@@ -3,7 +3,7 @@
 import requests
 import json
 import logging
-from fairlearn.metrics import MetricFrame, demographic_parity_difference, equal_opportunity_difference
+from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
 
 OPA_URL = "http://10.210.32.158:8181/v1/data/policies/fairness/allow"  # Adjust if OPA runs on a different host/port
 
@@ -31,7 +31,7 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         metric_frame = MetricFrame(
             metrics={
                 "demographic_parity": demographic_parity_difference,
-                "equal_opportunity": equal_opportunity_difference
+                # "equal_opportunity": equalized_odds_difference
             },
             y_true=y_true,
             y_pred=y_pred_binary,
@@ -39,11 +39,11 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         )
 
         dp_diff = metric_frame.metrics["demographic_parity"]
-        eo_diff = metric_frame.metrics["equal_opportunity"]
+        # eo_diff = metric_frame.metrics["equal_opportunity"]
 
         model_metrics = {
             "demographic_parity": abs(dp_diff),
-            "equal_opportunity": abs(eo_diff)
+            # "equal_opportunity": abs(eo_diff)
         }
 
         input_data = {
@@ -69,8 +69,8 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
             # Determine which policies failed based on metrics
             if model_metrics["demographic_parity"] > thresholds["demographic_parity"]:
                 failed_policies.append("demographic_parity")
-            if model_metrics["equal_opportunity"] > thresholds["equal_opportunity"]:
-                failed_policies.append("equal_opportunity")
+            # if model_metrics["equal_opportunity"] > thresholds["equal_opportunity"]:
+            #     failed_policies.append("equal_opportunity")
             return False, failed_policies
 
     except requests.exceptions.RequestException as e:

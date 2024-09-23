@@ -1,4 +1,6 @@
-# aggregator/aggregator.py
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 
 import os
 import json
@@ -9,6 +11,7 @@ import sys
 from collections import defaultdict
 import logging
 import requests
+from datasets.chest_xray_processor import process_chest_xray_data
 import mlflow
 import mlflow.tensorflow
 
@@ -32,7 +35,7 @@ mlflow.set_tracking_uri("http://10.210.32.158:5002")  # Adjust if MLflow runs on
 mlflow.set_experiment("Model_Fairness_Evaluation")
 
 # MQTT Configuration
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')  # Adjust if necessary
+MQTT_BROKER = os.getenv('MQTT_BROKER', '10.210.32.158')  # Adjust if necessary
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
@@ -166,10 +169,9 @@ def evaluate_and_aggregate():
             aggregated_model = tf.keras.models.load_model(aggregated_model_path)
 
             # Prepare validation data
+            # Prepare validation data
             # Replace with your actual validation dataset and sensitive feature(s)
-            X_val = pd.read_csv('validation_features.csv')               # Example feature file
-            y_val = pd.read_csv('validation_labels.csv')['label']        # Example labels file
-            sensitive_features = pd.read_csv('sensitive_features.csv')   # e.g., race, gender
+            X_val, y_val, sensitive_features = process_chest_xray_data("datasets/chest_xray/val")
 
             # Evaluate fairness
             is_fair, failed_policies = evaluate_fairness(

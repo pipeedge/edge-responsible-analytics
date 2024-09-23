@@ -1,0 +1,7 @@
+{
+    "fairness": {
+      "threshold": {
+        "demographic_parity": 0.05
+      }
+    }
+  }
