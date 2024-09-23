@@ -5,7 +5,7 @@ import json
 import logging
 from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
 
-OPA_URL = "http://10.201.0.1:8181/v1/data/policies/fairness/allow"  # Adjust if OPA runs on a different host/port
+OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"  # Adjust if OPA runs on a different host/port
 
 def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
     """
