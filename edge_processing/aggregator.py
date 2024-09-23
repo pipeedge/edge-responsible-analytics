@@ -5,12 +5,9 @@ import time
 import threading
 import sys
 from collections import defaultdict
-from flask import Flask, request, jsonify
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
-
-app = Flask(__name__)
 
 # MQTT Configuration
 MQTT_BROKER = os.getenv('MQTT_BROKER', '10.210.32.158')  # 10.12.93.246
@@ -27,45 +24,6 @@ client = mqtt.Client(client_id='aggregator')
 # Dictionary to store received models
 received_models = {}
 lock = threading.Lock()
-
-@app.route('/aggregate_models', methods=['POST'])
-def aggregate_models():
-    # Trigger aggregation logic
-    aggregate_and_publish_models()  # Call existing function
-    return jsonify({"status": "Models aggregated successfully"}), 200
-
-
-# New Route to add models manually (optional)
-@app.route('/add_model', methods=['POST'])
-def add_model():
-    data = request.json
-    device_id = data.get('device_id')
-    model_type = data.get('model_type')
-    model_data = data.get('model_data')
-
-    if not all([device_id, model_type, model_data]):
-        return jsonify({"error": "Missing parameters"}), 400
-
-    with lock:
-        if device_id not in received_models:
-            print(f"[Aggregator] Received {model_type} model from {device_id} via API")
-            received_models[device_id] = {
-                'model_type': model_type,
-                'model_data': model_data
-            }
-        else:
-            print(f"[Aggregator] Model from {device_id} already received via API.")
-
-    # Check if all expected models are received
-    with lock:
-        if len(received_models) >= EXPECTED_DEVICES:
-            print("[Aggregator] All models received. Starting aggregation.")
-            aggregate_and_publish_models()
-            # Clear received_models for next round
-            received_models.clear()
-
-    return jsonify({"status": f"Model from {device_id} added successfully"}), 200
-
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
@@ -196,17 +154,7 @@ def main():
     thread.daemon = True
     thread.start()
 
-    print("[Aggregator] MQTT loop started.")
-
-    # Start Flask app in a separate thread
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5001))
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    print("[Aggregator] Flask server started on port 5001.")
-
     print("[Aggregator] Running. Waiting for models...")
-
     try:
         while True:
             time.sleep(1)  # Keep the main thread alive
@@ -214,7 +162,5 @@ def main():
         print("[Aggregator] Shutting down.")
         client.disconnect()
 
-
 if __name__ == "__main__":
     main()
-    # Removed redundant calls to main()

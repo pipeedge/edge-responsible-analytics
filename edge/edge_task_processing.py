@@ -7,16 +7,12 @@ import json
 import threading
 import base64
 import time
-from flask import Flask, request, jsonify  # {{ edit_1 }}
 
 #import mlflow
 from edge_infer import perform_inference
 from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
-from load_models import load_mobilenet_model
-
-app = Flask(__name__)
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -113,9 +109,11 @@ def mqtt_loop():
 def task_processing(task_type, model_type):
     global model
     # Load the initial model
+    from load_models import load_mobilenet_model
     with model_lock:
         model = load_mobilenet_model()
 
+    # while True:
     # Define tasks
     inference_task = {
         'type': 'inference',
@@ -154,32 +152,8 @@ def task_processing(task_type, model_type):
         while True:
             time.sleep(1)  # Keep the thread alive
     except KeyboardInterrupt:
-        print(f"[{DEVICE_ID}] Shutting down.")
+        print("[{DEVICE_ID}] Shutting down.")
         client.disconnect()
-
-
-# Route to upload model
-@app.route('/upload_model', methods=['POST'])
-def upload_model():
-    data = request.json
-    model_path = data.get('model_path')
-    model_type = data.get('model_type')
-    send_trained_model(model_path, model_type)  # Call existing function
-    return jsonify({"status": "Model uploaded successfully"}), 200
-
-
-# New Route to trigger task processing
-@app.route('/start_task', methods=['POST'])
-def start_task():
-    data = request.json
-    task_type = data.get('task_type', 'inference')
-    model_type = data.get('model_type', 'MobileNet')
-
-    task_thread = threading.Thread(target=task_processing, args=(task_type, model_type))
-    task_thread.start()
-
-    return jsonify({"status": f"{task_type} task started"}), 200
-
 
 def main():
     # Connect to MQTT
@@ -189,25 +163,18 @@ def main():
     thread.daemon = True
     thread.start()
 
-    print(f"[{DEVICE_ID}] MQTT loop started.")
-
-    # Start Flask app in a separate thread
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000))
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    print(f"[{DEVICE_ID}] Flask server started on port 5000.")
-
+    model_type = 'MobileNet'
+    task_type = 'inference'
+    # Start task processing in the main thread
+    task_processing(task_type, model_type)
     try:
         while True:
-            time.sleep(1)  # Keep the main thread alive
+            time.sleep(1)  # Keep the thread alive
     except KeyboardInterrupt:
-        print(f"[{DEVICE_ID}] Shutting down.")
+        print("[{DEVICE_ID}] Shutting down.")
         client.disconnect()
-
 
 if __name__ == "__main__":
     main()
-    # Removed redundant calls to app.run and task_processing
 
     

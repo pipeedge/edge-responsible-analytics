@@ -50,6 +50,7 @@ def process_chest_xray_data(data_path, batch_size=32):
 
 # Example usage
 if __name__ == "__main__":
-    data_path = "datasets/chest_xray/train"
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(ROOT_DIR, "datasets/chest_xray/train")
     for X_batch, y_batch, sensitive_batch in process_chest_xray_data(data_path):
         print(f"Processed batch with {len(X_batch)} images")
