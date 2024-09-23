@@ -38,6 +38,15 @@ model = None
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
 
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("edge_device.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
+
 def process_task(task):
     if task['type'] == 'inference':
         if task['data_type'] == 'chest_xray':
@@ -60,16 +69,19 @@ def process_task(task):
 
 # Function to send the trained model
 def send_trained_model(model_path, model_type='MobileNet'):
-    with open(model_path, 'rb') as f:
-        model_bytes = f.read()
-    model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-    payload = json.dumps({
-        'device_id': DEVICE_ID,
-        'model_type': model_type,
-        'model_data': model_b64
-    })
-    client.publish(MQTT_TOPIC_UPLOAD, payload)
-    print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+    try:
+        with open(model_path, 'rb') as f:
+            model_bytes = f.read()
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        payload = json.dumps({
+            'device_id': DEVICE_ID,
+            'model_type': model_type,
+            'model_data': model_b64
+        })
+        client.publish(MQTT_TOPIC_UPLOAD, payload)
+        print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+    except Exception as e:
+        print(f"[{DEVICE_ID}] Failed to send trained model: {e}")
 
 # Callback when a message is received
 def on_message(client, userdata, msg):

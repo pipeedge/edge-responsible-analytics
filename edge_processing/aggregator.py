@@ -8,6 +8,16 @@ from collections import defaultdict
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("aggregator.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
 
 # MQTT Configuration
 MQTT_BROKER = os.getenv('MQTT_BROKER', '10.210.32.158')  # 10.12.93.246
@@ -28,34 +38,41 @@ lock = threading.Lock()
 # Callback when a message is received
 def on_message(client, userdata, msg):
     if msg.topic == MQTT_TOPIC_UPLOAD:
-        payload = json.loads(msg.payload.decode('utf-8'))
-        device_id = payload.get('device_id')
-        model_type = payload.get('model_type')
-        model_b64 = payload.get('model_data')
-        
-        if device_id and model_type and model_b64:
-            with lock:
-                if device_id not in received_models:
-                    print(f"[Aggregator] Received {model_type} model from {device_id}")
-                    received_models[device_id] = {
-                        'model_type': model_type,
-                        'model_data': model_b64
-                    }
-                else:
-                    print(f"[Aggregator] Model from {device_id} already received.")
-        
-            # Check if all expected models are received
-            with lock:
-                if len(received_models) >= EXPECTED_DEVICES:
-                    print("[Aggregator] All models received. Starting aggregation.")
-                    aggregate_and_publish_models()
-                    # Clear received_models for next round
-                    received_models.clear()
+        try:
+            payload = json.loads(msg.payload.decode('utf-8'))
+            device_id = payload.get('device_id')
+            model_type = payload.get('model_type')
+            model_b64 = payload.get('model_data')
+
+            if device_id and model_type and model_b64:
+                with lock:
+                    if device_id not in received_models:
+                        logger.info(f"Received {model_type} model from {device_id}")
+                        received_models[device_id] = {
+                            'model_type': model_type,
+                            'model_data': model_b64
+                        }
+                    else:
+                        logger.warning(f"Model from {device_id} already received.")
+                
+                # Check if all expected models are received
+                with lock:
+                    if len(received_models) >= EXPECTED_DEVICES:
+                        logger.info("All models received. Starting aggregation.")
+                        aggregate_and_publish_models()
+                        # Clear received_models for next round
+                        received_models.clear()
+            else:
+                logger.error("Received message with missing fields.")
+        except json.JSONDecodeError:
+            logger.exception("Failed to decode JSON payload.")
+        except Exception as e:
+            logger.exception(f"Unexpected error in on_message: {e}")
 
 def aggregate_and_publish_models():
     loaded_models = []
     device_ids = list(received_models.keys())
-    print(f"[Aggregator] Aggregating models from devices: {device_ids}")
+    logger.info(f"[Aggregator] Aggregating models from devices: {device_ids}")
     
     # Deserialize models from Base64
     for device_id in device_ids:
@@ -67,14 +84,14 @@ def aggregate_and_publish_models():
         try:
             model = tf.keras.models.load_model(model_path, compile=False)
             loaded_models.append(model)
-            print(f"[Aggregator] Loaded model from {device_id}")
+            logger.info(f"[Aggregator] Loaded model from {device_id}")
         except Exception as e:
-            print(f"[Aggregator] Failed to load model from {device_id}: {e}")
+            logger.error(f"[Aggregator] Failed to load model from {device_id}: {e}")
         finally:
             os.remove(model_path)  # Clean up temporary file
 
     if not loaded_models:
-        print("[Aggregator] No valid models loaded for aggregation.")
+        logger.warning("[Aggregator] No valid models loaded for aggregation.")
         return
 
     # Initialize aggregated weights with zeros
@@ -115,7 +132,7 @@ def aggregate_and_publish_models():
     # Save the aggregated model
     aggregated_model_path = 'aggregated_model.h5'
     aggregated_model.save(aggregated_model_path)
-    print(f"[Aggregator] Aggregated model saved to {aggregated_model_path}")
+    logger.info(f"[Aggregator] Aggregated model saved to {aggregated_model_path}")
     
     # Read and encode the aggregated model
     with open(aggregated_model_path, 'rb') as f:
@@ -128,7 +145,7 @@ def aggregate_and_publish_models():
         'model_type': 'MobileNet'  # Adjust as needed
     })
     client.publish(MQTT_TOPIC_AGGREGATED, payload)
-    print(f"[Aggregator] Published aggregated model to {MQTT_TOPIC_AGGREGATED}")
+    logger.info(f"[Aggregator] Published aggregated model to {MQTT_TOPIC_AGGREGATED}")
 
 # Set up MQTT callbacks
 client.on_message = on_message
@@ -138,9 +155,9 @@ def connect_mqtt():
     try:
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
         client.subscribe(MQTT_TOPIC_UPLOAD)
-        print(f"[Aggregator] Subscribed to {MQTT_TOPIC_UPLOAD}")
+        logger.info(f"[Aggregator] Subscribed to {MQTT_TOPIC_UPLOAD}")
     except Exception as e:
-        print(f"[Aggregator] Failed to connect to MQTT Broker: {e}")
+        logger.error(f"[Aggregator] Failed to connect to MQTT Broker: {e}")
         sys.exit(1)
 
 # Start MQTT loop in a separate thread
@@ -154,12 +171,12 @@ def main():
     thread.daemon = True
     thread.start()
 
-    print("[Aggregator] Running. Waiting for models...")
+    logger.info("[Aggregator] Running. Waiting for models...")
     try:
         while True:
             time.sleep(1)  # Keep the main thread alive
     except KeyboardInterrupt:
-        print("[Aggregator] Shutting down.")
+        logger.info("[Aggregator] Shutting down.")
         client.disconnect()
 
 if __name__ == "__main__":
