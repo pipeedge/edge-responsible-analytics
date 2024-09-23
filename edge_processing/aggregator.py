@@ -1,3 +1,5 @@
+# aggregator/aggregator.py
+
 import os
 import json
 import base64
@@ -5,10 +7,16 @@ import time
 import threading
 import sys
 from collections import defaultdict
+import logging
+import requests
+import mlflow
+import mlflow.tensorflow
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
-import logging
+import pandas as pd
+
+from policy_evaluator import evaluate_fairness  # Import the policy evaluator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -19,14 +27,18 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
+# MLflow Configuration
+mlflow.set_tracking_uri("http://10.210.32.158:5002")  # Adjust if MLflow runs on a different host/port
+mlflow.set_experiment("Model_Fairness_Evaluation")
+
 # MQTT Configuration
-MQTT_BROKER = os.getenv('MQTT_BROKER', '10.210.32.158')  # 10.12.93.246
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')  # Adjust if necessary
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 
 # Number of end devices expected
-EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set this to the number of your end devices
+EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
 # Initialize MQTT Client
 client = mqtt.Client(client_id='aggregator')
@@ -35,7 +47,13 @@ client = mqtt.Client(client_id='aggregator')
 received_models = {}
 lock = threading.Lock()
 
-# Callback when a message is received
+# Load fairness thresholds
+with open('fairness_thresholds.json') as f:
+    fairness_thresholds = json.load(f)['fairness']['threshold']
+
+# Initialize previous aggregated model path
+PREVIOUS_MODEL_PATH = 'aggregated_model_previous.h5'
+
 def on_message(client, userdata, msg):
     if msg.topic == MQTT_TOPIC_UPLOAD:
         try:
@@ -54,130 +72,164 @@ def on_message(client, userdata, msg):
                         }
                     else:
                         logger.warning(f"Model from {device_id} already received.")
-                
-                # Check if all expected models are received
-                with lock:
-                    if len(received_models) >= EXPECTED_DEVICES:
-                        logger.info("All models received. Starting aggregation.")
-                        aggregate_and_publish_models()
-                        # Clear received_models for next round
-                        received_models.clear()
+
+                # After receiving, evaluate fairness
+                evaluate_and_aggregate()
+
             else:
                 logger.error("Received message with missing fields.")
+
         except json.JSONDecodeError:
             logger.exception("Failed to decode JSON payload.")
         except Exception as e:
             logger.exception(f"Unexpected error in on_message: {e}")
 
-def aggregate_and_publish_models():
-    loaded_models = []
-    device_ids = list(received_models.keys())
-    logger.info(f"[Aggregator] Aggregating models from devices: {device_ids}")
-    
-    # Deserialize models from Base64
-    for device_id in device_ids:
-        model_b64 = received_models[device_id]['model_data']
-        model_bytes = base64.b64decode(model_b64)
-        model_path = f"temp_{device_id}.h5"
-        with open(model_path, 'wb') as f:
-            f.write(model_bytes)
-        try:
-            model = tf.keras.models.load_model(model_path, compile=False)
-            loaded_models.append(model)
-            logger.info(f"[Aggregator] Loaded model from {device_id}")
-        except Exception as e:
-            logger.error(f"[Aggregator] Failed to load model from {device_id}: {e}")
-        finally:
-            os.remove(model_path)  # Clean up temporary file
-
-    if not loaded_models:
-        logger.warning("[Aggregator] No valid models loaded for aggregation.")
-        return
-
-    # Initialize aggregated weights with zeros
-    aggregated_weights = []
-    for layer in loaded_models[0].layers:
-        if isinstance(layer, tf.keras.layers.Conv2D) or isinstance(layer, tf.keras.layers.Dense):
-            weight_shapes = [w.shape for w in layer.get_weights()]
-            aggregated_weights.append([tf.zeros_like(w) for w in layer.get_weights()])
-        else:
-            aggregated_weights.append(None)  # Layers without weights
-
-    # Sum weights from all models
-    for model in loaded_models:
-        for idx, layer in enumerate(model.layers):
-            if isinstance(layer, tf.keras.layers.Conv2D) or isinstance(layer, tf.keras.layers.Dense):
-                layer_weights = layer.get_weights()
-                if aggregated_weights[idx] is not None:
-                    aggregated_weights[idx] = [agg_w + w for agg_w, w in zip(aggregated_weights[idx], layer_weights)]
-    
-    # Average the weights
-    num_models = len(loaded_models)
-    for idx, layer_weights in enumerate(aggregated_weights):
-        if layer_weights is not None:
-            aggregated_weights[idx] = [w / num_models for w in layer_weights]
-    
-    # Create a new aggregated model
-    # Assuming all models have the same architecture as the first model
-    aggregated_model = tf.keras.models.clone_model(loaded_models[0])
-    
-    # Set the averaged weights
-    for idx, layer in enumerate(aggregated_model.layers):
-        if isinstance(layer, tf.keras.layers.Conv2D) or isinstance(layer, tf.keras.layers.Dense):
-            layer.set_weights(aggregated_weights[idx])
-    
-    # Compile the aggregated model
-    aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    
-    # Save the aggregated model
-    aggregated_model_path = 'aggregated_model.h5'
-    aggregated_model.save(aggregated_model_path)
-    logger.info(f"[Aggregator] Aggregated model saved to {aggregated_model_path}")
-    
-    # Read and encode the aggregated model
-    with open(aggregated_model_path, 'rb') as f:
-        aggregated_model_bytes = f.read()
-    aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-    
-    # Publish the aggregated model
-    payload = json.dumps({
-        'model_data': aggregated_model_b64,
-        'model_type': 'MobileNet'  # Adjust as needed
-    })
-    client.publish(MQTT_TOPIC_AGGREGATED, payload)
-    logger.info(f"[Aggregator] Published aggregated model to {MQTT_TOPIC_AGGREGATED}")
-
-# Set up MQTT callbacks
-client.on_message = on_message
-
-# Connect to MQTT Broker
 def connect_mqtt():
-    try:
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_UPLOAD)
-        logger.info(f"[Aggregator] Subscribed to {MQTT_TOPIC_UPLOAD}")
-    except Exception as e:
-        logger.error(f"[Aggregator] Failed to connect to MQTT Broker: {e}")
-        sys.exit(1)
+    client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+    client.subscribe(MQTT_TOPIC_UPLOAD)
+    logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
 
-# Start MQTT loop in a separate thread
 def mqtt_loop():
     client.loop_forever()
 
+def aggregate_and_publish_models():
+    try:
+        # Implement your aggregation logic here
+        # For demonstration, we'll assume aggregation is averaging weights
+
+        logger.info("Starting model aggregation.")
+
+        # Load all received models
+        models = []
+        for device_id, model_info in received_models.items():
+            model_data = base64.b64decode(model_info['model_data'])
+            model_path = f"received_{device_id}.h5"
+            with open(model_path, 'wb') as f:
+                f.write(model_data)
+            model = tf.keras.models.load_model(model_path)
+            models.append(model)
+            logger.info(f"Loaded model from {device_id}")
+
+        # Aggregate models (example: averaging weights)
+        averaged_weights = []
+        for weights in zip(*[model.get_weights() for model in models]):
+            averaged = [tf.reduce_mean([w.numpy() for w in layer_weights], axis=0) for layer_weights in zip(*weights)]
+            averaged_weights.append(averaged)
+
+        # Create a new model and set averaged weights
+        aggregated_model = models[0].__class__()
+        aggregated_model.build(models[0].input_shape)
+        aggregated_model.set_weights(averaged_weights)
+        aggregated_model_path = 'aggregated_model.h5'
+        aggregated_model.save(aggregated_model_path)
+        logger.info(f"Aggregated model saved to {aggregated_model_path}")
+
+        # Log the aggregated model with MLflow
+        with mlflow.start_run(run_name="Aggregated_Model_Run"):
+            mlflow.log_param("aggregated_from_devices", EXPECTED_DEVICES)
+            mlflow.log_artifact(aggregated_model_path)
+            logger.info("Aggregated model logged to MLflow.")
+
+        # Backup the previous model
+        if os.path.exists(PREVIOUS_MODEL_PATH):
+            os.remove(PREVIOUS_MODEL_PATH)
+        os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
+
+        # Publish the aggregated model to edge devices
+        with open(PREVIOUS_MODEL_PATH, 'rb') as f:
+            aggregated_model_bytes = f.read()
+        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+
+        payload = json.dumps({
+            'model_data': aggregated_model_b64,
+            'model_type': 'MobileNet'  # Adjust as needed
+        })
+        client.publish(MQTT_TOPIC_AGGREGATED, payload)
+        logger.info(f"Published aggregated model to {MQTT_TOPIC_AGGREGATED}")
+
+    except Exception as e:
+        logger.exception(f"Aggregation or Publishing failed: {e}")
+
+def evaluate_and_aggregate():
+    with lock:
+        if len(received_models) >= EXPECTED_DEVICES:
+            logger.info("All models received. Evaluating fairness policies.")
+
+            # Load aggregated model for fairness evaluation
+            # Assuming aggregation logic has been applied already
+            aggregated_model_path = 'aggregated_model.h5'
+
+            if not os.path.exists(aggregated_model_path):
+                logger.error(f"Aggreated model not found at {aggregated_model_path}")
+                return
+
+            aggregated_model = tf.keras.models.load_model(aggregated_model_path)
+
+            # Prepare validation data
+            # Replace with your actual validation dataset and sensitive feature(s)
+            X_val = pd.read_csv('validation_features.csv')               # Example feature file
+            y_val = pd.read_csv('validation_labels.csv')['label']        # Example labels file
+            sensitive_features = pd.read_csv('sensitive_features.csv')   # e.g., race, gender
+
+            # Evaluate fairness
+            is_fair, failed_policies = evaluate_fairness(
+                model=aggregated_model,
+                X=X_val,
+                y_true=y_val,
+                sensitive_features=sensitive_features['race'],       # Example: race as sensitive feature
+                thresholds=fairness_thresholds
+            )
+
+            if is_fair:
+                logger.info("Models passed fairness policies. Proceeding to aggregate and publish.")
+                aggregate_and_publish_models()
+                received_models.clear()
+            else:
+                logger.warning(f"Models failed fairness policies: {failed_policies}. Retaining previous model.")
+                # Notify (e.g., via logging, email, MQTT)
+                notify_policy_failure(failed_policies)
+                # Use the previous aggregated model if it exists
+                if os.path.exists(PREVIOUS_MODEL_PATH):
+                    with open(PREVIOUS_MODEL_PATH, 'rb') as f:
+                        aggregated_model_bytes = f.read()
+                    aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+                    payload = json.dumps({
+                        'model_data': aggregated_model_b64,
+                        'model_type': 'MobileNet'  # Adjust as needed
+                    })
+                    client.publish(MQTT_TOPIC_AGGREGATED, payload)
+                    logger.info(f"Published previous aggregated model to {MQTT_TOPIC_AGGREGATED}")
+                else:
+                    logger.error("No previous aggregated model available to deploy.")
+                received_models.clear()
+
+def notify_policy_failure(failed_policies):
+    """
+    Handles notifications when a model fails fairness policies.
+    """
+    try:
+        notification = {
+            "status": "Policy Failure",
+            "failed_policies": failed_policies,
+            "message": "Aggregated model does not satisfy fairness policies. Retaining previous model."
+        }
+        # Example: Publish to a notification topic
+        NOTIFICATION_TOPIC = "models/notification"
+        client.publish(NOTIFICATION_TOPIC, json.dumps(notification))
+        logger.info(f"Published policy failure notification to {NOTIFICATION_TOPIC}")
+    except Exception as e:
+        logger.exception(f"Failed to send policy failure notification: {e}")
+
 def main():
     connect_mqtt()
-    # Start MQTT loop in background
+    # Start MQTT loop in separate thread
     thread = threading.Thread(target=mqtt_loop)
     thread.daemon = True
     thread.start()
+    logger.info("MQTT loop started.")
 
-    logger.info("[Aggregator] Running. Waiting for models...")
-    try:
-        while True:
-            time.sleep(1)  # Keep the main thread alive
-    except KeyboardInterrupt:
-        logger.info("[Aggregator] Shutting down.")
-        client.disconnect()
+    logger.info("Aggregation triggered.")
+    evaluate_and_aggregate()
 
 if __name__ == "__main__":
     main()
