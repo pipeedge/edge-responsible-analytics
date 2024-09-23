@@ -22,3 +22,4 @@ scp -r /path/to/your/code crest@10.88.0.101:/home/crest/edge
 
 
 Matt config file (Mac): /opt/homebrew/etc/mosquitto/mosquitto.conf
+brew services restart mosquitto
