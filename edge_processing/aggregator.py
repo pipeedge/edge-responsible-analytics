@@ -51,7 +51,7 @@ received_models = {}
 lock = threading.Lock()
 
 # Load fairness thresholds
-with open('./policies/fairness_thresholds.json') as f:
+with open('fairness_thresholds.json') as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
 
 # Initialize previous aggregated model path
