@@ -13,6 +13,7 @@ from edge_infer import perform_inference
 from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
+import logging
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
