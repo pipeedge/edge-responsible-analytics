@@ -151,12 +151,6 @@ def task_processing(task_type, model_type):
         training_result = process_task(training_task)
         print(f"[{DEVICE_ID}] Training Result: {training_result}")
 
-    # Save the trained model
-    model_path = 'mobilenet_model.h5'
-    with model_lock:
-        model.save(model_path)
-    print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
-
     # Upload the trained model in a separate thread
     upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type))
     upload_thread.start()
