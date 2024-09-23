@@ -229,10 +229,16 @@ def main():
     thread = threading.Thread(target=mqtt_loop)
     thread.daemon = True
     thread.start()
-    logger.info("MQTT loop started.")
+    logger.info("[Aggregator] MQTT loop started.")
 
-    logger.info("Aggregation triggered.")
+    logger.info("[Aggregator] Running. Waiting for models...")
     evaluate_and_aggregate()
+    try:
+        while True:
+            time.sleep(1)  # Keep the main thread alive
+    except KeyboardInterrupt:
+        print("[Aggregator] Shutting down.")
+        client.disconnect()
 
 if __name__ == "__main__":
     main()
