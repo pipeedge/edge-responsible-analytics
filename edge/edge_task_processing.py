@@ -126,7 +126,6 @@ def task_processing(task_type, model_type):
     with model_lock:
         model = load_mobilenet_model()
 
-    # while True:
     # Define tasks
     inference_task = {
         'type': 'inference',
@@ -151,6 +150,12 @@ def task_processing(task_type, model_type):
         training_result = process_task(training_task)
         print(f"[{DEVICE_ID}] Training Result: {training_result}")
 
+    # Save the trained model
+    model_path = 'mobilenet_model.keras'
+    with model_lock:
+        model.save(model_path, save_format='keras')
+    print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
+
     # Upload the trained model in a separate thread
     upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type))
     upload_thread.start()
@@ -159,7 +164,7 @@ def task_processing(task_type, model_type):
         while True:
             time.sleep(1)  # Keep the thread alive
     except KeyboardInterrupt:
-        print("[{DEVICE_ID}] Shutting down.")
+        print(f"[{DEVICE_ID}] Shutting down.")
         client.disconnect()
 
 def main():

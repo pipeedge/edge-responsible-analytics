@@ -3,7 +3,7 @@ import tensorflow as tf
 from transformers import TFT5ForConditionalGeneration, T5Tokenizer
 
 def load_mobilenet_model():
-    model_path = "mobilenet_model.h5"
+    model_path = "mobilenet_model.keras"
     if not os.path.exists(model_path):
         # Build and compile the model with 3-channel input
         base_model = tf.keras.applications.MobileNetV2(
@@ -18,7 +18,7 @@ def load_mobilenet_model():
         output = tf.keras.layers.Dense(1, activation='sigmoid')(x)
         model = tf.keras.Model(inputs=inputs, outputs=output)
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        model.save(model_path)
+        model.save(model_path, save_format='keras')
         print(f"[Loader] New MobileNet model created and saved to {model_path}")
     else:
         # Load the model without compiling to reset the optimizer
