@@ -20,7 +20,7 @@ app = Flask(__name__)
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
-MQTT_BROKER = os.getenv('MQTT_BROKER', '10.210.32.158')
+MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.30')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
