@@ -8,7 +8,6 @@ import base64
 import time
 import threading
 import sys
-from collections import defaultdict
 import logging
 import requests
 from datasets.chest_xray_processor import process_chest_xray_data
@@ -17,7 +16,7 @@ import mlflow.tensorflow
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
-import pandas as pd
+import numpy as np
 
 from policy_evaluator import evaluate_fairness  # Import the policy evaluator
 
@@ -112,7 +111,19 @@ def evaluate_and_aggregate():
             aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
             # Prepare validation data
-            X_val, y_val, _ = process_chest_xray_data("datasets/chest_xray/test", batch_size=32)
+            X_val, y_val, sensitive_features = [], [], []
+
+            # Iterate over the generator to collect all batches
+            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/test", batch_size=32):
+                X_val.append(batch_X)
+                y_val.append(batch_y)
+                sensitive_features.append(batch_sensitive)
+
+            # Concatenate all batches into single arrays
+            X_val = np.concatenate(X_val, axis=0)
+            y_val = np.concatenate(y_val, axis=0)
+            sensitive_features = np.concatenate(sensitive_features, axis=0)
+
             # Evaluate fairness
             is_fair, failed_policies = evaluate_fairness(
                 model=aggregated_model,
