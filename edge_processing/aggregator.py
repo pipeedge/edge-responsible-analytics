@@ -19,7 +19,7 @@ import paho.mqtt.client as mqtt
 import tensorflow as tf
 import numpy as np
 
-from policy_evaluator import evaluate_fairness  # Import the policy evaluator
+from policy_evaluator import evaluate_fairness_policy  # Import the policy evaluator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -126,7 +126,7 @@ def evaluate_and_aggregate():
             sensitive_features = np.concatenate(sensitive_features, axis=0)
 
             # Evaluate fairness
-            is_fair, failed_policies = evaluate_fairness(
+            is_fair, failed_policies = evaluate_fairness_policy(
                 model=aggregated_model,
                 X=X_val,
                 y_true=y_val,
@@ -206,7 +206,8 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         y_pred=preds_binary,
         sensitive_features=sensitive_features
     )
-
+    logger.info(f"Computed Metrics: {metric_frame.overall_metrics.to_dict()}")
+    
     # Check thresholds
     is_fair = True
     failed_policies = []

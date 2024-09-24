@@ -1,13 +1,13 @@
-# aggregator/policy_evaluator.py
+# policy_evaluator.py
 
 import requests
 import json
 import logging
-from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
+from fairlearn.metrics import MetricFrame, demographic_parity_difference
 
-OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"  # Adjust if OPA runs on a different host/port
+OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
 
-def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
+def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     """
     Evaluates model fairness using OPA policies.
 
@@ -30,20 +30,17 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         # Calculate fairness metrics
         metric_frame = MetricFrame(
             metrics={
-                "demographic_parity": demographic_parity_difference,
-                # "equal_opportunity": equalized_odds_difference
+                "demographic_parity_difference": demographic_parity_difference
             },
             y_true=y_true,
             y_pred=y_pred_binary,
             sensitive_features=sensitive_features
         )
 
-        dp_diff = metric_frame.metrics["demographic_parity"]
-        # eo_diff = metric_frame.metrics["equal_opportunity"]
+        dp_diff = metric_frame.metrics["demographic_parity_difference"]
 
         model_metrics = {
-            "demographic_parity": abs(dp_diff),
-            # "equal_opportunity": abs(eo_diff)
+            "demographic_parity_difference": abs(dp_diff)
         }
 
         input_data = {
@@ -53,7 +50,7 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
             }
         }
 
-        # Send to OPA for evaluation
+        # Send metrics to OPA for policy evaluation
         response = requests.post(OPA_URL, json={"input": input_data})
         response.raise_for_status()
         result = response.json()
@@ -67,9 +64,9 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         else:
             logging.warning("Model failed fairness policies.")
             # Determine which policies failed based on metrics
-            if model_metrics["demographic_parity"] > thresholds["demographic_parity"]:
+            if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
-            # if model_metrics["equal_opportunity"] > thresholds["equal_opportunity"]:
+            # if model_metrics.get("equal_opportunity", 0) > thresholds.get("equal_opportunity", 0):
             #     failed_policies.append("equal_opportunity")
             return False, failed_policies
 
