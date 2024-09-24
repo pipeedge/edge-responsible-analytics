@@ -3,7 +3,15 @@
 import requests
 import json
 import logging
-from fairlearn.metrics import MetricFrame, demographic_parity_difference
+from fairlearn.metrics import MetricFrame, demographic_parity_difference, accuracy_score
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("aggregator.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
 
 OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
 
@@ -13,9 +21,9 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
 
     Args:
         model (tf.keras.Model): The machine learning model.
-        X (pd.DataFrame): Input features.
-        y_true (pd.Series): True labels.
-        sensitive_features (pd.Series): Protected attribute(s).
+        X (pd.DataFrame or np.ndarray): Input features.
+        y_true (pd.Series or np.ndarray): True labels.
+        sensitive_features (pd.Series or np.ndarray): Protected attribute(s).
         thresholds (dict): Thresholds for fairness metrics.
 
     Returns:
@@ -24,25 +32,34 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     """
     try:
         # Generate predictions
-        y_pred = model.predict(X).flatten()
+        y_pred = model.predict(X)
         y_pred_binary = (y_pred >= 0.5).astype(int)  # Assuming binary classification
 
-        # Calculate fairness metrics
+        # Log data details
+        logger.info(f"Evaluating model fairness:")
+        logger.info(f"X shape: {X.shape}")
+        logger.info(f"y_true shape: {y_true.shape}")
+        logger.info(f"sensitive_features shape: {sensitive_features.shape}")
+        logger.info(f"sensitive_features sample: {sensitive_features[:5]}")
+
+        # Create MetricFrame
         metric_frame = MetricFrame(
             metrics={
-                "demographic_parity_difference": demographic_parity_difference
+                "accuracy": accuracy_score,
+                "demographic_parity_difference": demographic_parity_difference,
             },
             y_true=y_true,
             y_pred=y_pred_binary,
             sensitive_features=sensitive_features
         )
 
-        dp_diff = metric_frame.metrics["demographic_parity_difference"]
+        # Log computed metrics
+        logger.info(f"Computed Metrics: {metric_frame.overall_metrics.to_dict()}")
 
-        model_metrics = {
-            "demographic_parity_difference": abs(dp_diff)
-        }
+        # Extract overall metrics
+        model_metrics = metric_frame.overall_metrics.to_dict()
 
+        # Prepare input data for OPA
         input_data = {
             "fairness": {
                 "metrics": model_metrics,
@@ -59,20 +76,18 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         failed_policies = []
 
         if allowed:
-            logging.info("Model passed all fairness policies.")
+            logger.info("Model passed all fairness policies.")
             return True, []
         else:
-            logging.warning("Model failed fairness policies.")
+            logger.warning("Model failed fairness policies.")
             # Determine which policies failed based on metrics
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
-            # if model_metrics.get("equal_opportunity", 0) > thresholds.get("equal_opportunity", 0):
-            #     failed_policies.append("equal_opportunity")
             return False, failed_policies
 
     except requests.exceptions.RequestException as e:
-        logging.exception("Failed to communicate with OPA.")
+        logger.exception("Failed to communicate with OPA.")
         return False, ["OPA Communication Error"]
     except Exception as e:
-        logging.exception(f"Error during fairness evaluation: {e}")
+        logger.exception(f"Error during fairness evaluation: {e}")
         return False, ["Fairness Evaluation Error"]
