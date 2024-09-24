@@ -38,11 +38,11 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         y_pred_binary = (y_pred >= 0.5).astype(int)  # Assuming binary classification
 
         # Log data details
-        logger.info(f"Evaluating model fairness:")
-        logger.info(f"X shape: {X.shape}")
-        logger.info(f"y_true shape: {y_true.shape}")
-        logger.info(f"sensitive_features shape: {sensitive_features.shape}")
-        logger.info(f"sensitive_features sample: {sensitive_features}")
+        # logger.info(f"Evaluating model fairness:")
+        # logger.info(f"X shape: {X.shape}")
+        # logger.info(f"y_true shape: {y_true.shape}")
+        # logger.info(f"sensitive_features shape: {sensitive_features.shape}")
+        # logger.info(f"sensitive_features sample: {sensitive_features}")
 
         logger.info(f"Number of samples - X_val: {len(X)}, y_val: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
         if np.isnan(sensitive_features).any():
