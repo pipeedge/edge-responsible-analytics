@@ -44,7 +44,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         logger.info(f"sensitive_features shape: {sensitive_features.shape}")
         logger.info(f"sensitive_features sample: {sensitive_features}")
 
-        logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
+        logger.info(f"Number of samples - X_val: {len(X)}, y_val: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
         if np.isnan(sensitive_features).any():
             logger.error("sensitive_features contain NaN values.")
         # Create MetricFrame
