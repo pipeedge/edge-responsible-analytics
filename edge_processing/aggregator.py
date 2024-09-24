@@ -112,8 +112,9 @@ def evaluate_and_aggregate():
             aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
             # Prepare validation data
-            X_val, y_val, sensitive_features = process_chest_xray_data("datasets/chest_xray/val")
-
+            processed_data = process_chest_xray_data("datasets/chest_xray/test", batch_size=32)
+            print(f"Processed data: {processed_data}")
+            X_val, y_val, sensitive_features = processed_data
             # Evaluate fairness
             is_fair, failed_policies = evaluate_fairness(
                 model=aggregated_model,

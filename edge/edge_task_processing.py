@@ -130,7 +130,7 @@ def task_processing(task_type, model_type):
     inference_task = {
         'type': 'inference',
         'data_type': 'chest_xray',
-        'data': 'datasets/chest_xray/val'
+        'data': 'datasets/chest_xray/test'
     }
     training_task = {
         'type': 'training',
