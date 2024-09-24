@@ -64,6 +64,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         model_metrics = metric_frame.overall.to_dict()
         
         logger.info(f"Model Metrics: {model_metrics}")
+        
         # Prepare input data for OPA
         input_data = {
             "fairness": {
@@ -71,7 +72,26 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
                 "threshold": thresholds
             }
         }
-
+        
+        # Check thresholds
+        is_fair = True
+        failed_policies = []
+        for metric_name, value in metric_frame.overall.items():
+            threshold = thresholds.get(metric_name, None)
+            if threshold is not None:
+                if metric_name in ['demographic_parity_difference']:
+                    # For these metrics, smaller absolute values are better
+                    if abs(value) > threshold:
+                        is_fair = False
+                        failed_policies.append(metric_name)
+                else:
+                    # For metrics like accuracy, higher is better
+                    if value < threshold:
+                        is_fair = False
+                        failed_policies.append(metric_name)
+        logger.info(f"is_fair: {is_fair}, failed_policies: {failed_policies}")
+        return is_fair, failed_policies
+        '''
         # Send metrics to OPA for policy evaluation
         response = requests.post(OPA_URL, json={"input": input_data})
         response.raise_for_status()
@@ -90,7 +110,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
             return False, failed_policies
-
+        '''
     except requests.exceptions.RequestException as e:
         logger.exception("Failed to communicate with OPA.")
         return False, ["OPA Communication Error"]
