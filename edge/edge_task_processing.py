@@ -9,6 +9,7 @@ import base64
 import time
 
 #import mlflow
+import tensorflow as tf
 from edge_infer import perform_inference
 from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
