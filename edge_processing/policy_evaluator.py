@@ -41,7 +41,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         logger.info(f"X shape: {X.shape}")
         logger.info(f"y_true shape: {y_true.shape}")
         logger.info(f"sensitive_features shape: {sensitive_features.shape}")
-        logger.info(f"sensitive_features sample: {sensitive_features[:5]}")
+        logger.info(f"sensitive_features sample: {sensitive_features}")
 
         # Create MetricFrame
         metric_frame = MetricFrame(

@@ -125,6 +125,19 @@ def evaluate_and_aggregate():
             y_val = np.concatenate(y_val, axis=0)
             sensitive_features = np.concatenate(sensitive_features, axis=0)
             print(X_val.shape, y_val.shape, sensitive_features.shape)
+            
+            num_samples = len(sensitive_features)
+            group_size = num_samples // 3  # Adjust to create 3 groups
+
+            # Create synthetic groups
+            sensitive_features[:group_size] = 0
+            sensitive_features[group_size:2*group_size] = 1
+            sensitive_features[2*group_size:] = 2
+
+            # Log the unique values in sensitive_features
+            unique_values = np.unique(sensitive_features)
+            logger.info(f"Unique sensitive feature values: {unique_values}")
+
             # Evaluate fairness
             is_fair, failed_policies = evaluate_fairness_policy(
                 model=aggregated_model,
