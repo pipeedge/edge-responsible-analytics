@@ -60,9 +60,6 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             sample_params = sample_params
         )
 
-        # Log computed metrics
-        logger.info(f"Computed Metrics: {metric_frame.overall_metrics}")
-
         # Extract overall metrics
         model_metrics = metric_frame.overall_metrics.to_dict()
         
