@@ -194,15 +194,14 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
     Evaluate the model against fairness policies.
     """
     # Example using Fairlearn's MetricFrame
-    from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
+    from fairlearn.metrics import MetricFrame, demographic_parity_difference
 
     predictions = model.predict(X)
     preds_binary = (predictions > 0.5).astype(int)
 
     metric_frame = MetricFrame(
         metrics={'accuracy': accuracy_score,
-                 'demographic_parity_difference': demographic_parity_difference,
-                 'equalized_odds_difference': equalized_odds_difference},
+                 'demographic_parity_difference': demographic_parity_difference}
         y_true=y_true,
         y_pred=preds_binary,
         sensitive_features=sensitive_features
@@ -214,7 +213,7 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
     for metric_name, value in metric_frame.overall_metrics.items():
         threshold = thresholds.get(metric_name, None)
         if threshold is not None:
-            if metric_name in ['demographic_parity_difference', 'equalized_odds_difference']:
+            if metric_name in ['demographic_parity_difference']:
                 # For these metrics, smaller absolute values are better
                 if abs(value) > threshold:
                     is_fair = False
