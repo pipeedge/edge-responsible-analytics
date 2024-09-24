@@ -15,7 +15,7 @@ source /home/crest/venv/bin/activate
 pip install --upgrade pip setuptools wheel
 
 # Install required Python libraries
-pip install tensorflow paho-mqtt numpy flask transformers scikit-learn kaggle
+pip install tensorflow paho-mqtt numpy flask transformers scikit-learn kaggle fairlearn
 
 # Transfer the code
 scp -r /path/to/your/code crest@10.88.0.101:/home/crest/edge
