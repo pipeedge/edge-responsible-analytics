@@ -13,7 +13,8 @@ import requests
 from datasets.chest_xray_processor import process_chest_xray_data
 import mlflow
 import mlflow.tensorflow
-from sklearn.metrics import accuracy_score
+from mlflow.tracking import MlflowClient
+from mlflow.models import infer_signature
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
@@ -33,6 +34,8 @@ logger = logging.getLogger(__name__)
 # MLflow Configuration
 mlflow.set_tracking_uri("http://10.200.3.99:5002")  # Adjust if MLflow runs on a different host/port
 mlflow.set_experiment("Model_Fairness_Evaluation")
+# Initialize MLflow client
+mlflow_client = MlflowClient()
 
 # MQTT Configuration
 MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.99')  # Adjust if necessary
@@ -138,40 +141,69 @@ def evaluate_and_aggregate():
             unique_values = np.unique(sensitive_features)
             logger.info(f"Unique sensitive feature values: {unique_values}")
 
-            # Evaluate fairness
-            is_fair, failed_policies = evaluate_fairness_policy(
-                model=aggregated_model,
-                X=X_val,
-                y_true=y_val,
-                sensitive_features=sensitive_features,
-                thresholds=fairness_thresholds
-            )
+            # Start MLflow run
+            with mlflow.start_run(run_name="AggregatedModel_Evaluation"):
+                try:
+                    # Evaluate fairness using the policy evaluator
+                    is_fair, failed_policies = evaluate_fairness_policy(
+                        model=aggregated_model,
+                        X=X_val,
+                        y_true=y_val,
+                        sensitive_features=sensitive_features,
+                        thresholds=fairness_thresholds
+                    )
 
-            if is_fair:
-                logger.info("Aggregated model passed fairness policies. Publishing the model.")
-                publish_aggregated_model(aggregated_model_path)
-                # Backup the current aggregated model
-                if os.path.exists(PREVIOUS_MODEL_PATH):
-                    os.remove(PREVIOUS_MODEL_PATH)
-                os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
-                received_models.clear()
-            else:
-                logger.warning(f"Aggregated model failed fairness policies: {failed_policies}. Retaining previous model.")
-                notify_policy_failure(failed_policies)
-                # Use the previous aggregated model if it exists
-                if os.path.exists(PREVIOUS_MODEL_PATH):
-                    with open(PREVIOUS_MODEL_PATH, 'rb') as f:
-                        aggregated_model_bytes = f.read()
-                    aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-                    payload = json.dumps({
-                        'model_data': aggregated_model_b64,
-                        'model_type': 'MobileNet'  # Adjust as needed
-                    })
-                    client.publish(MQTT_TOPIC_AGGREGATED, payload)
-                    logger.info(f"Published previous aggregated model to {MQTT_TOPIC_AGGREGATED}")
-                else:
-                    logger.error("No previous aggregated model available to deploy.")
-                received_models.clear()
+                    # Log parameters and metrics
+                    mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds["demographic_parity_difference"])
+                    mlflow.log_metric("is_fair", int(is_fair))
+
+                    if is_fair:
+                        logger.info("Aggregated model passed fairness policies. Publishing the model.")
+                        publish_aggregated_model(aggregated_model_path)
+                        
+                        # Log the aggregated Model 
+                        mlflow.keras.log_model(aggregated_model, "model", signature=infer_signature(X_val, aggregated_model.predict(X_val)))
+                        # Register the model in MLflow
+                        model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+                        model_details = mlflow.register_model(model_uri, "AggregatedModel")
+
+                        # Transition to Production stage
+                        mlflow_client.transition_model_version_stage(
+                            name="AggregatedModel",
+                            version=model_details.version,
+                            stage="Production"
+                        )
+
+                        logger.info(f"Registered model version {model_details.version} as Production.")
+                        
+                        # Backup the current aggregated model
+                        if os.path.exists(PREVIOUS_MODEL_PATH):
+                            os.remove(PREVIOUS_MODEL_PATH)
+                        os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
+                        received_models.clear()
+                    else:
+                        logger.warning(f"Aggregated model failed fairness policies: {failed_policies}. Retaining previous model.")
+                        notify_policy_failure(failed_policies)
+                        mlflow.log_param("failed_policies", failed_policies)
+                        # Use the previous aggregated model if it exists
+                        if os.path.exists(PREVIOUS_MODEL_PATH):
+                            with open(PREVIOUS_MODEL_PATH, 'rb') as f:
+                                aggregated_model_bytes = f.read()
+                            aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+                            payload = json.dumps({
+                                'model_data': aggregated_model_b64,
+                                'model_type': 'MobileNet'  # Adjust as needed
+                            })
+                            client.publish(MQTT_TOPIC_AGGREGATED, payload)
+                            logger.info(f"Published previous aggregated model to {MQTT_TOPIC_AGGREGATED}")
+                        else:
+                            logger.error("No previous aggregated model available to deploy.")
+                        received_models.clear()
+
+                except Exception as e:
+                    logger.exception(f"Error during MLflow logging and model registration: {e}")
+                    mlflow.end_run(status="FAILED")
+                    return
 
 def aggregate_models(received_models, save_path):
     """
@@ -201,44 +233,6 @@ def aggregate_models(received_models, save_path):
 
     # Save the aggregated model in .keras format
     aggregated_model.save(save_path, save_format='keras')
-
-def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
-    """
-    Evaluate the model against fairness policies.
-    """
-    # Example using Fairlearn's MetricFrame
-    from fairlearn.metrics import MetricFrame, demographic_parity_difference
-
-    predictions = model.predict(X)
-    preds_binary = (predictions > 0.5).astype(int)
-
-    metric_frame = MetricFrame(
-        metrics={'accuracy': accuracy_score,
-                 'demographic_parity_difference': demographic_parity_difference},
-        y_true=y_true,
-        y_pred=preds_binary,
-        sensitive_features=sensitive_features
-    )
-    logger.info(f"Computed Metrics: {metric_frame.overall_metrics.to_dict()}")
-
-    # Check thresholds
-    is_fair = True
-    failed_policies = []
-    for metric_name, value in metric_frame.overall_metrics.items():
-        threshold = thresholds.get(metric_name, None)
-        if threshold is not None:
-            if metric_name in ['demographic_parity_difference']:
-                # For these metrics, smaller absolute values are better
-                if abs(value) > threshold:
-                    is_fair = False
-                    failed_policies.append(metric_name)
-            else:
-                # For metrics like accuracy, higher is better
-                if value < threshold:
-                    is_fair = False
-                    failed_policies.append(metric_name)
-
-    return is_fair, failed_policies
 
 def publish_aggregated_model(model_path):
     """
