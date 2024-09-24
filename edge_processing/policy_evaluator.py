@@ -65,18 +65,11 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         
         logger.info(f"Model Metrics: {model_metrics}")
         
-        # Prepare input data for OPA
-        input_data = {
-            "fairness": {
-                "metrics": model_metrics,
-                "threshold": thresholds
-            }
-        }
-        
         # Check thresholds
         is_fair = True
         failed_policies = []
         for metric_name, value in metric_frame.overall.items():
+            logger.info(f"metric_name: {metric_name}, value: {value}")
             threshold = thresholds.get(metric_name, None)
             if threshold is not None:
                 if metric_name in ['demographic_parity_difference']:
@@ -92,6 +85,14 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         logger.info(f"is_fair: {is_fair}, failed_policies: {failed_policies}")
         return is_fair, failed_policies
         '''
+        # Prepare input data for OPA
+        input_data = {
+            "fairness": {
+                "metrics": model_metrics,
+                "threshold": thresholds
+            }
+        }
+
         # Send metrics to OPA for policy evaluation
         response = requests.post(OPA_URL, json={"input": input_data})
         response.raise_for_status()
