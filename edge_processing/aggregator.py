@@ -89,10 +89,17 @@ def on_message(client, userdata, msg):
         except Exception as e:
             logger.exception(f"Unexpected error in on_message: {e}")
 
+# Set up MQTT callbacks
+client.on_message = on_message
+
 def connect_mqtt():
-    client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-    client.subscribe(MQTT_TOPIC_UPLOAD)
-    logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+    try:
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_UPLOAD)
+        print(f"[Aggregator] Subscribed to {MQTT_TOPIC_UPLOAD}")
+    except Exception as e:
+        print(f"[Aggregator] Failed to connect to MQTT Broker: {e}")
+        sys.exit(1)
 
 def mqtt_loop():
     client.loop_forever()
