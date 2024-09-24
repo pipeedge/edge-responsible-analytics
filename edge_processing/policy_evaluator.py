@@ -61,7 +61,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         )
 
         # Extract overall metrics
-        model_metrics = metric_frame.overall_metrics.to_dict()
+        model_metrics = metric_frame.overall.to_dict()
         
         logger.info(f"Model Metrics: {model_metrics}")
         # Prepare input data for OPA
