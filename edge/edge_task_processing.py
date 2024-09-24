@@ -91,7 +91,7 @@ def on_message(client, userdata, msg):
         aggregated_model_b64 = payload.get('model_data')
         if aggregated_model_b64:
             aggregated_model_bytes = base64.b64decode(aggregated_model_b64)
-            aggregated_model_path = 'aggregated_model.h5'
+            aggregated_model_path = 'aggregated_model.keras'
             with open(aggregated_model_path, 'wb') as f:
                 f.write(aggregated_model_bytes)
             print(f"[{DEVICE_ID}] Received aggregated model. Loading {aggregated_model_path}")
@@ -130,7 +130,7 @@ def task_processing(task_type, model_type):
     inference_task = {
         'type': 'inference',
         'data_type': 'chest_xray',
-        'data': 'datasets/chest_xray/test'
+        'data': 'datasets/chest_xray/val'
     }
     training_task = {
         'type': 'training',
