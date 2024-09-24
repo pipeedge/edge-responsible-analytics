@@ -201,7 +201,7 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
 
     metric_frame = MetricFrame(
         metrics={'accuracy': accuracy_score,
-                 'demographic_parity_difference': demographic_parity_difference}
+                 'demographic_parity_difference': demographic_parity_difference},
         y_true=y_true,
         y_pred=preds_binary,
         sensitive_features=sensitive_features
