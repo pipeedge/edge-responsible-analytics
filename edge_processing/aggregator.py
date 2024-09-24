@@ -124,7 +124,7 @@ def evaluate_and_aggregate():
             X_val = np.concatenate(X_val, axis=0)
             y_val = np.concatenate(y_val, axis=0)
             sensitive_features = np.concatenate(sensitive_features, axis=0)
-
+            print(X_val.shape, y_val.shape, sensitive_features.shape)
             # Evaluate fairness
             is_fair, failed_policies = evaluate_fairness_policy(
                 model=aggregated_model,
@@ -207,7 +207,7 @@ def evaluate_fairness(model, X, y_true, sensitive_features, thresholds):
         sensitive_features=sensitive_features
     )
     logger.info(f"Computed Metrics: {metric_frame.overall_metrics.to_dict()}")
-    
+
     # Check thresholds
     is_fair = True
     failed_policies = []
