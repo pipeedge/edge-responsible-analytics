@@ -59,6 +59,7 @@ with open(thresholds_path) as f:
 PREVIOUS_MODEL_PATH = 'aggregated_model_previous.h5'
 
 def on_message(client, userdata, msg):
+    logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
     if msg.topic == MQTT_TOPIC_UPLOAD:
         try:
             payload = json.loads(msg.payload.decode('utf-8'))
@@ -232,7 +233,7 @@ def main():
     logger.info("[Aggregator] MQTT loop started.")
 
     logger.info("[Aggregator] Running. Waiting for models...")
-    evaluate_and_aggregate()
+    # evaluate_and_aggregate()
     try:
         while True:
             time.sleep(1)  # Keep the main thread alive
