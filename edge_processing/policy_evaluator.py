@@ -47,6 +47,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         logger.info(f"Number of samples - X_val: {len(X)}, y_val: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
         if np.isnan(sensitive_features).any():
             logger.error("sensitive_features contain NaN values.")
+        sample_params = {'demographic_parity_difference': {'sensitive_features': sensitive_features}}
         # Create MetricFrame
         metric_frame = MetricFrame(
             metrics={
@@ -55,11 +56,12 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             },
             y_true=y_true,
             y_pred=y_pred_binary,
-            sensitive_features=sensitive_features
+            sensitive_features=sensitive_features,
+            sample_params = sample_params
         )
 
         # Log computed metrics
-        logger.info(f"Computed Metrics: {metric_frame.overall_metrics.to_dict()}")
+        logger.info(f"Computed Metrics: {metric_frame.overall_metrics}")
 
         # Extract overall metrics
         model_metrics = metric_frame.overall_metrics.to_dict()
