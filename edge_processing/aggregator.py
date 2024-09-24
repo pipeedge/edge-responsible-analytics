@@ -115,7 +115,7 @@ def evaluate_and_aggregate():
             X_val, y_val, sensitive_features = [], [], []
 
             # Iterate over the generator to collect all batches
-            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/test", batch_size=32):
+            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
                 X_val.append(batch_X)
                 y_val.append(batch_y)
                 sensitive_features.append(batch_sensitive)

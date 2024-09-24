@@ -76,7 +76,8 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         response = requests.post(OPA_URL, json={"input": input_data})
         response.raise_for_status()
         result = response.json()
-
+        
+        logger.info(f"Result: {result}")
         allowed = result.get("result", False)
         failed_policies = []
 

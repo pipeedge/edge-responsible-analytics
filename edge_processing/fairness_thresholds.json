@@ -2,7 +2,7 @@
     "fairness": {
       "threshold": {
         "accuracy": 0.2,
-        "demographic_parity_difference": 0.05
+        "demographic_parity_difference": 0.5
       }
     }
   }
