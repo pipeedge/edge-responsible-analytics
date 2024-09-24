@@ -56,7 +56,7 @@ with open(thresholds_path) as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
 
 # Initialize previous aggregated model path
-PREVIOUS_MODEL_PATH = 'aggregated_model_previous.h5'
+PREVIOUS_MODEL_PATH = 'aggregated_model_previous.keras'
 
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -115,7 +115,7 @@ def aggregate_and_publish_models():
         models = []
         for device_id, model_info in received_models.items():
             model_data = base64.b64decode(model_info['model_data'])
-            model_path = f"received_{device_id}.h5"
+            model_path = f"received_{device_id}.keras"
             with open(model_path, 'wb') as f:
                 f.write(model_data)
             model = tf.keras.models.load_model(model_path)
@@ -132,7 +132,7 @@ def aggregate_and_publish_models():
         aggregated_model = models[0].__class__()
         aggregated_model.build(models[0].input_shape)
         aggregated_model.set_weights(averaged_weights)
-        aggregated_model_path = 'aggregated_model.h5'
+        aggregated_model_path = 'aggregated_model.keras'
         aggregated_model.save(aggregated_model_path)
         logger.info(f"Aggregated model saved to {aggregated_model_path}")
 
@@ -169,7 +169,7 @@ def evaluate_and_aggregate():
 
             # Load aggregated model for fairness evaluation
             # Assuming aggregation logic has been applied already
-            aggregated_model_path = 'aggregated_model.h5'
+            aggregated_model_path = 'aggregated_model.keras'
 
             if not os.path.exists(aggregated_model_path):
                 logger.error(f"Aggreated model not found at {aggregated_model_path}")
