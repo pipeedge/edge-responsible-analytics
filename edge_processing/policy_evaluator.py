@@ -3,7 +3,8 @@
 import requests
 import json
 import logging
-from fairlearn.metrics import MetricFrame, demographic_parity_difference, accuracy_score
+from fairlearn.metrics import MetricFrame, demographic_parity_difference
+from sklearn.metrics import accuracy_score
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
