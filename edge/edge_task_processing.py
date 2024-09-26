@@ -173,10 +173,10 @@ def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
     parser.add_argument('--model_type', type=str, default='MobileNet',
-                        choices=['MobileNet', 'ResNet', 'Custom'],
+                        choices=['MobileNet', '', ''],
                         help='Type of model to use (default: MobileNet)')
     parser.add_argument('--task_type', type=str, default='inference',
-                        choices=['inference', 'training', 'both'],
+                        choices=['inference', 'training'],
                         help='Type of task to perform (default: inference)')
     
     args = parser.parse_args()
