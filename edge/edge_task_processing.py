@@ -169,6 +169,21 @@ def task_processing(task_type, model_type):
         client.disconnect()
 
 def main():
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description="Edge Task Processing Script")
+    parser.add_argument('--model_type', type=str, default='MobileNet',
+                        choices=['MobileNet', 'ResNet', 'Custom'],
+                        help='Type of model to use (default: MobileNet)')
+    parser.add_argument('--task_type', type=str, default='inference',
+                        choices=['inference', 'training', 'both'],
+                        help='Type of task to perform (default: inference)')
+    
+    args = parser.parse_args()
+    model_type = args.model_type
+    task_type = args.task_type
+
+    logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
+
     # Connect to MQTT
     connect_mqtt()
     # Start MQTT loop in background
@@ -176,8 +191,6 @@ def main():
     thread.daemon = True
     thread.start()
 
-    model_type = 'MobileNet'
-    task_type = 'inference'
     # Start task processing in the main thread
     task_processing(task_type, model_type)
     try:
