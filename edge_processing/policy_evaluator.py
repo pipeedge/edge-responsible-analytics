@@ -65,6 +65,8 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         
         logger.info(f"Model Metrics: {model_metrics}")
         
+        '''
+        ### via local policy
         # Check thresholds
         is_fair = True
         failed_policies = []
@@ -85,7 +87,8 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         logger.info(f"is_fair: {is_fair}, failed_policies: {failed_policies}")
         return is_fair, failed_policies
         '''
-        # Prepare input data for OPA
+        
+        ### via OPA
         input_data = {
             "fairness": {
                 "metrics": model_metrics,
@@ -111,7 +114,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
             return False, failed_policies
-        '''
+        
     except requests.exceptions.RequestException as e:
         logger.exception("Failed to communicate with OPA.")
         return False, ["OPA Communication Error"]
