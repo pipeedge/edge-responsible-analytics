@@ -15,7 +15,9 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
-OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
+# OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
+OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/demographic_parity/allow"
+
 
 def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     """
