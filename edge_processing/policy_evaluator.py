@@ -10,6 +10,7 @@ import foolbox as fb
 import tensorflow as tf
 import shap
 import yaml
+import os
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 #     "reliability": "http://10.200.3.99:8181/v1/data/policies/reliability/allow",
 #     "explainability": "http://10.200.3.99:8181/v1/data/policies/explainability/allow"
 # }
-
-with open('opa_config.yaml', 'r') as file:
+opa_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opa_config.yaml')
+with open(opa_config_path, 'r') as file:
     config = yaml.safe_load(file)
 
 OPA_SERVER_URL = config['opa_server_url']
