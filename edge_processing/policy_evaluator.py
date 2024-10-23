@@ -6,6 +6,10 @@ import logging
 import numpy as np
 from fairlearn.metrics import MetricFrame, demographic_parity_difference
 from sklearn.metrics import accuracy_score
+import foolbox as fb
+import tensorflow as tf
+import shap
+import yaml
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -16,7 +20,24 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
-OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/demographic_parity/allow"
+# OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/demographic_parity/allow"
+
+# POLICY_URLS = {
+#     "fairness": "http://10.200.3.99:8181/v1/data/policies/fairness/demographic_parity/allow",
+#     "reliability": "http://10.200.3.99:8181/v1/data/policies/reliability/allow",
+#     "explainability": "http://10.200.3.99:8181/v1/data/policies/explainability/allow"
+# }
+
+with open('config.yaml', 'r') as file:
+    config = yaml.safe_load(file)
+
+OPA_SERVER_URL = config['opa_server_url']
+POLICIES = config['policies']
+
+def evaluate_policy(policy_config, input_data):
+    policy_url = OPA_SERVER_URL + policy_config['path']
+    # Rest of the function as before
+
 
 
 def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
@@ -97,9 +118,10 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
                 "threshold": thresholds
             }
         }
-        print(json.dumps(input_data, indent=2))
+
         # Send metrics to OPA for policy evaluation
-        response = requests.post(OPA_URL, json={"input": input_data})
+        policy_url = OPA_SERVER_URL + POLICIES['fairness']
+        response = requests.post(policy_url, json={"input": input_data})
         response.raise_for_status()
         result = response.json()
         
@@ -126,3 +148,34 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     except Exception as e:
         logger.exception(f"Error during fairness evaluation: {e}")
         return False, ["Fairness Evaluation Error"]
+
+
+def evaluate_reliability(model, X_test, y_test):
+    # Create a Foolbox model
+    fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
+    
+    # Create an attack
+    attack = fb.attacks.LinfPGD()
+    
+    # Run the attack
+    raw_advs, clipped_advs, success = attack(fmodel, X_test, y_test, epsilons=0.03)
+    
+    # Calculate the success rate of the attack
+    success_rate = np.mean(success)
+    
+    # Reliability score is inversely related to the success rate of the attack
+    reliability_score = 1 - success_rate
+    return reliability_score
+
+def evaluate_explainability(model, X_sample):
+    # Create a SHAP explainer
+    explainer = shap.DeepExplainer(model, X_sample)
+    
+    # Explain the model's predictions
+    shap_values = explainer.shap_values(X_sample)
+    
+    # Visualize the explanation
+    shap.image_plot(shap_values, X_sample)
+    
+    # Return the SHAP values for further analysis
+    return shap_values
