@@ -1,8 +1,5 @@
 opa_server_url: "http://10.200.3.99:8181"
 policies:
-  - name: fairness
-    path: "/v1/data/policies/fairness/demographic_parity/allow"
-  - name: reliability
-    path: "/v1/data/policies/reliability/allow"
-  - name: explainability
-    path: "/v1/data/policies/explainability/allow"
+  fairness: "/v1/data/policies/fairness/demographic_parity/allow"
+  reliability: "/v1/data/policies/reliability/allow"
+  explainability: "/v1/data/policies/explainability/allow"

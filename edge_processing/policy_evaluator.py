@@ -35,12 +35,6 @@ with open(opa_config_path, 'r') as file:
 OPA_SERVER_URL = config['opa_server_url']
 POLICIES = config['policies']
 
-def evaluate_policy(policy_config, input_data):
-    policy_url = OPA_SERVER_URL + policy_config['path']
-    # Rest of the function as before
-
-
-
 def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     """
     Evaluates model fairness using OPA policies.
