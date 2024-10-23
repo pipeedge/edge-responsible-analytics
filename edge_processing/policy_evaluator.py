@@ -95,7 +95,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
                 "threshold": thresholds
             }
         }
-
+        print(json.dumps(input_data, indent=2))
         # Send metrics to OPA for policy evaluation
         response = requests.post(OPA_URL, json={"input": input_data})
         response.raise_for_status()
