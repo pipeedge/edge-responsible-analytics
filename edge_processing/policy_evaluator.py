@@ -110,9 +110,12 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             return True, []
         else:
             logger.warning("Model failed fairness policies.")
-            # Determine which policies failed based on metrics
+            #For these metrics, smaller absolute values are better
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
+            # For metrics like accuracy, higher is better
+            if model_metrics.get("accuracy", 0) < thresholds.get("accuracy", 0):
+                failed_policies.append("accuracy")
             return False, failed_policies
         
     except requests.exceptions.RequestException as e:
