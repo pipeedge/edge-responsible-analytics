@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 #     "explainability": "http://10.200.3.99:8181/v1/data/policies/explainability/allow"
 # }
 
-with open('config.yaml', 'r') as file:
+with open('opa_config.yaml', 'r') as file:
     config = yaml.safe_load(file)
 
 OPA_SERVER_URL = config['opa_server_url']
