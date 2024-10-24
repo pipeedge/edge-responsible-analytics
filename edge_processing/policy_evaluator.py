@@ -162,7 +162,7 @@ def evaluate_reliability_policy(model, X_test, y_test):
     reliability_score = 1 - success_rate
     return reliability_score
 
-def evaluate_explainability(model, X_sample):
+def evaluate_explainability_policy(model, X_sample):
     """
     Evaluates model explainability using SHAP's KernelExplainer.
 
