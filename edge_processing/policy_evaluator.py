@@ -174,16 +174,6 @@ def evaluate_explainability_policy(model, X_sample):
         float: Explainability score.
     """
     try:
-        # Get original input shape
-        original_input_shape = model.input_shape  # e.g., (None, 224, 224, 3)
-        if len(original_input_shape) != 4:
-            logger.error(f"Unsupported model input shape: {original_input_shape}")
-            return 0.0
-
-        height = original_input_shape[1]
-        width = original_input_shape[2]
-        channels = original_input_shape[3]
-
         # Select a background dataset for Integrated Gradients
         # Typically, a small subset of the training data
         background_size = min(100, X_sample.shape[0])
