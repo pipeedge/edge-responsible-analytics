@@ -190,8 +190,12 @@ def evaluate_explainability_policy(model, X_sample):
             X_reshaped = inputs_flat.reshape(n_samples, height, width, channels)
             return model.predict(X_reshaped)
 
+        n_background = min(100, X_sample.shape[0])
+        if n_background < 100:
+            logger.warning(f"Insufficient background samples. Using {n_background} samples instead of 100.")
+
         # Reshape background and X_sample to 2D
-        background_flat = X_sample[:100].reshape(100, height * width * channels)
+        background_flat = X_sample[:n_background].reshape(n_background, height * width * channels)
         X_sample_flat = X_sample.reshape(X_sample.shape[0], height * width * channels)
 
         # Initialize the SHAP Kernel Explainer
