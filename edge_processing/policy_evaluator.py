@@ -162,9 +162,9 @@ def evaluate_reliability_policy(model, X_test, y_test):
     reliability_score = 1 - success_rate
     return reliability_score
 
-def evaluate_explainability_policy(model, X_sample):
+def evaluate_explainability(model, X_sample):
     """
-    Evaluates model explainability using SHAP.
+    Evaluates model explainability using SHAP's KernelExplainer.
 
     Args:
         model (tf.keras.Model): The machine learning model.
@@ -174,18 +174,37 @@ def evaluate_explainability_policy(model, X_sample):
         float: Explainability score.
     """
     try:
-        # Initialize the Kernel Explainer with a background dataset
-        background = X_sample[:100]  # Use a representative subset
-        explainer = shap.KernelExplainer(model.predict, background)
-        
-        # Explain the model's predictions
-        shap_values = explainer.shap_values(X_sample)
-        
+        # Get original input shape
+        original_input_shape = model.input_shape  # e.g., (None, 224, 224, 3)
+        if len(original_input_shape) != 4:
+            logger.error(f"Unsupported model input shape: {original_input_shape}")
+            return 0.0
+
+        height = original_input_shape[1]
+        width = original_input_shape[2]
+        channels = original_input_shape[3]
+
+        # Define a prediction wrapper that reshapes the input
+        def predict_wrapper(inputs_flat):
+            n_samples = inputs_flat.shape[0]
+            X_reshaped = inputs_flat.reshape(n_samples, height, width, channels)
+            return model.predict(X_reshaped)
+
+        # Reshape background and X_sample to 2D
+        background_flat = X_sample[:100].reshape(100, height * width * channels)
+        X_sample_flat = X_sample.reshape(X_sample.shape[0], height * width * channels)
+
+        # Initialize the SHAP Kernel Explainer
+        explainer = shap.KernelExplainer(predict_wrapper, background_flat)
+
+        # Compute SHAP values
+        shap_values = explainer.shap_values(X_sample_flat, nsamples=100)
+
         # Calculate explainability score as the mean absolute SHAP value
         explainability_score = np.mean(np.abs(shap_values))
-        
+
         logger.info(f"Explainability Score: {explainability_score}")
-        
+
         return explainability_score
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
