@@ -184,29 +184,27 @@ def evaluate_explainability_policy(model, X_sample):
         width = original_input_shape[2]
         channels = original_input_shape[3]
 
-        # Define a prediction wrapper that reshapes the input
-        def predict_wrapper(inputs_flat):
-            n_samples = inputs_flat.shape[0]
-            X_reshaped = inputs_flat.reshape(n_samples, height, width, channels)
-            return model.predict(X_reshaped)
+        # Select a background dataset for Integrated Gradients
+        # Typically, a small subset of the training data
+        background_size = min(100, X_sample.shape[0])
+        if background_size < 100:
+            logger.warning(f"Insufficient background samples. Using {background_size} samples instead of 100.")
 
-        n_background = min(100, X_sample.shape[0])
-        if n_background < 100:
-            logger.warning(f"Insufficient background samples. Using {n_background} samples instead of 100.")
+        background = X_sample[:background_size]
 
-        # Reshape background and X_sample to 2D
-        background_flat = X_sample[:n_background].reshape(n_background, height * width * channels)
-        X_sample_flat = X_sample.reshape(X_sample.shape[0], height * width * channels)
-
-        # Initialize the SHAP Kernel Explainer
-        explainer = shap.KernelExplainer(predict_wrapper, background_flat)
+        # Initialize the SHAP GradientExplainer
+        explainer = shap.GradientExplainer(model, background)
 
         # Compute SHAP values
-        shap_values = explainer.shap_values(X_sample_flat, nsamples=100)
+        shap_values = explainer.shap_values(X_sample)
 
         # Calculate explainability score as the mean absolute SHAP value
-        explainability_score = np.mean(np.abs(shap_values))
+        # For classification, shap_values is a list (one per class). Assume binary classification.
+        if isinstance(shap_values, list):
+            shap_values = shap_values[1]  # Assuming index 1 corresponds to the positive class
 
+        explainability_score = np.mean(np.abs(shap_values))
+        
         logger.info(f"Explainability Score: {explainability_score}")
 
         return explainability_score

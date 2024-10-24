@@ -174,7 +174,7 @@ def evaluate_and_aggregate():
                     mlflow.log_metric("explainability_score", explainability_score)
 
                     if is_fair and is_explainable:
-                        logger.info("Aggregated model passed mall policies. Publishing the model.")
+                        logger.info("Aggregated model passed all policies. Publishing the model.")
                         publish_aggregated_model(aggregated_model_path)
                         
                         # Log the aggregated Model 
