@@ -158,7 +158,7 @@ def evaluate_and_aggregate():
 
                     # Evaluate explainability
                     explainability_threshold = explainability_thresholds["explainability_score"]
-                    explainability_score = evaluate_explainability_policy(aggregated_model, X_val[:100])  # Use a sample for SHAP
+                    explainability_score = evaluate_explainability_policy(aggregated_model, X_val)
                     is_explainable = explainability_score >= explainability_threshold
 
                     logger.info(f"Explainability Score: {explainability_score}, Threshold: {explainability_threshold}")

@@ -174,8 +174,9 @@ def evaluate_explainability_policy(model, X_sample):
         float: Explainability score.
     """
     try:
-        # Create a SHAP explainer
-        explainer = shap.DeepExplainer(model, X_sample)
+        # Initialize the Kernel Explainer with a background dataset
+        background = X_sample[:100]  # Use a representative subset
+        explainer = shap.KernelExplainer(model.predict, background)
         
         # Explain the model's predictions
         shap_values = explainer.shap_values(X_sample)
