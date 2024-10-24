@@ -1,0 +1,59 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and Push API Server Image
+      run: |
+        docker build -f cloud_layer/Dockerfile.api -t your-docker-registry/cloud_layer_api:latest .
+        docker push your-docker-registry/cloud_layer_api:latest
+
+    - name: Build and Push MLflow Image
+      run: |
+        docker build -f cloud_layer/Dockerfile.mlflow -t your-docker-registry/mlflow:latest .
+        docker push your-docker-registry/mlflow:latest
+
+    - name: Build and Push Monitoring Image
+      run: |
+        docker build -f cloud_layer/Dockerfile.monitoring -t your-docker-registry/cloud_layer_monitoring:latest .
+        docker push your-docker-registry/cloud_layer_monitoring:latest
+
+    - name: Build and Push Edge Processing Image
+      run: |
+        docker build -f edge_processing/Dockerfile -t your-docker-registry/edge_processing:latest .
+        docker push your-docker-registry/edge_processing:latest
+
+    - name: Configure kubectl
+      uses: azure/setup-kubectl@v1
+      with:
+        version: '1.20.0'
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/deployment_mlflow.yaml
+        kubectl apply -f k8s/service_mlflow.yaml
+        kubectl apply -f k8s/deployment_monitoring.yaml
+        kubectl apply -f k8s/service_monitoring.yaml
+        kubectl apply -f k8s/deployment_api.yaml
+        kubectl apply -f k8s/service_api.yaml
+        kubectl apply -f k8s/mosquitto-deployment.yaml
+        kubectl apply -f k8s/mosquitto-service.yaml

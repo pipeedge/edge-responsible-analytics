@@ -20,7 +20,6 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
-# OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/allow"
 # OPA_URL = "http://10.200.3.99:8181/v1/data/policies/fairness/demographic_parity/allow"
 
 # POLICY_URLS = {
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 #     "reliability": "http://10.200.3.99:8181/v1/data/policies/reliability/allow",
 #     "explainability": "http://10.200.3.99:8181/v1/data/policies/explainability/allow"
 # }
+
 opa_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opa_config.yaml')
 with open(opa_config_path, 'r') as file:
     config = yaml.safe_load(file)
@@ -145,7 +145,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         return False, ["Fairness Evaluation Error"]
 
 
-def evaluate_reliability(model, X_test, y_test):
+def evaluate_reliability_policy(model, X_test, y_test):
     # Create a Foolbox model
     fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
     
@@ -162,15 +162,30 @@ def evaluate_reliability(model, X_test, y_test):
     reliability_score = 1 - success_rate
     return reliability_score
 
-def evaluate_explainability(model, X_sample):
-    # Create a SHAP explainer
-    explainer = shap.DeepExplainer(model, X_sample)
-    
-    # Explain the model's predictions
-    shap_values = explainer.shap_values(X_sample)
-    
-    # Visualize the explanation
-    shap.image_plot(shap_values, X_sample)
-    
-    # Return the SHAP values for further analysis
-    return shap_values
+def evaluate_explainability_policy(model, X_sample):
+    """
+    Evaluates model explainability using SHAP.
+
+    Args:
+        model (tf.keras.Model): The machine learning model.
+        X_sample (np.ndarray): Sample input data for explanation.
+
+    Returns:
+        float: Explainability score.
+    """
+    try:
+        # Create a SHAP explainer
+        explainer = shap.DeepExplainer(model, X_sample)
+        
+        # Explain the model's predictions
+        shap_values = explainer.shap_values(X_sample)
+        
+        # Calculate explainability score as the mean absolute SHAP value
+        explainability_score = np.mean(np.abs(shap_values))
+        
+        logger.info(f"Explainability Score: {explainability_score}")
+        
+        return explainability_score
+    except Exception as e:
+        logger.exception(f"Error during explainability evaluation: {e}")
+        return 0.0

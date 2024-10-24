@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt-broker-service
+  namespace: cloud-layer
+spec:
+  selector:
+    app: mqtt-broker
+  ports:
+    - protocol: TCP
+      port: 1883
+      targetPort: 1883
+    - protocol: TCP
+      port: 9001
+      targetPort: 9001
+  type: LoadBalancer

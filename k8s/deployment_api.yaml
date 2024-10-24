@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: cloud-layer
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+      - name: api-server
+        image: your-docker-registry/cloud_layer_api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OPA_CONFIG_PATH
+          value: "/configs/opa_config.yaml"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /configs
+      volumes:
+      - name: config-volume
+        configMap:
+          name: opa-config

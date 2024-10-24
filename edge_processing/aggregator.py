@@ -20,7 +20,7 @@ import paho.mqtt.client as mqtt
 import tensorflow as tf
 import numpy as np
 
-from policy_evaluator import evaluate_fairness_policy  # Import the policy evaluator
+from policy_evaluator import * 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -53,10 +53,13 @@ client = mqtt.Client(client_id='aggregator')
 received_models = {}
 lock = threading.Lock()
 
-# Load fairness thresholds
-thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/fairness_thresholds.json')
-with open(thresholds_path) as f:
+# Load thresholds
+thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/')
+with open(thresholds_path+'fairness_thresholds.json') as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
+with open(thresholds_path+'explainability_thresholds.json') as f:
+    explainability_thresholds = json.load(f)['explainability']['threshold']
+
 
 # Initialize previous aggregated model path
 PREVIOUS_MODEL_PATH = 'aggregated_model_previous.keras'
@@ -145,7 +148,7 @@ def evaluate_and_aggregate():
             with mlflow.start_run(run_name="AggregatedModel_Evaluation"):
                 try:
                     # Evaluate fairness using the policy evaluator
-                    is_fair, failed_policies = evaluate_fairness_policy(
+                    is_fair, failed_fairness_policies = evaluate_fairness_policy(
                         model=aggregated_model,
                         X=X_val,
                         y_true=y_val,
@@ -153,12 +156,25 @@ def evaluate_and_aggregate():
                         thresholds=fairness_thresholds
                     )
 
-                    # Log parameters and metrics
+                    # Evaluate explainability
+                    explainability_threshold = explainability_thresholds["explainability_score"]
+                    explainability_score = evaluate_explainability_policy(aggregated_model, X_val[:100])  # Use a sample for SHAP
+                    is_explainable = explainability_score >= explainability_threshold
+
+                    logger.info(f"Explainability Score: {explainability_score}, Threshold: {explainability_threshold}")
+
+                    if not is_explainable:
+                        failed_explainability_policies = ["explainability_score"]
+                        logger.warning(f"Aggregated model failed explainability policy: {failed_explainability_policies}")
+                    else:
+                        failed_explainability_policies = []
+
                     mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds["demographic_parity_difference"])
                     mlflow.log_metric("is_fair", int(is_fair))
+                    mlflow.log_metric("explainability_score", explainability_score)
 
-                    if is_fair:
-                        logger.info("Aggregated model passed fairness policies. Publishing the model.")
+                    if is_fair and is_explainable:
+                        logger.info("Aggregated model passed mall policies. Publishing the model.")
                         publish_aggregated_model(aggregated_model_path)
                         
                         # Log the aggregated Model 
@@ -182,7 +198,12 @@ def evaluate_and_aggregate():
                         os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
                         received_models.clear()
                     else:
-                        logger.warning(f"Aggregated model failed fairness policies: {failed_policies}. Retaining previous model.")
+                        # logger.warning(f"Aggregated model failed fairness policies: {failed_fairness_policies}. Retaining previous model.")
+                        # notify_policy_failure(failed_fairness_policies)
+                        # mlflow.log_param("failed_fairness_policies", failed_fairness_policies)
+
+                        failed_policies = failed_fairness_policies + failed_explainability_policies
+                        logger.warning(f"Aggregated model failed policies: {failed_policies}. Retaining previous model.")
                         notify_policy_failure(failed_policies)
                         mlflow.log_param("failed_policies", failed_policies)
                         # Use the previous aggregated model if it exists
@@ -269,6 +290,25 @@ def connect_mqtt():
     client.subscribe(MQTT_TOPIC_UPLOAD)
     client.loop_start()
     logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+
+CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-layer-api-service.cloud-layer.svc.cluster.local:8000/upload_model/')
+def send_model_to_cloud(device_id, model_type, model_path):
+    try:
+        with open(model_path, 'rb') as f:
+            model_bytes = f.read()
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        payload = {
+            'device_id': device_id,
+            'model_type': model_type,
+            'model_data': model_b64
+        }
+        response = requests.post(CLOUD_API_URL, json=payload)
+        if response.status_code == 200:
+            print(f"Model {model_type} from {device_id} uploaded successfully.")
+        else:
+            print(f"Failed to upload model: {response.text}")
+    except Exception as e:
+        print(f"Error uploading model: {e}")
 
 def main():
     connect_mqtt()
