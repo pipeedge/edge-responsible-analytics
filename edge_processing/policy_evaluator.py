@@ -295,7 +295,7 @@ def send_to_opa(input_data, policy_type):
             logger.error(f"No policy URL found for policy type: {policy_type}")
             return False, [f"{policy_type}_policy_not_found"]
 
-        response = requests.post(policy_url, json=input_data)
+        response = requests.post(policy_url, json={"input": input_data})
         if response.status_code == 200:
             result = response.json()
             allowed = result.get('result', False)
