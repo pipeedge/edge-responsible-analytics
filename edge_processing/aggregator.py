@@ -117,7 +117,7 @@ def evaluate_and_aggregate():
                 return
 
             aggregated_model = tf.keras.models.load_model(aggregated_model_path, compile=False)
-            aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+            aggregated_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
             # Prepare validation data
             X_val, y_val, sensitive_features = [], [], []

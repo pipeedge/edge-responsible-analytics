@@ -114,15 +114,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             }
         }
 
-        # Send metrics to OPA for policy evaluation
-        policy_url = OPA_SERVER_URL + POLICIES['fairness']
-        response = requests.post(policy_url, json={"input": input_data})
-        response.raise_for_status()
-        result = response.json()
-        
-        logger.info(f"Result: {result}")
-        allowed = result.get("result", False)
-        failed_policies = []
+        allowed, failed_policies= send_to_opa(input_data, "fairness")
 
         if allowed:
             logger.info("Model passed all fairness policies.")
@@ -233,3 +225,16 @@ def evaluate_explainability_policy(model, X_sample):
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
         return 0.0
+    
+def send_to_opa(input_data, policy):
+    # Send metrics to OPA for policy evaluation
+    policy_url = OPA_SERVER_URL + POLICIES[policy]
+    response = requests.post(policy_url, json={"input": input_data})
+    response.raise_for_status()
+    result = response.json()
+        
+    logger.info(f"Result: {result}")
+    allowed = result.get("result", False)
+    failed_policies = []
+
+    return allowed, failed_policies
