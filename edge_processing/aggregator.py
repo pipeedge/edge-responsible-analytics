@@ -59,7 +59,7 @@ with open(thresholds_path+'fairness_thresholds.json') as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
 with open(thresholds_path+'explainability_thresholds.json') as f:
     explainability_thresholds = json.load(f)['explainability']['threshold']
-with open(thresholds_path+'explainability_thresholds.json') as f:
+with open(thresholds_path+'reliability_thresholds.json') as f:
     reliability_thresholds = json.load(f)['reliability']['threshold']
 
 
