@@ -137,7 +137,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         return False, ["Fairness Evaluation Error"]
 
 
-def evaluate_reliability_policy(model, X_test, y_test):
+def evaluate_reliability_policy(model, X_test, y_test, thresholds):
     """
     Evaluates model reliability using adversarial attacks via Foolbox.
 
@@ -183,12 +183,37 @@ def evaluate_reliability_policy(model, X_test, y_test):
         # Reliability score is inversely related to the success rate of the attack
         reliability_score = 1 - success_rate
 
-        return reliability_score
+        # Prepare metrics for OPA
+        reliability_metrics = {
+            "success_rate": float(success_rate),
+            "reliability_score": float(reliability_score)
+        }
+
+        # Log reliability metrics
+        logger.info(f"Reliability Metrics: {reliability_metrics}")
+
+        # Prepare input data for OPA
+        input_data = {
+            "reliability": {
+                "metrics": reliability_metrics,
+                "threshold": thresholds
+            }
+        }
+
+        # Send data to OPA for policy evaluation
+        allowed, failed_policies = send_to_opa(input_data, "reliability")
+
+        if allowed:
+            logger.info("Model passed all reliability policies.")
+            return True, []
+        else:
+            logger.warning("Model failed reliability policies.")
+            return False, failed_policies
     except Exception as e:
         logger.exception(f"Error during reliability evaluation: {e}")
         return 0.0
 
-def evaluate_explainability_policy(model, X_sample):
+def evaluate_explainability_policy(model, X_sample, thresholds):
     """
     Evaluates model explainability using SHAP's KernelExplainer.
 
@@ -221,20 +246,64 @@ def evaluate_explainability_policy(model, X_sample):
 
         explainability_score = np.mean(np.abs(shap_values))
         
-        return explainability_score
+        logger.info(f"Explainability Score: {explainability_score}")
+
+        # Prepare metrics for OPA
+        explainability_metrics = {
+            "explainability_score": float(explainability_score)
+        }
+
+        # Log explainability metrics
+        logger.info(f"Explainability Metrics: {explainability_metrics}")
+
+        # Prepare input data for OPA
+        input_data = {
+            "explainability": {
+                "metrics": explainability_metrics,
+                "threshold": thresholds
+            }
+        }
+
+        # Send data to OPA for policy evaluation
+        allowed, failed_policies = send_to_opa(input_data, "explainability")
+
+        if allowed:
+            logger.info("Model passed all explainability policies.")
+            return True, []
+        else:
+            logger.warning("Model failed explainability policies.")
+            return False, failed_policies
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
         return 0.0
     
-def send_to_opa(input_data, policy):
-    # Send metrics to OPA for policy evaluation
-    policy_url = OPA_SERVER_URL + POLICIES[policy]
-    response = requests.post(policy_url, json={"input": input_data})
-    response.raise_for_status()
-    result = response.json()
-        
-    logger.info(f"Result: {result}")
-    allowed = result.get("result", False)
-    failed_policies = []
+def send_to_opa(input_data, policy_type):
+    """
+    Sends evaluation data to OPA for policy decision.
 
-    return allowed, failed_policies
+    Args:
+        input_data (dict): Data containing metrics and thresholds.
+        policy_type (str): Type of policy (e.g., 'fairness', 'reliability', 'explainability').
+
+    Returns:
+        bool: Whether the policy is allowed.
+        list: List of failed policies.
+    """
+    try:
+        policy_url = POLICIES.get(policy_type)
+        if not policy_url:
+            logger.error(f"No policy URL found for policy type: {policy_type}")
+            return False, [f"{policy_type}_policy_not_found"]
+
+        response = requests.post(policy_url, json=input_data)
+        if response.status_code == 200:
+            result = response.json()
+            allowed = result.get('result', False)
+            failed_policies = result.get('failed_policies', [])
+            return allowed, failed_policies
+        else:
+            logger.error(f"OPA request failed with status code {response.status_code}: {response.text}")
+            return False, [f"{policy_type}_opa_request_failed"]
+    except Exception as e:
+        logger.exception(f"Error sending data to OPA: {e}")
+        return False, [f"{policy_type}_opa_exception"]
