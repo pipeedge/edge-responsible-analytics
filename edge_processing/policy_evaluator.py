@@ -158,10 +158,20 @@ def evaluate_reliability_policy(model, X_test, y_test):
         float: Reliability score.
     """
     try:
+        # Ensure TensorFlow's eager execution is enabled
+        tf.config.run_functions_eagerly(True)
+
+        # Verify input bounds and normalize if necessary
         if X_test.min() < 0 or X_test.max() > 1:
-            logger.info("Normalizing X_val to [0, 1] range.")
+            logger.info(f"Normalizing X_test to [0, 1] range. Original min: {X_test.min()}, max: {X_test.max()}")
             X_test = X_test.astype('float32')
             X_test = (X_test - X_test.min()) / (X_test.max() - X_test.min())
+            logger.info(f"After normalization - min: {X_test.min()}, max: {X_test.max()}")
+
+        # Convert NumPy arrays to TensorFlow tensors
+        X_test_tf = tf.convert_to_tensor(X_test)
+        y_test_tf = tf.convert_to_tensor(y_test)
+
         # Create a Foolbox model
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
 
@@ -169,9 +179,11 @@ def evaluate_reliability_policy(model, X_test, y_test):
         attack = fb.attacks.LinfPGD()
 
         # Run the attack
-        raw_advs, clipped_advs, success = attack(fmodel, X_test, y_test, epsilons=0.03)
+        raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf, epsilons=0.03)
 
-        logger.info(f"raw_advs, clipped_advs: {raw_advs}, ,{clipped_advs}")
+        logger.info(f"Adversarial examples generated: {raw_advs.shape}")
+        logger.info(f"Clipped adversarial examples: {clipped_advs.shape}")
+        logger.info(f"Attack Success Rate: {np.mean(success)}")
 
         # Calculate the success rate of the attack
         success_rate = np.mean(success)
