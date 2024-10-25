@@ -290,7 +290,7 @@ def send_to_opa(input_data, policy_type):
         list: List of failed policies.
     """
     try:
-        policy_url = POLICIES.get(policy_type)
+        policy_url = OPA_SERVER_URL+POLICIES.get(policy_type)
         if not policy_url:
             logger.error(f"No policy URL found for policy type: {policy_type}")
             return False, [f"{policy_type}_policy_not_found"]
