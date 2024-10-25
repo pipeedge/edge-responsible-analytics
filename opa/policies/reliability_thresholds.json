@@ -1,0 +1,7 @@
+{
+    "reliability": {
+      "threshold": {
+        "reliability_score": 0.8
+      }
+    }
+  }

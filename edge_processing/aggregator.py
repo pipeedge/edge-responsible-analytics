@@ -59,6 +59,8 @@ with open(thresholds_path+'fairness_thresholds.json') as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
 with open(thresholds_path+'explainability_thresholds.json') as f:
     explainability_thresholds = json.load(f)['explainability']['threshold']
+with open(thresholds_path+'explainability_thresholds.json') as f:
+    reliability_thresholds = json.load(f)['reliability']['threshold']
 
 
 # Initialize previous aggregated model path
@@ -163,17 +165,30 @@ def evaluate_and_aggregate():
 
                     logger.info(f"Explainability Score: {explainability_score}, Threshold: {explainability_threshold}")
 
+                    # Evaluate reliability
+                    reliability_threshold = reliability_thresholds.get("reliability_score", 0.9)
+                    reliability_score = evaluate_reliability_policy(aggregated_model, X_val, y_val)
+                    is_reliable = reliability_score >= reliability_threshold
+
+                    logger.info(f"Reliability Score: {reliability_score}, Threshold: {reliability_threshold}")
+
                     if not is_explainable:
                         failed_explainability_policies = ["explainability_score"]
                         logger.warning(f"Aggregated model failed explainability policy: {failed_explainability_policies}")
                     else:
                         failed_explainability_policies = []
 
+                    if not is_reliable:
+                        failed_reliability_policies = ["reliability_score"]
+                        logger.warning(f"Aggregated model failed reliability policy: {failed_reliability_policies}")
+                    else:
+                        failed_reliability_policies = []
+
                     mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds["demographic_parity_difference"])
                     mlflow.log_metric("is_fair", int(is_fair))
                     mlflow.log_metric("explainability_score", explainability_score)
 
-                    if is_fair and is_explainable:
+                    if is_fair and is_explainable and is_reliable:
                         logger.info("Aggregated model passed all policies. Publishing the model.")
                         publish_aggregated_model(aggregated_model_path)
                         
@@ -202,7 +217,7 @@ def evaluate_and_aggregate():
                         # notify_policy_failure(failed_fairness_policies)
                         # mlflow.log_param("failed_fairness_policies", failed_fairness_policies)
 
-                        failed_policies = failed_fairness_policies + failed_explainability_policies
+                        failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
                         logger.warning(f"Aggregated model failed policies: {failed_policies}. Retaining previous model.")
                         notify_policy_failure(failed_policies)
                         mlflow.log_param("failed_policies", failed_policies)

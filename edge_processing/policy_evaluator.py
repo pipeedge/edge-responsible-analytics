@@ -146,21 +146,39 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
 
 
 def evaluate_reliability_policy(model, X_test, y_test):
-    # Create a Foolbox model
-    fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
-    
-    # Create an attack
-    attack = fb.attacks.LinfPGD()
-    
-    # Run the attack
-    raw_advs, clipped_advs, success = attack(fmodel, X_test, y_test, epsilons=0.03)
-    
-    # Calculate the success rate of the attack
-    success_rate = np.mean(success)
-    
-    # Reliability score is inversely related to the success rate of the attack
-    reliability_score = 1 - success_rate
-    return reliability_score
+    """
+    Evaluates model reliability using adversarial attacks via Foolbox.
+
+    Args:
+        model (tf.keras.Model): The machine learning model.
+        X_test (np.ndarray): Test input data.
+        y_test (np.ndarray): True labels for test data.
+
+    Returns:
+        float: Reliability score.
+    """
+    try:
+        # Create a Foolbox model
+        fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
+
+        # Create an attack
+        attack = fb.attacks.LinfPGD()
+
+        # Run the attack
+        raw_advs, clipped_advs, success = attack(fmodel, X_test, y_test, epsilons=0.03)
+
+        logger.info(f"raw_advs, clipped_advs: {raw_advs}, ,{clipped_advs}")
+
+        # Calculate the success rate of the attack
+        success_rate = np.mean(success)
+
+        # Reliability score is inversely related to the success rate of the attack
+        reliability_score = 1 - success_rate
+
+        return reliability_score
+    except Exception as e:
+        logger.exception(f"Error during reliability evaluation: {e}")
+        return 0.0
 
 def evaluate_explainability_policy(model, X_sample):
     """
@@ -195,8 +213,6 @@ def evaluate_explainability_policy(model, X_sample):
 
         explainability_score = np.mean(np.abs(shap_values))
         
-        logger.info(f"Explainability Score: {explainability_score}")
-
         return explainability_score
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
