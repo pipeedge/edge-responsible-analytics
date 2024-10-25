@@ -158,6 +158,10 @@ def evaluate_reliability_policy(model, X_test, y_test):
         float: Reliability score.
     """
     try:
+        if X_test.min() < 0 or X_test.max() > 1:
+            logger.info("Normalizing X_val to [0, 1] range.")
+            X_test = X_test.astype('float32')
+            X_test = (X_test - X_test.min()) / (X_test.max() - X_test.min())
         # Create a Foolbox model
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
 
