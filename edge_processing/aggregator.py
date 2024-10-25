@@ -206,7 +206,7 @@ def evaluate_and_aggregate():
                         # notify_policy_failure(failed_fairness_policies)
                         # mlflow.log_param("failed_fairness_policies", failed_fairness_policies)
 
-                        failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
+                        failed_policies = failed_fairness_policies + failed_explainability_policies #+ failed_reliability_policies
                         logger.warning(f"Aggregated model failed policies: {failed_policies}. Retaining previous model.")
                         notify_policy_failure(failed_policies)
                         mlflow.log_param("failed_policies", failed_policies)
