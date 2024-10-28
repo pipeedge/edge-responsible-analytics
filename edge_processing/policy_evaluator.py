@@ -165,7 +165,7 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=preprocessing)
 
         # Define the criterion for binary classification
-        criterion = fb.criteria.Binary()
+        criterion = fb.criteria.Misclassification()
 
         # Initialize the attack with the specified criterion
         attack = fb.attacks.LinfPGD(steps=40, epsilon=0.03, random_start=True, criterion=criterion)
