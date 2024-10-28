@@ -235,7 +235,7 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
     try:
         # Ensure model is compiled
         if not model.optimizer:
-            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
         # Select a background dataset for SHAP
         background_size = min(100, X_sample.shape[0])
@@ -303,7 +303,7 @@ def send_to_opa(input_data, policy_type):
         bool: Whether the policy is allowed.
         list: List of failed policies.
     """
-    failed_policies = ""
+    failed_policies = []
     try:
         policy_url = OPA_SERVER_URL+POLICIES.get(policy_type)
         if not policy_url:

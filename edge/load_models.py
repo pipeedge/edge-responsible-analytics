@@ -17,14 +17,14 @@ def load_mobilenet_model():
         x = tf.keras.layers.Dense(128, activation='relu')(x)
         output = tf.keras.layers.Dense(1, activation='sigmoid')(x)
         model = tf.keras.Model(inputs=inputs, outputs=output)
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         model.save(model_path, save_format='keras')
         print(f"[Loader] New MobileNet model created and saved to {model_path}")
     else:
         # Load the model without compiling to reset the optimizer
         model = tf.keras.models.load_model(model_path, compile=False)
         # Recompile the model with a fresh optimizer
-        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         print(f"[Loader] MobileNet model loaded and recompiled from {model_path}")
     return model
 
