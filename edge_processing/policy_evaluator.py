@@ -7,6 +7,7 @@ import numpy as np
 from fairlearn.metrics import MetricFrame, demographic_parity_difference
 from sklearn.metrics import accuracy_score
 import foolbox as fb
+from foolbox import Criterion
 import tensorflow as tf
 import shap
 import yaml
@@ -152,28 +153,21 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         list: List of failed policies.
     """
     try:
-        # Ensure TensorFlow's eager execution is enabled
-        tf.config.run_functions_eagerly(True)
-
-        # Verify input bounds and normalize if necessary
-        if X_test.min() < 0 or X_test.max() > 1:
-            logger.info(f"Normalizing X_test to [0, 1] range. Original min: {X_test.min()}, max: {X_test.max()}")
-            X_test = X_test.astype('float32')
-            X_test = (X_test - X_test.min()) / (X_test.max() - X_test.min())
-            logger.info(f"After normalization - min: {X_test.min()}, max: {X_test.max()}")
-
         # Convert NumPy arrays to TensorFlow tensors
-        X_test_tf = tf.convert_to_tensor(X_test)
+        X_test_tf = tf.convert_to_tensor(X_test, dtype=tf.float32)
         y_test_tf = tf.convert_to_tensor(y_test, dtype=tf.int32)
 
-        # Create a Foolbox model
-        fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
+        # Create a Foolbox model with logits=False since the model outputs probabilities
+        fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=(0, 1), logits=False)
 
-        # Create an attack
-        attack = fb.attacks.LinfPGD()
+        # Define the criterion for binary classification
+        criterion = fb.criteria.Binary()
+
+        # Initialize the attack with the specified criterion
+        attack = fb.attacks.LinfPGD(steps=40, epsilon=0.03, random_start=True, criterion=criterion)
 
         # Run the attack
-        raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf, epsilons=0.03)
+        raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf)
 
         logger.info(f"Adversarial examples generated: {raw_advs.shape}")
         logger.info(f"Clipped adversarial examples: {clipped_advs.shape}")
