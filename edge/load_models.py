@@ -15,7 +15,7 @@ def load_mobilenet_model():
         x = base_model(inputs)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         x = tf.keras.layers.Dense(128, activation='relu')(x)
-        output = tf.keras.layers.Dense(2)(x)
+        output = tf.keras.layers.Dense(1, activation='sigmoid')(x)
         model = tf.keras.Model(inputs=inputs, outputs=output)
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         model.save(model_path, save_format='keras')

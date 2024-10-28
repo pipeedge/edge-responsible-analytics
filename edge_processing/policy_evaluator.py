@@ -6,11 +6,13 @@ import logging
 import numpy as np
 from fairlearn.metrics import MetricFrame, demographic_parity_difference
 from sklearn.metrics import accuracy_score
-import foolbox as fb
 import tensorflow as tf
 import shap
 import yaml
 import os
+
+from art.attacks.evasion import ProjectedGradientDescentPyTorch, ProjectedGradientDescentTensorFlow, PGD
+from art.estimators.classification import TensorFlowV2Classifier
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -34,6 +36,26 @@ with open(opa_config_path, 'r') as file:
 
 OPA_SERVER_URL = config['opa_server_url']
 POLICIES = config['policies']
+
+def get_art_classifier(model, loss_object, input_shape):
+    """
+    Wraps the TensorFlow model with ART's TensorFlowV2Classifier.
+
+    Args:
+        model (tf.keras.Model): Trained TensorFlow model.
+        loss_object: TensorFlow loss function.
+        input_shape (tuple): Shape of the input data.
+
+    Returns:
+        TensorFlowV2Classifier: ART classifier.
+    """
+    return TensorFlowV2Classifier(
+        model=model,
+        loss=loss_object,
+        input_shape=input_shape,
+        nb_classes=2,
+        clip_values=(0, 1)
+    )
 
 def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
     """
@@ -139,7 +161,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
 
 def evaluate_reliability_policy(model, X_test, y_test, thresholds):
     """
-    Evaluates model reliability using adversarial attacks via Foolbox and sends metrics to OPA for policy evaluation.
+    Evaluates model reliability using adversarial attacks via ART and sends metrics to OPA for policy evaluation.
 
     Args:
         model (tf.keras.Model): The machine learning model.
@@ -152,46 +174,28 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         list: List of failed policies.
     """
     try:
-        # Convert NumPy arrays to TensorFlow tensors
-        X_test_tf = tf.convert_to_tensor(X_test, dtype=tf.float32)
-        y_test_tf = tf.convert_to_tensor(y_test, dtype=tf.int32)
+        # Wrap the model with ART classifier
+        loss_object = tf.keras.losses.BinaryCrossentropy()
+        art_classifier = get_art_classifier(model, loss_object, input_shape=(224, 224, 3))
 
-        preprocessing = {
-            "mean": 0.0,
-            "std": 255.0
-        }
-        # Create a Foolbox model with logits=False since the model outputs probabilities
-        fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=preprocessing)
+        # Initialize the attack (PGD)
+        attack = PGD(estimator=art_classifier, eps=0.03, eps_step=0.005, max_iter=40, targeted=False)
 
-        # Initialize the attack with the specified criterion
-        attack = fb.attacks.LinfProjectedGradientDescentAttack(rel_stepsize=0.03, steps=40, random_start=True)
+        # Generate adversarial examples
+        X_test_adv = attack.generate(x=X_test)
+        predictions = model.predict(X_test_adv)
+        y_pred_adv = (predictions >= 0.5).astype(int).flatten()
 
-        X_test_clipped = tf.clip_by_value(X_test_tf, 0.0, 1.0)
-        logger.info(f"X_test_tf.min(): {X_test_tf.numpy().min()}, X_test_tf.max(): {X_test_tf.numpy().max()}")
-
-        # Run the attack
-        raw_advs, clipped_advs, success = attack(fmodel, X_test_clipped, y_test_tf, epsilons=0.03)
-
-        logger.info(f"Adversarial examples generated: {raw_advs.shape}")
-        logger.info(f"Clipped adversarial examples: {clipped_advs.shape}")
-        logger.info(f"Attack Success Rate: {np.mean(success)}")
-
-        # Calculate the success rate of the attack
-        success_rate = np.mean(success)
-
-        # Reliability score is inversely related to the success rate of the attack
+        success_rate = np.mean(y_pred_adv != y_test)
         reliability_score = 1 - success_rate
 
-        # Prepare metrics for OPA
         reliability_metrics = {
             "success_rate": float(success_rate),
             "reliability_score": float(reliability_score)
         }
 
-        # Log reliability metrics
         logger.info(f"Reliability Metrics: {reliability_metrics}")
 
-        # Prepare input data for OPA
         input_data = {
             "reliability": {
                 "metrics": reliability_metrics,
@@ -199,7 +203,6 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
             }
         }
 
-        # Send data to OPA for policy evaluation
         allowed, failed_policies = send_to_opa(input_data, "reliability")
 
         if allowed:
@@ -207,6 +210,8 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
             return True, []
         else:
             logger.warning("Model failed reliability policies.")
+            if reliability_metrics.get("reliability_score", 0) < thresholds.get("reliability_score", 0):
+                failed_policies.append("reliability_score")
             return False, failed_policies
 
     except requests.exceptions.RequestException as e:
@@ -279,6 +284,8 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             return True, []
         else:
             logger.warning("Model failed explainability policies.")
+            if explainability_metrics.get("explainability_score", 0) < thresholds.get("explainability_score", 0):
+                failed_policies.append("explainability_score")
             return False, failed_policies
 
     except requests.exceptions.RequestException as e:
@@ -312,7 +319,6 @@ def send_to_opa(input_data, policy_type):
             result = response.json()
             allowed = result.get('result', False)
             if not allowed:
-                # Assuming the policy type corresponds to a single policy
                 failed_policies.append(policy_type)
             return allowed, failed_policies
         else:
