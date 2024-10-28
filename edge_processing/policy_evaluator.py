@@ -299,7 +299,8 @@ def send_to_opa(input_data, policy_type):
         if response.status_code == 200:
             result = response.json()
             allowed = result.get('result', False)
-            failed_policies = result.get('failed_policies', [])
+            if not allowed:
+                failed_policies = policy_type
             return allowed, failed_policies
         else:
             logger.error(f"OPA request failed with status code {response.status_code}: {response.text}")
