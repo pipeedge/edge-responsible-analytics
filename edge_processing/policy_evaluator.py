@@ -51,7 +51,7 @@ def get_art_classifier(model, loss_object, input_shape):
     """
     return TensorFlowV2Classifier(
         model=model,
-        loss=loss_object,
+        loss_object=loss_object,
         input_shape=input_shape,
         nb_classes=2,
         clip_values=(0, 1)
