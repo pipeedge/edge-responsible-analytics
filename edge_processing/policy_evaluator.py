@@ -158,7 +158,7 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         y_test_tf = tf.convert_to_tensor(y_test, dtype=tf.int32)
 
         # Create a Foolbox model with logits=False since the model outputs probabilities
-        fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=(0, 1), logits=False)
+        fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=(0, 1))
 
         # Define the criterion for binary classification
         criterion = fb.criteria.Binary()
