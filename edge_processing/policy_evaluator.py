@@ -11,7 +11,7 @@ import shap
 import yaml
 import os
 
-from art.attacks.evasion import ProjectedGradientDescentPyTorch, ProjectedGradientDescentTensorFlow, PGD
+from art.attacks.evasion import ProjectedGradientDescent
 from art.estimators.classification import TensorFlowV2Classifier
 
 logging.basicConfig(level=logging.INFO,
@@ -179,7 +179,7 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         art_classifier = get_art_classifier(model, loss_object, input_shape=(224, 224, 3))
 
         # Initialize the attack (PGD)
-        attack = PGD(estimator=art_classifier, eps=0.03, eps_step=0.005, max_iter=40, targeted=False)
+        attack = ProjectedGradientDescent(estimator=art_classifier, eps=0.03, eps_step=0.005, max_iter=40, targeted=False)
 
         # Generate adversarial examples
         X_test_adv = attack.generate(x=X_test)
