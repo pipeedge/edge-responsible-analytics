@@ -139,15 +139,17 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
 
 def evaluate_reliability_policy(model, X_test, y_test, thresholds):
     """
-    Evaluates model reliability using adversarial attacks via Foolbox.
+    Evaluates model reliability using adversarial attacks via Foolbox and sends metrics to OPA for policy evaluation.
 
     Args:
         model (tf.keras.Model): The machine learning model.
         X_test (np.ndarray): Test input data.
         y_test (np.ndarray): True labels for test data.
+        thresholds (dict): Thresholds for reliability metrics.
 
     Returns:
-        float: Reliability score.
+        bool: True if all reliability policies are satisfied, False otherwise.
+        list: List of failed policies.
     """
     try:
         # Ensure TensorFlow's eager execution is enabled
@@ -162,7 +164,7 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
 
         # Convert NumPy arrays to TensorFlow tensors
         X_test_tf = tf.convert_to_tensor(X_test)
-        y_test_tf = tf.convert_to_tensor(y_test)
+        y_test_tf = tf.convert_to_tensor(y_test, dtype=tf.int32)
 
         # Create a Foolbox model
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1))
@@ -209,24 +211,33 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         else:
             logger.warning("Model failed reliability policies.")
             return False, failed_policies
+
+    except requests.exceptions.RequestException as e:
+        logger.exception("Failed to communicate with OPA.")
+        return False, ["OPA Communication Error"]
     except Exception as e:
         logger.exception(f"Error during reliability evaluation: {e}")
-        return 0.0
+        return False, ["Reliability Evaluation Error"]
 
 def evaluate_explainability_policy(model, X_sample, thresholds):
     """
-    Evaluates model explainability using SHAP's KernelExplainer.
+    Evaluates model explainability using SHAP's GradientExplainer and sends metrics to OPA for policy evaluation.
 
     Args:
         model (tf.keras.Model): The machine learning model.
         X_sample (np.ndarray): Sample input data for explanation.
+        thresholds (dict): Thresholds for explainability metrics.
 
     Returns:
-        float: Explainability score.
+        bool: True if all explainability policies are satisfied, False otherwise.
+        list: List of failed policies.
     """
     try:
-        # Select a background dataset for Integrated Gradients
-        # Typically, a small subset of the training data
+        # Ensure model is compiled
+        if not model.optimizer:
+            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+        # Select a background dataset for SHAP
         background_size = min(100, X_sample.shape[0])
         if background_size < 100:
             logger.warning(f"Insufficient background samples. Using {background_size} samples instead of 100.")
@@ -239,13 +250,12 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         # Compute SHAP values
         shap_values = explainer.shap_values(X_sample)
 
-        # Calculate explainability score as the mean absolute SHAP value
-        # For classification, shap_values is a list (one per class). Assume binary classification.
+        # Assuming binary classification; select SHAP values for the positive class
         if isinstance(shap_values, list):
-            shap_values = shap_values[1]  # Assuming index 1 corresponds to the positive class
+            shap_values = shap_values[1]  # Index 1 corresponds to the positive class
 
+        # Calculate explainability score as the mean absolute SHAP value
         explainability_score = np.mean(np.abs(shap_values))
-        
         logger.info(f"Explainability Score: {explainability_score}")
 
         # Prepare metrics for OPA
@@ -273,9 +283,13 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         else:
             logger.warning("Model failed explainability policies.")
             return False, failed_policies
+
+    except requests.exceptions.RequestException as e:
+        logger.exception("Failed to communicate with OPA.")
+        return False, ["OPA Communication Error"]
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
-        return 0.0
+        return False, ["Explainability Evaluation Error"]
     
 def send_to_opa(input_data, policy_type):
     """
@@ -289,6 +303,7 @@ def send_to_opa(input_data, policy_type):
         bool: Whether the policy is allowed.
         list: List of failed policies.
     """
+    failed_policies = ""
     try:
         policy_url = OPA_SERVER_URL+POLICIES.get(policy_type)
         if not policy_url:
