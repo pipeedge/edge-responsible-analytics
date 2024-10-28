@@ -158,13 +158,15 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
 
         preprocessing = {
             "mean": 0.0,
-            "std": 1.0
+            "std": 255.0
         }
         # Create a Foolbox model with logits=False since the model outputs probabilities
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=preprocessing)
 
         # Initialize the attack with the specified criterion
         attack = fb.attacks.LinfProjectedGradientDescentAttack(rel_stepsize=0.03, steps=40, random_start=True)
+
+        logger.info(f"X_test_tf.min(): {X_test_tf.numpy().min()}, X_test_tf.max(): {X_test_tf.numpy().max()}")
 
         # Run the attack
         raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf, epsilons=0.03)
