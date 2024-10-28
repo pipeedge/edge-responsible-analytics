@@ -166,10 +166,11 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         # Initialize the attack with the specified criterion
         attack = fb.attacks.LinfProjectedGradientDescentAttack(rel_stepsize=0.03, steps=40, random_start=True)
 
+        X_test_clipped = tf.clip_by_value(X_test_tf, 0.0, 1.0)
         logger.info(f"X_test_tf.min(): {X_test_tf.numpy().min()}, X_test_tf.max(): {X_test_tf.numpy().max()}")
 
         # Run the attack
-        raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf, epsilons=0.03)
+        raw_advs, clipped_advs, success = attack(fmodel, X_test_clipped, y_test_tf, epsilons=0.03)
 
         logger.info(f"Adversarial examples generated: {raw_advs.shape}")
         logger.info(f"Clipped adversarial examples: {clipped_advs.shape}")
