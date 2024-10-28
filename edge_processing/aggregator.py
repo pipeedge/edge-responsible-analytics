@@ -117,7 +117,7 @@ def evaluate_and_aggregate():
                 return
 
             aggregated_model = tf.keras.models.load_model(aggregated_model_path, compile=False)
-            aggregated_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
             # Prepare validation data
             X_val, y_val, sensitive_features = [], [], []
@@ -172,7 +172,11 @@ def evaluate_and_aggregate():
                         publish_aggregated_model(aggregated_model_path)
                         
                         # Log the aggregated Model 
-                        mlflow.keras.log_model(aggregated_model, "model", signature=infer_signature(X_val, aggregated_model.predict(X_val)))
+                        mlflow.keras.log_model(
+                            aggregated_model, 
+                            "model", 
+                            signature=infer_signature(X_val, aggregated_model.predict(X_val))
+                        )
                         # Register the model in MLflow
                         model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
                         model_details = mlflow.register_model(model_uri, "AggregatedModel")
@@ -192,10 +196,6 @@ def evaluate_and_aggregate():
                         os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
                         received_models.clear()
                     else:
-                        # logger.warning(f"Aggregated model failed fairness policies: {failed_fairness_policies}. Retaining previous model.")
-                        # notify_policy_failure(failed_fairness_policies)
-                        # mlflow.log_param("failed_fairness_policies", failed_fairness_policies)
-
                         failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
                         logger.warning(f"Aggregated model failed policies: {failed_policies}. Retaining previous model.")
                         notify_policy_failure(failed_policies)

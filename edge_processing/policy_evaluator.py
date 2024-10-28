@@ -305,7 +305,7 @@ def send_to_opa(input_data, policy_type):
     """
     failed_policies = []
     try:
-        policy_url = OPA_SERVER_URL+POLICIES.get(policy_type)
+        policy_url = OPA_SERVER_URL + POLICIES.get(policy_type)
         if not policy_url:
             logger.error(f"No policy URL found for policy type: {policy_type}")
             return False, [f"{policy_type}_policy_not_found"]
@@ -315,7 +315,8 @@ def send_to_opa(input_data, policy_type):
             result = response.json()
             allowed = result.get('result', False)
             if not allowed:
-                failed_policies = policy_type
+                # Assuming the policy type corresponds to a single policy
+                failed_policies.append(policy_type)
             return allowed, failed_policies
         else:
             logger.error(f"OPA request failed with status code {response.status_code}: {response.text}")
