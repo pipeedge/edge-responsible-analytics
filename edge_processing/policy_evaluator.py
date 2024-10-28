@@ -7,7 +7,6 @@ import numpy as np
 from fairlearn.metrics import MetricFrame, demographic_parity_difference
 from sklearn.metrics import accuracy_score
 import foolbox as fb
-from foolbox import Criterion
 import tensorflow as tf
 import shap
 import yaml
@@ -164,11 +163,8 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         # Create a Foolbox model with logits=False since the model outputs probabilities
         fmodel = fb.TensorFlowModel(model, bounds=(0, 1), preprocessing=preprocessing)
 
-        # Define the criterion for binary classification
-        criterion = fb.criteria.Misclassification(labels=y_test)
-
         # Initialize the attack with the specified criterion
-        attack = fb.attacks.LinfPGD(steps=40, epsilon=0.03, random_start=True, criterion=criterion)
+        attack = fb.attacks.LinfProjectedGradientDescentAttack(rel_stepsize=0.03, steps=40, random_start=True)
 
         # Run the attack
         raw_advs, clipped_advs, success = attack(fmodel, X_test_tf, y_test_tf)
