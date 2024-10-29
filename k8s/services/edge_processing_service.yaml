@@ -8,13 +8,16 @@ spec:
   selector:
     app: edge-processing
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 8000
       targetPort: 8000
-    - protocol: TCP
+    - name: mlflow
+      protocol: TCP
       port: 5002
       targetPort: 5002
-    - protocol: TCP
+    - name: opa
+      protocol: TCP
       port: 8181
       targetPort: 8181
   type: ClusterIP
