@@ -23,7 +23,7 @@ spec:
         - containerPort: 8181  # OPA server
         env:
         - name: MQTT_BROKER
-          value: "localhost"
+          value: "edge-processing-service"
         - name: MQTT_PORT
           value: "1883"
         - name: MQTT_TOPIC_UPLOAD
@@ -31,6 +31,4 @@ spec:
         - name: MQTT_TOPIC_AGGREGATED
           value: "models/aggregated"
         - name: EXPECTED_DEVICES
-          value: "3"
-        - name: CLOUD_API_URL
-          value: "http://edge-processing-service:8000/upload_model/"          
+          value: "1"       

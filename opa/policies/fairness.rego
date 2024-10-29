@@ -1,4 +1,4 @@
-package policies.fairness.demographic_parity
+package policies.fairness
 
 default allow = false
 
