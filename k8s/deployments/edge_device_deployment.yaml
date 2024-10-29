@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-device-deployment
+  labels:
+    app: edge-device
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: edge-device
+  template:
+    metadata:
+      labels:
+        app: edge-device
+    spec:
+      containers:
+      - name: edge-device
+        image: your-dockerhub-username/edge-device:latest
+        ports:
+        - containerPort: 8001
+        env:              
+        - name: MQTT_BROKER
+          value: "edge-processing-service"
+        - name: MQTT_PORT
+          value: "1883"
+        - name: MQTT_TOPIC_UPLOAD
+          value: "models/upload"
+        - name: MQTT_TOPIC_AGGREGATED
+          value: "models/aggregated"
+        - name: DEVICE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name

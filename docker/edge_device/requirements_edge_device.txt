@@ -1,0 +1,8 @@
+paho-mqtt
+tensorflow
+numpy
+flask
+transformers
+scikit-learn
+kaggle
+fairlearn

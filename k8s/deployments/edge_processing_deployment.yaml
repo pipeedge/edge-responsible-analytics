@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-processing-deployment
+  labels:
+    app: edge-processing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-processing
+  template:
+    metadata:
+      labels:
+        app: edge-processing
+    spec:
+      containers:
+      - name: edge-processing
+        image: your-dockerhub-username/edge-processing-server:latest
+        ports:
+        - containerPort: 8000
+        - containerPort: 5002  # MLflow server
+        - containerPort: 8181  # OPA server
+        env:
+        - name: MQTT_BROKER
+          value: "localhost"
+        - name: MQTT_PORT
+          value: "1883"
+        - name: MQTT_TOPIC_UPLOAD
+          value: "models/upload"
+        - name: MQTT_TOPIC_AGGREGATED
+          value: "models/aggregated"
+        - name: EXPECTED_DEVICES
+          value: "3"
+        - name: CLOUD_API_URL
+          value: "http://edge-processing-service:8000/upload_model/"          
