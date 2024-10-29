@@ -36,3 +36,6 @@ opa run --server --set=decision_logs.console=true ./opa/policies
 python 3 edge_process/aggregator.py
 ### edge side
 python3 edge/edge_task_processing.py
+
+
+sudo kubeadm init --pod-network-cidr=10.200.3.99/16
