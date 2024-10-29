@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: edge-processing
-        image: liang/edge-processing-server:latest
+        image: crest-lab-manager/edge-processing-server:latest
         ports:
         - containerPort: 8000
         - containerPort: 5002  # MLflow server

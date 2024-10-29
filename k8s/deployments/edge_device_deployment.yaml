@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: edge-device
-        image: crest/edge-device:latest
+        image: r5n01/edge-device:latest
         ports:
         - containerPort: 8001
         env:              
