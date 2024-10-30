@@ -16,8 +16,8 @@ sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable --now kubelet
 
 
-sudo kubeadm join 10.200.3.99:6443 --token mmfymd.a05olcqftc9vmsyv --discovery-token-ca-cert-hash sha256:9650ac2687ce5c364d319e5988505d21b630085e63121a2cb7d9dded5ad3857a
-
+kubeadm join 10.200.3.99:6443 --token s0nijv.0nagdpoff2ntioea \
+	--discovery-token-ca-cert-hash sha256:9f0efe5fae86f945fdc43ac20878876e392b13ae1eeba1234dd3f7595d85f673
 # Verify Cluster Status
 kubectl get nodes
 kubectl get pods --all-namespaces

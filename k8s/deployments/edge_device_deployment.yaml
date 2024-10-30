@@ -14,6 +14,8 @@ spec:
       labels:
         app: edge-device
     spec:
+      imagePullSecrets:
+        - name: mlops
       containers:
       - name: edge-device
         image: r5n01/edge-device:latest

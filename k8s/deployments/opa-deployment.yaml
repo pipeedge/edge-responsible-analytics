@@ -15,6 +15,8 @@ spec:
       labels:
         app: opa
     spec:
+      imagePullSecrets:
+        - name: mlops
       containers:
         - name: opa
           image: openpolicyagent/opa:latest
