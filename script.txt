@@ -38,9 +38,10 @@ python 3 edge_process/aggregator.py
 python3 edge/edge_task_processing.py
 
 
-sudo kubeadm init --pod-network-cidr=10.200.3.99/16
-
 kubectl create secret docker-registry mlops \
   --docker-server=https://index.docker.io/v2/ \
   --docker-username=mlops \
   --docker-password=mlops
+
+
+

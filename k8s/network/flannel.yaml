@@ -22,7 +22,7 @@ spec:
       serviceAccountName: flannel
       containers:
       - name: kube-flannel
-        image: quay.io/coreos/flannel:v0.14.0-amd64
+        image: quay.io/flannel/flannel:v1.21.0
         args:
         - --ip-masq
         - --kube-subnet-mgr

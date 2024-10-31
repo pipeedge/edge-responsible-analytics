@@ -19,6 +19,7 @@ from mlflow.models import infer_signature
 import paho.mqtt.client as mqtt
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 
 from policy_evaluator import * 
 
@@ -61,6 +62,8 @@ with open(thresholds_path+'explainability_thresholds.json') as f:
     explainability_thresholds = json.load(f)['explainability']['threshold']
 with open(thresholds_path+'reliability_thresholds.json') as f:
     reliability_thresholds = json.load(f)['reliability']['threshold']
+with open(thresholds_path + 'privacy_thresholds.json') as f:
+    privacy_thresholds = json.load(f)['privacy']['threshold']
 
 
 # Initialize previous aggregated model path
@@ -149,6 +152,23 @@ def evaluate_and_aggregate():
             # Start MLflow run
             with mlflow.start_run(run_name="AggregatedModel_Evaluation"):
                 try:
+                    # Define quasi-identifiers (adjust based on your dataset)
+                    QUASI_IDENTIFIERS = ['age', 'gender', 'zipcode']  # Example columns
+                    # Convert to DataFrame for privacy evaluation
+                    df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
+                    # Example: df_val['age'] = ... , df_val['gender'] = ..., df_val['zipcode'] = ... 
+                    # Populate quasi-identifiers accordingly
+
+                    # Perform privacy evaluation
+                    is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
+                                                                          quasi_identifiers=QUASI_IDENTIFIERS, 
+                                                                          k_threshold=privacy_thresholds["k"])
+
+                    if not is_private:
+                        logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation.")
+                        notify_policy_failure(failed_privacy_policies)
+                        return
+
                     # Evaluate fairness using the policy evaluator
                     is_fair, failed_fairness_policies = evaluate_fairness_policy(
                         model=aggregated_model,
@@ -163,7 +183,7 @@ def evaluate_and_aggregate():
 
                     # Evaluate reliability
                     is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
-  
+
                     mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds["demographic_parity_difference"])
                     mlflow.log_metric("is_fair", int(is_fair))
 

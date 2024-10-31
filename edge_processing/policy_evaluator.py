@@ -294,6 +294,62 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
         return False, ["Explainability Evaluation Error"]
+
+def compute_k_anonymity(df, quasi_identifiers, k):
+    """
+    Computes k-anonymity for the given DataFrame and quasi-identifiers.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the data.
+        quasi_identifiers (list): List of columns to consider as quasi-identifiers.
+        k (int): The anonymity threshold.
+
+    Returns:
+        int: The minimum k-anonymity across all quasi-identifiers.
+    """
+    group_sizes = df.groupby(quasi_identifiers).size()
+    min_k = group_sizes.min()
+    return min_k
+
+def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
+    """
+    Evaluates privacy policy based on k-anonymity.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the data.
+        quasi_identifiers (list): Columns considered as quasi-identifiers.
+        k_threshold (int): The minimum required k-anonymity.
+
+    Returns:
+        bool: True if k-anonymity >= threshold, False otherwise.
+        list: List containing 'k_anonymity' if policy fails.
+    """
+    try:
+        k_anonymity = compute_k_anonymity(df, quasi_identifiers, k_threshold)
+        logger.info(f"k-anonymity: {k_anonymity}")
+        
+        input_data = {
+            "privacy": {
+                "k_anonymity": k_anonymity,
+                "thresholds": {
+                    "k": k_threshold
+                }
+            }
+        }
+        
+        allowed, failed_policies = send_to_opa(input_data, "privacy")
+        
+        if allowed:
+            logger.info("Data satisfies the privacy policies.")
+            return True, []
+        else:
+            logger.warning("Data failed privacy policies.")
+            failed_policies.append("k_anonymity")
+            return False, failed_policies
+    
+    except Exception as e:
+        logger.exception(f"Error during privacy evaluation: {e}")
+        return False, ["Privacy Evaluation Error"]
     
 def send_to_opa(input_data, policy_type):
     """

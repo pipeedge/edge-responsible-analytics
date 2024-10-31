@@ -1,0 +1,39 @@
+# Initialize Kubernetes with kubeadm
+sudo kubeadm init --apiserver-advertise-address=10.200.3.99 --pod-network-cidr=10.244.0.0/16 # Flannel CNI plugin.
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16 # Calico network
+
+# Configure kubectl for the Default User
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Install Flannel CNI Plugin
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+# Calico network
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+
+# Join the node to the Kubernetes Cluster (change based on initialized info)
+sudo kubeadm join 10.200.3.99:6443 --token nmbyqw.oug2dcltxth7iaf1 \
+	--discovery-token-ca-cert-hash sha256:3155a4f7dbfa01f0a2ed10db75ff89f5729158cdcdef6da447ca110118049119
+    
+# Apply Deployments and Services on the Server
+kubectl apply -f k8s/deployments/opa-deployment.yaml
+kubectl apply -f k8s/services/opa-service.yaml
+
+kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
+kubectl apply -f k8s/services/edge_processing_service.yaml
+
+kubectl apply -f k8s/deployments/edge_device_deployment.yaml
+kubectl apply -f k8s/services/edge_device_service.yaml
+
+
+# Verify Cluster Status
+kubectl get nodes
+kubectl get pods --all-namespaces
+kubectl get services
+
+# Reset the cluster, remove all cluster configurations.
+   sudo kubeadm reset
+
+
