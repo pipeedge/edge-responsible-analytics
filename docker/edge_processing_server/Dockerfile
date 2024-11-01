@@ -13,9 +13,9 @@ COPY docker/edge_processing_server/requirements_edge_processing.txt .
 RUN pip install --upgrade pip && pip install -r requirements_edge_processing.txt
 
 # Copy application code from the 'edge' directory
-COPY edge/aggregator.py \
-     edge/policy_evaluator.py \
-     edge/opa_config.yaml \
+COPY edge_processing/aggregator.py \
+     dge_processing/policy_evaluator.py \
+     edge_processing/opa_config.yaml \
      ./
 
 # Expose necessary ports
