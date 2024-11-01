@@ -14,9 +14,9 @@ kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 
 # Join the node to the Kubernetes Cluster (change based on initialized info)
-sudo kubeadm join 10.200.3.99:6443 --token nmbyqw.oug2dcltxth7iaf1 \
-	--discovery-token-ca-cert-hash sha256:3155a4f7dbfa01f0a2ed10db75ff89f5729158cdcdef6da447ca110118049119
-    
+sudo kubeadm join 10.200.3.99:6443 --token 9emoic.7lrokgczcees2ktz \
+	--discovery-token-ca-cert-hash sha256:e0a79801d11a3cc27100024462067307de151b5dfe4e4ce17744a6d68ab10ab2
+
 # Apply Deployments and Services on the Server
 kubectl apply -f k8s/deployments/opa-deployment.yaml
 kubectl apply -f k8s/services/opa-service.yaml
@@ -32,6 +32,8 @@ kubectl apply -f k8s/services/edge_device_service.yaml
 kubectl get nodes
 kubectl get pods --all-namespaces
 kubectl get services
+
+kubectl describe node <>
 
 # Reset the cluster, remove all cluster configurations.
    sudo kubeadm reset

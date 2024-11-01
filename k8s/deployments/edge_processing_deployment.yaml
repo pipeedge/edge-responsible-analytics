@@ -18,7 +18,7 @@ spec:
         - name: mlops
       containers:
       - name: edge-processing
-        image: crest-lab-manager/edge-processing-server:latest
+        image: edgemlops/edge-processing-server:latest
         ports:
         - containerPort: 8000
         - containerPort: 5002  # MLflow server

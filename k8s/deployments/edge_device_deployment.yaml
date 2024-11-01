@@ -18,9 +18,16 @@ spec:
         - name: mlops
       containers:
       - name: edge-device
-        image: r5n01/edge-device:latest
+        image: edgemlops/edge-device:latest
         ports:
         - containerPort: 8001
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
         env:              
         - name: MQTT_BROKER
           value: "edge-processing-service"
