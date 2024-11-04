@@ -1,5 +1,4 @@
 ---
-# Source: kube-flannel.yaml
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
@@ -89,8 +88,8 @@ metadata:
   namespace: kube-system
 
 ---
-kind: DaemonSet
 apiVersion: apps/v1
+kind: DaemonSet
 metadata:
   name: kube-flannel-ds
   namespace: kube-system
@@ -112,7 +111,7 @@ spec:
       hostNetwork: true
       containers:
         - name: kube-flannel
-          image: quay.io/flannel/flannel:v1.1.13-arm64
+          image: quay.io/flannel/flannel:v1.1.14
           resources:
             requests:
               cpu: 100m
