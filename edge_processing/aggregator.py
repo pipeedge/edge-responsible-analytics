@@ -156,6 +156,7 @@ def evaluate_and_aggregate():
                     QUASI_IDENTIFIERS = ['age', 'gender', 'zipcode']  # Example columns
                     # Convert to DataFrame for privacy evaluation
                     df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
+                    print(df_val)
                     # Example: df_val['age'] = ... , df_val['gender'] = ..., df_val['zipcode'] = ... 
                     # Populate quasi-identifiers accordingly
 
