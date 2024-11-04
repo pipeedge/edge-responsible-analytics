@@ -23,10 +23,10 @@ spec:
         - containerPort: 8001
         resources:
           requests:
-            memory: "256Mi"
+            memory: "100Mi"
             cpu: "250m"
           limits:
-            memory: "512Mi"
+            memory: "200Mi"
             cpu: "500m"
         env:              
         - name: MQTT_BROKER
