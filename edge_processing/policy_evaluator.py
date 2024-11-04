@@ -325,6 +325,7 @@ def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
         list: List containing 'k_anonymity' if policy fails.
     """
     try:
+        k_threshold = int(k_threshold)  # Ensure k_threshold is a Python int
         k_anonymity = compute_k_anonymity(df, quasi_identifiers, k_threshold)
         logger.info(f"k-anonymity: {k_anonymity}")
         
@@ -337,6 +338,7 @@ def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
             }
         }
         
+        input_data = convert_numpy_types(input_data)
         allowed, failed_policies = send_to_opa(input_data, "privacy")
         
         if allowed:
@@ -383,3 +385,17 @@ def send_to_opa(input_data, policy_type):
     except Exception as e:
         logger.exception(f"Error sending data to OPA: {e}")
         return False, [f"{policy_type}_opa_exception"]
+
+def convert_numpy_types(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(element) for element in obj]
+    else:
+        return obj
