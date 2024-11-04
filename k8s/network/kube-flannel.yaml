@@ -22,7 +22,7 @@ spec:
       hostNetwork: true
       containers:
         - name: kube-flannel
-          image: quay.io/flannel/flannel:v0.26.0
+          image: docker.io/flannel/flannel:v0.26.0
           resources:
             requests:
               cpu: 100m
