@@ -1,5 +1,5 @@
-# opa_server_url: "http://10.200.3.99:8181"
-opa_server_url: "http://opa-service:8181"
+opa_server_url: "http://10.200.3.99:8181"
+# opa_server_url: "http://opa-service:8181"
 policies:
   fairness: "/v1/data/policies/fairness/allow"
   reliability: "/v1/data/policies/reliability/allow"
