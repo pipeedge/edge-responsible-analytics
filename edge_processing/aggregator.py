@@ -152,13 +152,11 @@ def evaluate_and_aggregate():
             # Start MLflow run
             with mlflow.start_run(run_name="AggregatedModel_Evaluation"):
                 try:
-                    # Define quasi-identifiers (adjust based on your dataset)
-                    QUASI_IDENTIFIERS = ['age', 'gender', 'zipcode']  # Example columns
                     # Convert to DataFrame for privacy evaluation
                     df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
-                    print(df_val)
-                    # Example: df_val['age'] = ... , df_val['gender'] = ..., df_val['zipcode'] = ... 
-                    # Populate quasi-identifiers accordingly
+                    print("Columns in df_val:", df_val.columns.tolist())
+                    # Define quasi-identifiers
+                    QUASI_IDENTIFIERS = ['gender']
 
                     # Perform privacy evaluation
                     is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
