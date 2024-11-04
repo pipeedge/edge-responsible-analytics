@@ -35,6 +35,8 @@ kubectl get services
 kubectl describe node <>
 
 sudo lsof -i :10250
+sudo swapoff -a
+
 
 # Reset the cluster, remove all cluster configurations.
    sudo kubeadm reset
