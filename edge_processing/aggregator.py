@@ -154,10 +154,14 @@ def evaluate_and_aggregate():
                 try:
                     # Convert to DataFrame for privacy evaluation
                     df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
-                    print("Columns in df_val:", df_val.columns.tolist())
+                    # print("Columns in df_val:", df_val.columns.tolist())
                     # Define quasi-identifiers
+                    df_val['gender'] = sensitive_features
                     QUASI_IDENTIFIERS = ['gender']
-
+                    missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
+                    if missing_columns:
+                        logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
+                        return
                     # Perform privacy evaluation
                     is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
                                                                           quasi_identifiers=QUASI_IDENTIFIERS, 
