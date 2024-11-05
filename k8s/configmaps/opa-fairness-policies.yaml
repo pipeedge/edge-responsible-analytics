@@ -13,7 +13,7 @@ data:
         }
       }
     }
-  demographic_parity.rego: |
+  fairness.rego: |
     package policies.fairness
 
     default allow = false

@@ -61,6 +61,10 @@ sudo swapoff -a
    docker build -f docker/edge_device/Dockerfile -t edgemlops/edge-device:latest .
    docker push edgemlops/edge_device:latest
 
+   docker buildx build -f docker/edge_device/Dockerfile --platform linux/amd64,linux/arm64 -t edgemlops/edge-device:latest --push .
+
 ## Rebuild Edge Processing Server Image
    docker build -f docker/edge_processing_server/Dockerfile -t edgemlops/edge-processing-server:latest .
    docker push edgemlops/edge-processing-server:latest
+
+   docker buildx build -f docker/edge_processing_server/Dockerfile --platform linux/amd64,linux/arm64 -t edgemlops/edge-processing-server:latest --push .
