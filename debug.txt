@@ -21,3 +21,6 @@ sudo systemctl restart kubelet
 
 sudo nano /var/lib/kubelet/config.yaml
 change: resolvConf: "/etc/resolv.conf"
+
+# check docker image logs
+kubectl logs edge-processing-deployment-7c7889cf99-lnsvt -c edge-processing -n default
