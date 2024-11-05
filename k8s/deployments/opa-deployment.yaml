@@ -19,7 +19,6 @@ spec:
         - name: opa
           image: openpolicyagent/opa:latest
           args:
-            - "opa"
             - "run"
             - "--server"
             - "--addr=0.0.0.0:8181"
