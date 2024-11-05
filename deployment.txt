@@ -14,18 +14,33 @@ kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
 
 # Join the node to the Kubernetes Cluster (change based on initialized info)
-sudo kubeadm join 10.200.3.99:6443 --token u89veh.nc60cputzd0uci9w --discovery-token-ca-cert-hash sha256:e0a79801d11a3cc27100024462067307de151b5dfe4e4ce17744a6d68ab10ab2
+sudo kubeadm token create --print-join-command
+e.g., sudo kubeadm join 10.200.3.99:6443 --token f7gy7a.p4x0xulpaclrofof --discovery-token-ca-cert-hash sha256:e0a79801d11a3cc27100024462067307de151b5dfe4e4ce17744a6d68ab10ab2
 
 # Apply Deployments and Services on the Server
-kubectl apply -f k8s/deployments/opa-deployment.yaml
+kubectl apply -f k8s/configmaps/opa-fairness-policies.yaml
+kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
+kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
+
 kubectl apply -f k8s/services/opa-service.yaml
-
-kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
 kubectl apply -f k8s/services/edge_processing_service.yaml
-
-kubectl apply -f k8s/deployments/edge_device_deployment.yaml
 kubectl apply -f k8s/services/edge_device_service.yaml
 
+kubectl apply -f k8s/deployments/opa-deployment.yaml
+kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
+kubectl apply -f k8s/deployments/edge_device_deployment.yaml
+
+kubectl delete -f k8s/configmaps/opa-fairness-policies.yaml
+kubectl delete -f k8s/configmaps/opa-reliability-policies.yaml
+kubectl delete -f k8s/configmaps/opa-explainability-policies.yaml
+
+kubectl delete -f k8s/services/opa-service.yaml
+kubectl delete -f k8s/services/edge_processing_service.yaml
+kubectl delete -f k8s/services/edge_device_service.yaml
+
+kubectl delete -f k8s/deployments/opa-deployment.yaml
+kubectl delete -f k8s/deployments/edge_processing_deployment.yaml
+kubectl delete -f k8s/deployments/edge_device_deployment.yaml
 
 # Verify Cluster Status
 kubectl get nodes
@@ -40,5 +55,3 @@ sudo swapoff -a
 
 # Reset the cluster, remove all cluster configurations.
    sudo kubeadm reset
-
-

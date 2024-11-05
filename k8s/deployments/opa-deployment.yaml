@@ -15,8 +15,6 @@ spec:
       labels:
         app: opa
     spec:
-      imagePullSecrets:
-        - name: mlops
       containers:
         - name: opa
           image: openpolicyagent/opa:latest
@@ -27,16 +25,16 @@ spec:
             - "--set=decision_logs.console=true"
             - "--set=decision_logs.format=json"
             - "--watch"
-            - "/policies"
+            - "/opa/policies"
           ports:
             - containerPort: 8181
           volumeMounts:
             - name: fairness-policies
-              mountPath: /policies/fairness
+              mountPath: /opa/policies/fairness
             - name: reliability-policies
-              mountPath: /policies/reliability
+              mountPath: /opa/policies/reliability
             - name: explainability-policies
-              mountPath: /policies/explainability
+              mountPath: /opa/policies/explainability
       volumes:
         - name: fairness-policies
           configMap:

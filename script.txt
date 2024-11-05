@@ -40,8 +40,8 @@ python3 edge/edge_task_processing.py
 
 kubectl create secret docker-registry mlops \
   --docker-server=https://index.docker.io/v2/ \
-  --docker-username=mlops \
-  --docker-password=mlops
+  --docker-username=edgemlops \
+  --docker-password=yl15884563651
 
 
 

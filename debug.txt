@@ -8,3 +8,16 @@
 # Enable Systemd Cgroup
      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
        SystemdCgroup = true
+
+
+# solve: Unit systemd-resolved.service could not be found.
+sudo mkdir -p /etc/systemd/system/kubelet.service.d/
+sudo nano /etc/systemd/system/kubelet.service.d/10-resolv-conf.conf
+add: [Service]
+Environment="KUBELET_EXTRA_ARGS=--resolv-conf=/etc/resolv.conf"
+
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+sudo nano /var/lib/kubelet/config.yaml
+change: resolvConf: "/etc/resolv.conf"
