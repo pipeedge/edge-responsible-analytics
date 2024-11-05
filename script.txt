@@ -33,7 +33,7 @@ opa run --server --set=decision_logs.console=true ./opa/policies
 
 ## Run the system (assume under the project root folder)
 ### Local server side
-python 3 edge_process/aggregator.py
+python3 edge_process/aggregator.py
 ### edge side
 python3 edge/edge_task_processing.py
 

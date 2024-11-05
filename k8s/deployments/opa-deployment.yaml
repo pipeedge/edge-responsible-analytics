@@ -25,12 +25,12 @@ spec:
             - "--set=decision_logs.console=true"
             - "--set=decision_logs.format=json"
             - "--watch"
-            - "/opa/policies"
+            - "/policies"
           ports:
             - containerPort: 8181
           volumeMounts:
             - name: opa-policies
-              mountPath: /opa/policies
+              mountPath: /policies
       volumes:
         - name: opa-policies
           projected:

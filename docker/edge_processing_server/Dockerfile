@@ -22,4 +22,4 @@ COPY edge_processing/aggregator.py \
 EXPOSE 8000 5002 8181
 
 # Command to run the aggregator
-CMD ["python3", "aggregator.py"]
+CMD ["python3", "edge_processing/aggregator.py"]
