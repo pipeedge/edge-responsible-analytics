@@ -8,6 +8,14 @@ ENV PYTHONUNBUFFERED=1
 # Set work directory
 WORKDIR /app
 
+# Install system dependencies for building h5py
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        pkg-config \
+        libhdf5-dev \
+        build-essential && \
+    rm -rf /var/lib/apt/lists/*
+    
 # Install dependencies
 COPY docker/edge_processing_server/requirements_edge_processing.txt .
 RUN pip install --upgrade pip && pip install -r requirements_edge_processing.txt
