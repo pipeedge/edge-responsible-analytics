@@ -6,7 +6,7 @@ import os
 import json
 import kaggle
 
-os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(os.path.dirname(__file__), 'datasets')
+# os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(os.path.dirname(__file__), 'datasets')
 
 def download_synthea_data():
     # Download the dataset from Kaggle

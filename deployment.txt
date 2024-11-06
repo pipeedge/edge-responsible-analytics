@@ -24,10 +24,11 @@ kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-privacy-policies.yaml
 
 kubectl apply -f k8s/services/opa-service.yaml
+kubectl apply -f k8s/deployments/opa-deployment.yaml
+
 kubectl apply -f k8s/services/edge_processing_service.yaml
 kubectl apply -f k8s/services/edge_device_service.yaml
 
-kubectl apply -f k8s/deployments/opa-deployment.yaml
 kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
 kubectl apply -f k8s/deployments/edge_device_deployment.yaml
 
@@ -60,11 +61,9 @@ sudo swapoff -a
 
 # docker builds
 ## Rebuild Edge Device Image
-   docker build -f docker/edge_device/Dockerfile -t edgemlops/edge-device:latest .
-   docker push edgemlops/edge-device:latest
+   docker build -f docker/edge_device/Dockerfile -t edgemlops/edge-device:latest --push .
 
 ## Rebuild Edge Processing Server Image
-   docker build -f docker/edge_processing_server/Dockerfile -t edgemlops/edge-processing-server:latest .
-   docker push edgemlops/edge-processing-server:latest
+   docker build -f docker/edge_processing_server/Dockerfile -t edgemlops/edge-processing-server:latest --push .
 
    docker buildx build -f docker/edge_processing_server/Dockerfile --platform linux/amd64,linux/arm64 -t edgemlops/edge-processing-server:latest --push .
