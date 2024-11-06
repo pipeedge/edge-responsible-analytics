@@ -30,7 +30,7 @@ spec:
             cpu: "500m"
         env:              
         - name: MQTT_BROKER
-          value: "edge-processing-service"
+          value: "mosquitto-service"
         - name: MQTT_PORT
           value: "1883"
         - name: MQTT_TOPIC_UPLOAD

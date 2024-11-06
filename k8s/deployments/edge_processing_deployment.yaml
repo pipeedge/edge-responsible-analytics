@@ -25,7 +25,7 @@ spec:
         - containerPort: 8181  # OPA server
         env:
         - name: MQTT_BROKER
-          value: "edge-processing-service"
+          value: "mosquitto-service"
         - name: MQTT_PORT
           value: "1883"
         - name: MQTT_TOPIC_UPLOAD
