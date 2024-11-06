@@ -29,10 +29,10 @@ COPY edge_processing/aggregator.py \
      # Create the /opa/policies directory
 RUN mkdir -p /opa/policies
 # Copy policy JSON files into /opa/policies/
-COPY opa/policies/fairness_thresholds.json /opa/policies/fairness_thresholds.json
-COPY opa/policies/reliability_thresholds.json /opa/policies/reliability_thresholds.json
-COPY opa/policies/explainability_thresholds.json /opa/policies/explainability_thresholds.json
-COPY opa/policies/privacy_thresholds.json /opa/policies/privacy_thresholds.json
+# COPY opa/policies/fairness_thresholds.json /opa/policies/fairness_thresholds.json
+# COPY opa/policies/reliability_thresholds.json /opa/policies/reliability_thresholds.json
+# COPY opa/policies/explainability_thresholds.json /opa/policies/explainability_thresholds.json
+# COPY opa/policies/privacy_thresholds.json /opa/policies/privacy_thresholds.json
 
 
 # Copy the 'datasets' directory into the Docker image

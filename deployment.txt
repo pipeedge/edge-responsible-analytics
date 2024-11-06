@@ -22,6 +22,7 @@ kubectl apply -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-privacy-policies.yaml
+kubectl apply -f k8s/configmaps/opa-aggregator-thresholds.yaml
 
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/deployments/opa-deployment.yaml
