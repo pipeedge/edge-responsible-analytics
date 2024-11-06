@@ -31,4 +31,4 @@ COPY edge/edge_task_processing.py \
 EXPOSE 8001
 
 # Command to run the edge device script
-CMD ["python3", "edge/edge_task_processing.py"]
+CMD ["python3", "edge_task_processing.py"]

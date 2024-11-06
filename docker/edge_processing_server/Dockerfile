@@ -15,7 +15,7 @@ RUN apt-get update && \
         libhdf5-dev \
         build-essential && \
     rm -rf /var/lib/apt/lists/*
-    
+
 # Install dependencies
 COPY docker/edge_processing_server/requirements_edge_processing.txt .
 RUN pip install --upgrade pip && pip install -r requirements_edge_processing.txt
@@ -30,4 +30,4 @@ COPY edge_processing/aggregator.py \
 EXPOSE 8000 5002 8181
 
 # Command to run the aggregator
-CMD ["python3", "edge_processing/aggregator.py"]
+CMD ["python3", "aggregator.py"]
