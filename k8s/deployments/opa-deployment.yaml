@@ -40,8 +40,8 @@ spec:
                   items:
                     - key: fairness_thresholds.json
                       path: fairness_thresholds.json
-                    - key: demographic_parity.rego
-                      path: demographic_parity.rego
+                    - key: fairness.rego
+                      path: fairness.rego
               - configMap:
                   name: opa-reliability-policies
                   items:
