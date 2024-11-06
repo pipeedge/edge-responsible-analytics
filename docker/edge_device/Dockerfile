@@ -27,6 +27,9 @@ COPY edge/edge_task_processing.py \
      edge/load_models.py \
      ./
 
+# Copy the 'datasets' directory into the Docker image
+COPY datasets/ ./datasets/
+
 # Expose necessary ports
 EXPOSE 8001
 

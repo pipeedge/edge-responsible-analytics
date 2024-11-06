@@ -59,7 +59,7 @@ sudo swapoff -a
 # docker builds
 ## Rebuild Edge Device Image
    docker build -f docker/edge_device/Dockerfile -t edgemlops/edge-device:latest .
-   docker push edgemlops/edge_device:latest
+   docker push edgemlops/edge-device:latest
 
 ## Rebuild Edge Processing Server Image
    docker build -f docker/edge_processing_server/Dockerfile -t edgemlops/edge-processing-server:latest .

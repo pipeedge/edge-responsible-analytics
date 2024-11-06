@@ -26,6 +26,9 @@ COPY edge_processing/aggregator.py \
      edge_processing/opa_config.yaml \
      ./
 
+# Copy the 'datasets' directory into the Docker image
+COPY datasets/ ./datasets/
+
 # Expose necessary ports
 EXPOSE 8000 5002 8181
 
