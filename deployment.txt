@@ -21,6 +21,7 @@ e.g., sudo kubeadm join 10.200.3.99:6443 --token f7gy7a.p4x0xulpaclrofof --disco
 kubectl apply -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
+kubectl apply -f k8s/configmaps/opa-privacy-policies.yaml
 
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/services/edge_processing_service.yaml
