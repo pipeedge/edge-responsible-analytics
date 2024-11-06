@@ -34,6 +34,7 @@ kubectl apply -f k8s/deployments/edge_device_deployment.yaml
 kubectl delete -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl delete -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl delete -f k8s/configmaps/opa-explainability-policies.yaml
+kubectl delete -f k8s/configmaps/opa-privacy-policies.yaml
 
 kubectl delete -f k8s/services/opa-service.yaml
 kubectl delete -f k8s/services/edge_processing_service.yaml
