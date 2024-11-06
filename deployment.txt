@@ -1,4 +1,4 @@
-# Initialize Kubernetes with kubeadm
+# Initialize Kubernetes with kubeadm on controller side
 sudo kubeadm init --apiserver-advertise-address=10.200.3.99 --pod-network-cidr=10.244.0.0/16 # Flannel CNI plugin.
 sudo kubeadm init --pod-network-cidr=192.168.0.0/16 # Calico network
 
@@ -28,6 +28,11 @@ kubectl apply -f k8s/configmaps/opa-aggregator-thresholds.yaml
 ## OPA service
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/deployments/opa-deployment.yaml
+
+## MQTT service
+kubectl apply -f k8s/configmaps/mqtt.yaml
+kubectl apply -f k8s/deployments/mqtt_deployment.yaml
+kubectl apply -f k8s/services/mqtt_service.yaml
 
 ## edge processing
 kubectl apply -f k8s/services/edge_processing_service.yaml

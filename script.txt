@@ -43,5 +43,5 @@ kubectl create secret docker-registry mlops \
   --docker-username=edgemlops \
   --docker-password=yl15884563651
 
-
+# Install
 
