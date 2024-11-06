@@ -29,6 +29,12 @@ COPY edge/edge_task_processing.py \
 
 # Copy the 'datasets' directory into the Docker image
 COPY datasets/ ./datasets/
+# Copy kaggle.json into the Docker image
+COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
+# Set permissions for kaggle.json
+RUN chmod 600 /app/.kaggle/kaggle.json
+# Set the Kaggle configuration directory
+ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 
 # Expose necessary ports
 EXPOSE 8001

@@ -15,8 +15,8 @@ data:
   explainability.rego: |
     package policies.explainability
 
-    default allow = false
+    # default allow = false
 
     allow {
-        input.explainability_score >= input.thresholds.explainability_score
+      input.explainability_score >= input.thresholds.explainability_score
     }

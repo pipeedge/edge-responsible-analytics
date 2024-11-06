@@ -15,7 +15,7 @@ data:
   reliability.rego: |
     package policies.reliability
 
-    default allow = false
+    # default allow = false
 
     allow {
         input.reliability_score >= input.threshold.reliability_score
