@@ -18,32 +18,41 @@ sudo kubeadm token create --print-join-command
 e.g., sudo kubeadm join 10.200.3.99:6443 --token f7gy7a.p4x0xulpaclrofof --discovery-token-ca-cert-hash sha256:e0a79801d11a3cc27100024462067307de151b5dfe4e4ce17744a6d68ab10ab2
 
 # Apply Deployments and Services on the Server
+## configmaps
 kubectl apply -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-privacy-policies.yaml
 kubectl apply -f k8s/configmaps/opa-aggregator-thresholds.yaml
 
+## OPA service
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/deployments/opa-deployment.yaml
 
+## edge processing
 kubectl apply -f k8s/services/edge_processing_service.yaml
 kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
 
+## edge
 kubectl apply -f k8s/services/edge_device_service.yaml
 kubectl apply -f k8s/deployments/edge_device_deployment.yaml
 
+## delete configmaps
 kubectl delete -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl delete -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl delete -f k8s/configmaps/opa-explainability-policies.yaml
 kubectl delete -f k8s/configmaps/opa-privacy-policies.yaml
+kubectl delete -f k8s/configmaps/opa-aggregator-thresholds.yaml
 
+## delete OPA
 kubectl delete -f k8s/services/opa-service.yaml
 kubectl delete -f k8s/deployments/opa-deployment.yaml
 
+## delete edge processing
 kubectl delete -f k8s/services/edge_processing_service.yaml
 kubectl delete -f k8s/deployments/edge_processing_deployment.yaml
 
+## delete edge
 kubectl delete -f k8s/services/edge_device_service.yaml
 kubectl delete -f k8s/deployments/edge_device_deployment.yaml
 
