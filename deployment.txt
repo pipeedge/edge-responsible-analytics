@@ -86,4 +86,7 @@ sudo swapoff -a
 
 # check logs
    kubectl logs deployment/edge-processing-deployment -n default
+   kubectl logs deployment/edge-processing-deployment -n default -c edge-processing --follow
+
    kubectl logs deployment/edge-device-deployment -n default
+   kubectl logs deployment/edge-device-deployment -n default -c edge-device --follow

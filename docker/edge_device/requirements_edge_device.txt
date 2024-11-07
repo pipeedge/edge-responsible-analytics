@@ -6,3 +6,4 @@ transformers
 scikit-learn
 kaggle
 fairlearn
+pillow
