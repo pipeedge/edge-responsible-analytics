@@ -33,4 +33,4 @@ spec:
         - name: MQTT_TOPIC_AGGREGATED
           value: "models/aggregated"
         - name: EXPECTED_DEVICES
-          value: "1"
+          value: "2"

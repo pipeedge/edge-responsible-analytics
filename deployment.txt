@@ -24,8 +24,13 @@ kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-explainability-policies.yaml
 kubectl apply -f k8s/configmaps/opa-privacy-policies.yaml
 kubectl apply -f k8s/configmaps/opa-aggregator-thresholds.yaml
-kubectl apply -f k8s/configmaps/vertical_pod_autoscaler.yaml
 
+## Autoscaler
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vpa-release-1.0/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vpa-release-1.0/vertical-pod-autoscaler/deploy/vpa-rbac.yaml
+kubectl apply -f k8s/configmaps/vertical_pod_autoscaler.yaml
+   kubectl get verticalpodautoscaler edge-device-vpa -o yaml
+   
 ## OPA service
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/deployments/opa-deployment.yaml

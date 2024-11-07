@@ -22,13 +22,3 @@ sudo kubeadm join 10.200.3.99:6443 --token g1fimn.u2md2hqugpm0wi9i \
 
 
 kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
-
-
-kubectl apply -f k8s/deployments/opa-deployment.yaml
-kubectl apply -f k8s/services/opa-service.yaml
-kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
-kubectl apply -f k8s/services/edge_processing_service.yaml
-kubectl apply -f k8s/deployments/edge_device_deployment.yaml
-kubectl apply -f k8s/services/edge_device_service.yaml
-kubectl apply -f k8s/configmaps/opa-reliability-policies.yaml
-kubectl apply -f k8s/configmaps/opa-fairness-policies.yaml
