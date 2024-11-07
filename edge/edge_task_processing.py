@@ -222,7 +222,7 @@ def main():
     thread.start()
 
     # Start memory monitoring thread
-    monitor_thread = threading.Thread(target=memory_monitor, args=(60,), daemon=True)
+    monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
     monitor_thread.start()
 
     # Start task processing in the main thread
