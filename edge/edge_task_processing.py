@@ -19,11 +19,6 @@ from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
 import logging
 
-# Configure TensorFlow memory growth
-physical_devices = tf.config.list_physical_devices('CPU')
-for device in physical_devices:
-    tf.config.experimental.set_memory_growth(device, True)
-
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
 MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.99')
