@@ -38,10 +38,11 @@ kubectl apply -f k8s/services/mqtt_service.yaml
 kubectl apply -f k8s/services/edge_processing_service.yaml
 kubectl apply -f k8s/deployments/edge_processing_deployment.yaml
 
-## edge
+## edge device
 kubectl apply -f k8s/services/edge_device_service.yaml
 kubectl apply -f k8s/deployments/edge_device_deployment.yaml
 
+# Delete
 ## delete configmaps
 kubectl delete -f k8s/configmaps/opa-fairness-policies.yaml
 kubectl delete -f k8s/configmaps/opa-reliability-policies.yaml
@@ -57,7 +58,7 @@ kubectl delete -f k8s/deployments/opa-deployment.yaml
 kubectl delete -f k8s/services/edge_processing_service.yaml
 kubectl delete -f k8s/deployments/edge_processing_deployment.yaml
 
-## delete edge
+## delete edge device
 kubectl delete -f k8s/services/edge_device_service.yaml
 kubectl delete -f k8s/deployments/edge_device_deployment.yaml
 

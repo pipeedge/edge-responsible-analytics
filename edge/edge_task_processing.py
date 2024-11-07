@@ -8,6 +8,8 @@ import threading
 import base64
 import time
 import argparse
+import psutil  # Import psutil for memory usage
+import gc       # Import gc for garbage collection
 
 #import mlflow
 import tensorflow as tf
@@ -16,6 +18,11 @@ from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
 import logging
+
+# Configure TensorFlow memory growth
+physical_devices = tf.config.list_physical_devices('CPU')
+for device in physical_devices:
+    tf.config.experimental.set_memory_growth(device, True)
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -169,6 +176,33 @@ def task_processing(task_type, model_type):
         print(f"[{DEVICE_ID}] Shutting down.")
         client.disconnect()
 
+def log_memory_usage():
+    """
+    Logs the current memory usage of the process in MB.
+    """
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info().rss / (1024 * 1024)  # Convert to MB
+    logger.info(f"Current memory usage: {mem:.2f} MB")
+
+def clean_up():
+    """
+    Performs garbage collection to free up memory.
+    """
+    gc.collect()
+    logger.info("Performed garbage collection.")
+
+def memory_monitor(interval=60):
+    """
+    Thread function to monitor memory usage at specified intervals.
+    
+    Args:
+        interval (int): Time in seconds between each memory check.
+    """
+    while True:
+        log_memory_usage()
+        clean_up()
+        time.sleep(interval)
+
 def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
@@ -191,6 +225,10 @@ def main():
     thread = threading.Thread(target=mqtt_loop)
     thread.daemon = True
     thread.start()
+
+    # Start memory monitoring thread
+    monitor_thread = threading.Thread(target=memory_monitor, args=(60,), daemon=True)
+    monitor_thread.start()
 
     # Start task processing in the main thread
     task_processing(task_type, model_type)
