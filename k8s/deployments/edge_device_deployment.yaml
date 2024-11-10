@@ -16,28 +16,37 @@ spec:
     spec:
       imagePullSecrets:
         - name: mlops
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: edge-device
+              topologyKey: "kubernetes.io/hostname"
+      nodeSelector:
+        device-id: ""
       containers:
-      - name: edge-device
-        image: edgemlops/edge-device:latest
-        ports:
-        - containerPort: 8001
-        resources:
-          requests:
-            memory: "500Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        env:              
-        - name: MQTT_BROKER
-          value: "mosquitto-service"
-        - name: MQTT_PORT
-          value: "1883"
-        - name: MQTT_TOPIC_UPLOAD
-          value: "models/upload"
-        - name: MQTT_TOPIC_AGGREGATED
-          value: "models/aggregated"
-        - name: DEVICE_ID
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
+        - name: edge-device
+          image: edgemlops/edge-device:latest
+          ports:
+            - containerPort: 8001
+          resources:
+            requests:
+              memory: "500Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          env:              
+            - name: MQTT_BROKER
+              value: "mosquitto-service"
+            - name: MQTT_PORT
+              value: "1883"
+            - name: MQTT_TOPIC_UPLOAD
+              value: "models/upload"
+            - name: MQTT_TOPIC_AGGREGATED
+              value: "models/aggregated"
+            - name: DEVICE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName

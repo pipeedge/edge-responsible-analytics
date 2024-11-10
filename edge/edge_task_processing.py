@@ -27,7 +27,7 @@ MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 
 # Unique identifier for the end device (can be MAC address or any unique ID)
-DEVICE_ID = os.getenv('DEVICE_ID', 'device_1')
+DEVICE_ID = os.getenv('DEVICE_ID', 'unknown-device')
 
 # Initialize MQTT Client
 client = mqtt.Client(client_id=DEVICE_ID)

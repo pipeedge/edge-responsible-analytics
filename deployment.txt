@@ -30,7 +30,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vpa-rel
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vpa-release-1.0/vertical-pod-autoscaler/deploy/vpa-rbac.yaml
 kubectl apply -f k8s/configmaps/vertical_pod_autoscaler.yaml
    kubectl get verticalpodautoscaler edge-device-vpa -o yaml
-   
+
 ## OPA service
 kubectl apply -f k8s/services/opa-service.yaml
 kubectl apply -f k8s/deployments/opa-deployment.yaml
@@ -97,3 +97,12 @@ sudo swapoff -a
 
    kubectl logs deployment/edge-device-deployment -n default
    kubectl logs deployment/edge-device-deployment -n default -c edge-device --follow
+
+
+### To ensure that each edge-device pod runs on a separate Raspberry Pi within Kubernetes cluster
+kubectl get nodes
+kubectl label node [node_name] device-id=node-1
+kubectl label node [node_name] device-id=node-2
+
+kubectl get nodes --show-labels
+
