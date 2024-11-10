@@ -17,14 +17,21 @@ spec:
       imagePullSecrets:
         - name: mlops
       affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: device-id
+                    operator: In
+                    values:
+                      - node-1
+                      - node-2
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
                   app: edge-device
               topologyKey: "kubernetes.io/hostname"
-      nodeSelector:
-        device-id: ""
       containers:
         - name: edge-device
           image: edgemlops/edge-device:latest
