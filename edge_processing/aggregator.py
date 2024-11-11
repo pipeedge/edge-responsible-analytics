@@ -300,6 +300,7 @@ def connect_mqtt():
     """
     client.on_message = on_message
     try:
+        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
