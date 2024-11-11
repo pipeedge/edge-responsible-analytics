@@ -29,14 +29,14 @@ spec:
       initContainers:
       - name: init-mosquitto-config
         image: busybox
-        command: ['sh', '-c', 'cp /mosquitto-config/mosquitto.conf /mosquitto-config/mosquitto.conf']
+        command: ['sh', '-c', 'cp /mosquitto-config-readonly/mosquitto.conf /mosquitto-config-writable/mosquitto.conf']
         volumeMounts:
-        - name: mosquitto-config
-          mountPath: /mosquitto-config
+        - name: mosquitto-config-readonly
+          mountPath: /mosquitto-config-readonly
         - name: mosquitto-config-writable
-          mountPath: /mosquitto-config
+          mountPath: /mosquitto-config-writable
       volumes:
-      - name: mosquitto-config
+      - name: mosquitto-config-readonly
         configMap:
           name: mosquitto-config
       - name: mosquitto-config-writable
