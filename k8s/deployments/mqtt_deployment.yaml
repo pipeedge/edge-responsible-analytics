@@ -17,7 +17,7 @@ spec:
       initContainers:
         - name: init-permissions
           image: busybox
-          command: ['sh', '-c', 'mkdir -p /mosquitto/config && cp /config/mosquitto.conf /mosquitto/config/mosquitto.conf && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
+          command: ['sh', '-c', 'mkdir -p /mosquitto/config && cp /config/mosquitto.conf /mosquitto/config/mosquitto.conf && addgroup -S mosquitto && adduser -S mosquitto -G mosquitto && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
           volumeMounts:
             - name: mosquitto-config
               mountPath: /config
