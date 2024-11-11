@@ -17,7 +17,13 @@ spec:
       initContainers:
         - name: copy-mosquitto-config
           image: busybox
-          command: ['sh', '-c', 'cp -R /config/* /mosquitto/config/']
+          command:
+            - sh
+            - -c
+            - |
+              cp -R /config/* /mosquitto/config/ && \
+              chown -R 1883:1883 /mosquitto && \
+              chmod -R 755 /mosquitto
           volumeMounts:
             - name: configmap-volume
               mountPath: /config
@@ -26,6 +32,7 @@ spec:
       containers:
         - name: mosquitto
           image: eclipse-mosquitto:latest
+          args: ["-c", "/mosquitto/config/mosquitto.conf"]
           ports:
             - containerPort: 1883
           volumeMounts:
