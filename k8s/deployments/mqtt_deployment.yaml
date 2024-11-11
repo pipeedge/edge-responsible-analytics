@@ -15,33 +15,32 @@ spec:
         app: mosquitto
     spec:
       containers:
-      - name: mosquitto
-        image: eclipse-mosquitto:2.0
-        ports:
-        - containerPort: 1883
-        volumeMounts:
-        - name: mosquitto-config-writable
-          mountPath: /mosquitto/config
-        - name: mosquitto-data
-          mountPath: /mosquitto/data
-        - name: mosquitto-log
-          mountPath: /mosquitto/log
-      initContainers:
-      - name: init-mosquitto-config
-        image: busybox
-        command: ['sh', '-c', 'cp /mosquitto-config-readonly/mosquitto.conf /mosquitto-config-writable/mosquitto.conf']
-        volumeMounts:
-        - name: mosquitto-config-readonly
-          mountPath: /mosquitto-config-readonly
-        - name: mosquitto-config-writable
-          mountPath: /mosquitto-config-writable
+        - name: mosquitto
+          image: eclipse-mosquitto:latest
+          ports:
+            - containerPort: 1883
+          volumeMounts:
+            - name: mosquitto-config
+              mountPath: /mosquitto/config
+            - name: mosquitto-data
+              mountPath: /mosquitto/data
+            - name: mosquitto-log
+              mountPath: /mosquitto/log
+          readinessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 15
+            periodSeconds: 20
       volumes:
-      - name: mosquitto-config-readonly
-        configMap:
-          name: mosquitto-config
-      - name: mosquitto-config-writable
-        emptyDir: {}
-      - name: mosquitto-data
-        emptyDir: {}
-      - name: mosquitto-log
-        emptyDir: {}
+        - name: mosquitto-config
+          configMap:
+            name: mosquitto-config
+        - name: mosquitto-data
+          emptyDir: {}
+        - name: mosquitto-log
+          emptyDir: {}
