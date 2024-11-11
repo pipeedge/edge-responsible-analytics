@@ -17,7 +17,7 @@ spec:
       initContainers:
         - name: init-permissions
           image: busybox
-          command: ['sh', '-c', 'chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
+          command: ['sh', '-c', 'addgroup -S mosquitto && adduser -S mosquitto -G mosquitto && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
           volumeMounts:
             - name: mosquitto-config
               mountPath: /mosquitto/config/mosquitto.conf
@@ -35,16 +35,6 @@ spec:
               mountPath: /mosquitto/data
             - name: mosquitto-log
               mountPath: /mosquitto/log
-          readinessProbe:
-            tcpSocket:
-              port: 1883
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            tcpSocket:
-              port: 1883
-            initialDelaySeconds: 15
-            periodSeconds: 20
       volumes:
         - name: mosquitto-config
           configMap:
