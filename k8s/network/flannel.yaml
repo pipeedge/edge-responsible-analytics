@@ -70,7 +70,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: kube-flannel
-          image: quay.io/coreos/flannel:v0.21.1
+          image: docker.io/flannel/flannel:v0.26.1
           args:
             - --ip-masq
             - --kube-subnet-mgr
@@ -95,7 +95,7 @@ spec:
               mountPath: /etc/kube-flannel/
       initContainers:
         - name: install-cni
-          image: quay.io/coreos/flannel:v0.21.1
+          image: docker.io/flannel/flannel:v0.26.1
           command:
             - /bin/sh
             - -c
