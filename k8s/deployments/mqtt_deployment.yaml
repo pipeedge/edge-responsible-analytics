@@ -19,10 +19,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: role
+              - key: mosquitto-node
                 operator: In
                 values:
-                - mqtt
+                - "true"
       initContainers:
         - name: init-permissions
           image: busybox
@@ -54,3 +54,7 @@ spec:
           emptyDir: {}
         - name: mosquitto-log
           emptyDir: {}
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
