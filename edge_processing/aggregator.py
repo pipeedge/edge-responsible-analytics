@@ -48,7 +48,7 @@ MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
 # Initialize MQTT Client
-client = mqtt.Client(client_id='aggregator')
+client = mqtt.Client(client_id='aggregator', protocol=mqtt.MQTTv5)
 
 # Dictionary to store received models
 received_models = {}

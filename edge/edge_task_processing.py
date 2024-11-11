@@ -30,7 +30,7 @@ MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 DEVICE_ID = os.getenv('DEVICE_ID', 'unknown-device')
 
 # Initialize MQTT Client
-client = mqtt.Client(client_id=DEVICE_ID)
+client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv5)
 
 # Event to signal when a new aggregated model is received
 model_update_event = threading.Event()
