@@ -25,7 +25,7 @@ spec:
         - containerPort: 8181  # OPA server
         env:
         - name: MQTT_BROKER
-          value: "10.102.163.51"
+          value: "10.244.0.4"
         - name: MQTT_PORT
           value: "1883"
         - name: MQTT_TOPIC_UPLOAD
