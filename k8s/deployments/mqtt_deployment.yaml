@@ -22,7 +22,7 @@ spec:
               - key: mosquitto-node
                 operator: In
                 values:
-                - "true"
+                - true
       initContainers:
         - name: init-permissions
           image: busybox
