@@ -21,7 +21,7 @@ import logging
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service.default.svc.cluster.local')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')

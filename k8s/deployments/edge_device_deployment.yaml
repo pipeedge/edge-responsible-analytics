@@ -46,7 +46,7 @@ spec:
               cpu: "500m"
           env:              
             - name: MQTT_BROKER
-              value: "mosquitto-service"
+              value: "mosquitto-service.default.svc.cluster.local"
             - name: MQTT_PORT
               value: "1883"
             - name: MQTT_TOPIC_UPLOAD
