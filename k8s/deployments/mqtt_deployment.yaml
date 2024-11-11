@@ -19,10 +19,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: mosquitto-node
+              - key: role
                 operator: In
                 values:
-                - true
+                - mqtt
       initContainers:
         - name: init-permissions
           image: busybox
