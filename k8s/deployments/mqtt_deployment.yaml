@@ -17,11 +17,10 @@ spec:
       initContainers:
         - name: init-permissions
           image: busybox
-          command: ['sh', '-c', 'addgroup -S mosquitto && adduser -S mosquitto -G mosquitto && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
+          command: ['sh', '-c', 'cp /config/mosquitto.conf /mosquitto/config/mosquitto.conf && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
           volumeMounts:
             - name: mosquitto-config
-              mountPath: /mosquitto/config/mosquitto.conf
-              subPath: mosquitto.conf
+              mountPath: /config
       containers:
         - name: mosquitto
           image: eclipse-mosquitto:latest
@@ -29,8 +28,7 @@ spec:
             - containerPort: 1883
           volumeMounts:
             - name: mosquitto-config
-              mountPath: /mosquitto/config/mosquitto.conf
-              subPath: mosquitto.conf
+              mountPath: /mosquitto/config
             - name: mosquitto-data
               mountPath: /mosquitto/data
             - name: mosquitto-log
@@ -39,9 +37,6 @@ spec:
         - name: mosquitto-config
           configMap:
             name: mosquitto-config
-            items:
-              - key: mosquitto.conf
-                path: mosquitto.conf
         - name: mosquitto-data
           emptyDir: {}
         - name: mosquitto-log
