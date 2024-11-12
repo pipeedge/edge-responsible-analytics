@@ -14,15 +14,6 @@ spec:
       labels:
         app: mosquitto
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: mosquitto-node
-                operator: In
-                values:
-                - "true"
       initContainers:
         - name: init-permissions
           image: busybox
