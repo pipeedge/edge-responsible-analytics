@@ -26,6 +26,7 @@ spec:
       containers:
         - name: mosquitto
           image: eclipse-mosquitto:latest
+          command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf", "-v"]
           ports:
             - containerPort: 1883
           volumeMounts:
