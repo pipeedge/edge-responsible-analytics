@@ -15,6 +15,17 @@ spec:
       labels:
         app: opa
     spec:
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "node-role.kubernetes.io/control-plane"
+                    operator: "Exists"
       containers:
         - name: opa
           image: openpolicyagent/opa:edge-static
@@ -69,9 +80,9 @@ spec:
                     - key: explainability.rego
                       path: explainability.rego
               - configMap:
-                     name: opa-privacy-policies
-                     items:
-                       - key: privacy_thresholds.json
-                         path: privacy_thresholds.json
-                       - key: privacy.rego
-                         path: privacy.rego
+                  name: opa-privacy-policies
+                  items:
+                    - key: privacy_thresholds.json
+                      path: privacy_thresholds.json
+                    - key: privacy.rego
+                      path: privacy.rego
