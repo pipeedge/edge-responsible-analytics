@@ -24,3 +24,6 @@ change: resolvConf: "/etc/resolv.conf"
 
 # check docker image logs
 kubectl logs edge-processing-deployment-7c7889cf99-lnsvt -c edge-processing -n default
+
+# Reviewing the Kubelet logs
+   sudo journalctl -u kubelet -f
