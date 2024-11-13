@@ -24,16 +24,16 @@ spec:
         - containerPort: 5002  # MLflow server
         - containerPort: 8181  # OPA server
         env:
-        - name: MQTT_BROKER
-          value: "mosquitto-service"
-        - name: MQTT_PORT
-          value: "1883"
-        - name: MQTT_TOPIC_UPLOAD
-          value: "models/upload"
-        - name: MQTT_TOPIC_AGGREGATED
-          value: "models/aggregated"
-        - name: EXPECTED_DEVICES
-          value: "2"
+          - name: MQTT_BROKER
+            value: "mosquitto-service"
+          - name: MQTT_PORT
+            value: "1883"
+          - name: MQTT_TOPIC_UPLOAD
+            value: "models/upload"
+          - name: MQTT_TOPIC_AGGREGATED
+            value: "models/aggregated"
+          - name: EXPECTED_DEVICES
+            value: "2"
       tolerations:
         - key: "node-role.kubernetes.io/control-plane"
           operator: "Exists"
