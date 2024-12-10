@@ -34,12 +34,13 @@ logger = logging.getLogger(__name__)
 
 # MLflow Configuration
 mlflow.set_tracking_uri("http://10.200.3.99:5002")  # Adjust if MLflow runs on a different host/port
-mlflow.set_experiment("Model_Fairness_Evaluation")
+mlflow.set_experiment("Model_Evaluation")
 # Initialize MLflow client
 mlflow_client = MlflowClient()
 
 # MQTT Configuration
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')  # Adjust if necessary
+# MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
+MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.99')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')

@@ -1,5 +1,6 @@
 # Initialize Kubernetes with kubeadm on controller side
 sudo kubeadm init --apiserver-advertise-address=10.200.3.99 --pod-network-cidr=10.244.0.0/16 # Flannel CNI plugin.
+or
 sudo kubeadm init --pod-network-cidr=192.168.0.0/16 # Calico network
 
 # Configure kubectl for the Default User
@@ -81,6 +82,11 @@ sudo swapoff -a
 
 # Reset the cluster, remove all cluster configurations.
    sudo kubeadm reset
+   sudo rm -rf /etc/kubernetes/ /var/lib/etcd/ /var/lib/kubelet/
+   sudo rm -rf ~/.kube/
+
+   sudo rm -rf /etc/kubernetes/manifests/*.yaml
+
 
 # docker builds
 ## Rebuild Edge Device Image

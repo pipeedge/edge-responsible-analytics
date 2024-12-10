@@ -15,10 +15,4 @@ sudo apt-mark hold kubelet kubeadm kubectl
 
 sudo systemctl enable --now kubelet
 
-
-sudo kubeadm join 10.200.3.99:6443 --token g1fimn.u2md2hqugpm0wi9i \
-	--discovery-token-ca-cert-hash sha256:bb4733e9f79b3186042e7e0835cee4ea61ec2667e078447b0727bc4152adb146
-
-
-
 kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml

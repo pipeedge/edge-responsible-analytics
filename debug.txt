@@ -27,3 +27,14 @@ kubectl logs edge-processing-deployment-7c7889cf99-lnsvt -c edge-processing -n d
 
 # Reviewing the Kubelet logs
    sudo journalctl -u kubelet -f
+
+
+sudo usermod -aG adm liang
+sudo usermod -aG systemd-journal liang 
+## check logs
+sudo journalctl -u containerd -xe
+sudo journalctl -u kubelet -xe
+
+## remove containers and images
+sudo crictl rm --all
+sudo crictl rmi --all
