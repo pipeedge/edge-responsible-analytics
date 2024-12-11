@@ -34,7 +34,7 @@ def train_model(data_path, data_type, batch_size=32, epochs=1):
         for epoch in range(epochs):
             for X_batch, y_batch, _ in process_chest_xray_data(data_path, batch_size):
                 model.fit(X_batch, y_batch, epochs=1, verbose=1)
-        model.save("mobilenet_model.h5")
+        model.save("mobilenet_model.keras")
         training_loss = model.history.history['loss'][-1]
         training_accuracy = model.history.history['accuracy'][-1]
     elif data_type == 'mt':

@@ -15,7 +15,7 @@ source /path/to/your_folder/venv/bin/activate
 pip install --upgrade pip setuptools wheel
 
 # Install required Python libraries
-pip install tensorflow paho-mqtt numpy flask transformers scikit-learn kaggle fairlearn
+pip install tensorflow paho-mqtt numpy flask transformers scikit-learn kaggle fairlearn psutil tf-keras Pillow
 
 ## config MQTT to allow communication
 Matt config file (Mac): /opt/homebrew/etc/mosquitto/mosquitto.conf
