@@ -45,7 +45,7 @@ def split_data(df, test_size=0.2, random_state=42):
     train_df, val_df = train_test_split(df, test_size=test_size, stratify=df['Label'], random_state=random_state)
     return train_df.reset_index(drop=True), val_df.reset_index(drop=True)
 
-def organize_dataset(df, source_dir, destination_dir, label_columns):
+def organize_dataset(df, source_dir, destination_dir):
     for _, row in df.iterrows():
         image_file = row['Image Index']
         src_path = os.path.join(source_dir, image_file)
@@ -94,25 +94,28 @@ def prepare_dataset(download_dir, extract_dir, csv_path, organized_dir, test_siz
     
     print("Organizing training dataset...")
     train_dir = os.path.join(organized_dir, 'train')
-    organize_dataset(train_df, extract_dir, train_dir, label_columns)
+    organize_dataset(train_df, extract_dir, train_dir)
     print("Training dataset organized.\n")
     
     print("Organizing validation dataset...")
     val_dir = os.path.join(organized_dir, 'val')
-    organize_dataset(val_df, extract_dir, val_dir, label_columns)
+    organize_dataset(val_df, extract_dir, val_dir)
     print("Validation dataset organized.\n")
     
     print("Dataset preparation complete.")
 
 if __name__ == "__main__":
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-    download_directory = os.path.join(ROOT_DIR, "downloaded_zips")  # Directory where batch_download_zips.py downloads files
-    extracted_directory = os.path.join(ROOT_DIR, "extracted_images")
+    if not os.path.exists("cxr8_zips"):
+        os.makedirs("cxr8_zips")
+    if not os.path.exists("extracted_cxr8"):
+        os.makedirs("extracted_cxr8")
+    if not os.path.exists("cxr8"):
+        os.makedirs("cxr8")   
+    download_directory = os.path.join(ROOT_DIR, "cxr8_zips")  # Directory where batch_download_zips.py downloads files
+    extracted_directory = os.path.join(ROOT_DIR, "extracted_cxr8")
     csv_file_path = os.path.join(ROOT_DIR, "Data_Entry_2017_v2020.csv")
     organized_dataset_dir = os.path.join(ROOT_DIR, "cxr8")
-    
-    # Define label columns
-    label_columns = ['Label']  # Binary classification
     
     prepare_dataset(
         download_dir=download_directory,
