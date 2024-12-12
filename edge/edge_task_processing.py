@@ -10,6 +10,9 @@ import time
 import argparse
 import psutil  # Import psutil for memory usage
 import gc       # Import gc for garbage collection
+import shutil   # Add shutil for directory operations
+import tempfile # Add tempfile for temporary file operations
+import tarfile  # Add tarfile for tar operations
 
 #import mlflow
 import tensorflow as tf
@@ -96,10 +99,6 @@ def send_trained_model(model_path, model_type):
                 model_bytes = f.read()
             model_b64 = base64.b64encode(model_bytes).decode('utf-8')
         else:  # TinyBERT
-            # Handle directory-based model
-            import shutil
-            import tempfile
-            
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                 shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
