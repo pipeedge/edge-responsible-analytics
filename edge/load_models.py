@@ -46,10 +46,10 @@ def load_t5_model():
     
     try:
         if os.path.exists(os.path.join(model_dir, "config.json")):
-            # Load with memory-efficient settings
+            # Load locally saved model
             model = TFT5ForConditionalGeneration.from_pretrained(
                 model_dir,
-                low_cpu_mem_usage=True,
+                from_pt=False,  # Ensure loading TensorFlow weights
                 use_cache=False  # Disable caching to save memory
             )
             tokenizer = T5Tokenizer.from_pretrained(
@@ -61,7 +61,7 @@ def load_t5_model():
         # Download and save if not found locally
         model = TFT5ForConditionalGeneration.from_pretrained(
             't5-small',
-            low_cpu_mem_usage=True,
+            from_pt=False,
             use_cache=False
         )
         tokenizer = T5Tokenizer.from_pretrained(
