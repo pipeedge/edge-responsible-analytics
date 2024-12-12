@@ -164,30 +164,25 @@ def evaluate_and_aggregate():
                         if model_type == 'MobileNet':
                             df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
                             df_val['gender'] = sensitive_features
-                        elif model_type == 't5_small':
-                            df_val = pd.DataFrame({'transcription': X_val})
-                            # Assuming 'transcription' has been prefix with 'summarize: '
-                            
-                        # Define quasi-identifiers
-                        QUASI_IDENTIFIERS = ['gender'] if model_type == 'MobileNet' else []
-                        if QUASI_IDENTIFIERS:
+                            QUASI_IDENTIFIERS = ['gender']
                             missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
                             if missing_columns:
                                 logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
-                                continue
-                        # Perform privacy evaluation
-                        if QUASI_IDENTIFIERS:
+                                return
+                            # Perform privacy evaluation
                             is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
-                                                                                           quasi_identifiers=QUASI_IDENTIFIERS, 
-                                                                                           k_threshold=privacy_thresholds["k"])
-                        else:
-                            is_private, failed_privacy_policies = True, []
+                                                                          quasi_identifiers=QUASI_IDENTIFIERS, 
+                                                                          k_threshold=privacy_thresholds["k"])
+
+                            if not is_private:
+                                logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation.")
+                                notify_policy_failure(failed_privacy_policies)
+                                return
     
-                        if not is_private:
-                            logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation for {model_type}.")
-                            notify_policy_failure(failed_privacy_policies)
-                            continue
-    
+                        elif model_type == 't5_small':
+                            df_val = pd.DataFrame({'transcription': X_val})
+                            # [TODO]
+
                         # Evaluate fairness using the policy evaluator
                         if model_type == 'MobileNet':
                             is_fair, failed_fairness_policies = evaluate_fairness_policy(
