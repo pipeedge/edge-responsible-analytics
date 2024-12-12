@@ -60,16 +60,17 @@ def process_task(task):
     """
     data_type = task['data_type']
     print("data type: ", data_type)
+    
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "mt":
-        # Ensure the data is properly formatted for the T5 model
-        if isinstance(task['data_path'], str):
-            processed_data = task['data_path']
-        elif isinstance(task['data_path'], (list, pd.Series)):
-            processed_data = list(task['data_path'])
+        # Process medical transcription data
+        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data(task['data_path'])
+        # For inference, use the test set
+        if task['data_type'] == 'inference':
+            processed_data = X_test
         else:
-            raise ValueError(f"Unsupported data format for medical transcription: {type(task['data_type'])}")
+            processed_data = X_train
     else:
         raise ValueError(f"Unsupported data type: {data_type}")
     

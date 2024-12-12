@@ -18,7 +18,7 @@ def perform_inference(data, data_type):
         model = load_mobilenet_model()
         predictions = model.predict(data)
         return predictions
-    elif data_type == "medical_transcription":
+    elif data_type == "mt":
         model, tokenizer = load_t5_model()
         
         # Ensure data is in the correct format (list of strings)
