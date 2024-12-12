@@ -163,9 +163,11 @@ def evaluate_and_aggregate():
                         # Convert to DataFrame for privacy evaluation
                         if model_type == 'MobileNet':
                             df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
+                            df_val['gender'] = sensitive_features
                         elif model_type == 't5_small':
                             df_val = pd.DataFrame({'transcription': X_val})
                             # Assuming 'transcription' has been prefix with 'summarize: '
+                            
                         # Define quasi-identifiers
                         QUASI_IDENTIFIERS = ['gender'] if model_type == 'MobileNet' else []
                         if QUASI_IDENTIFIERS:
