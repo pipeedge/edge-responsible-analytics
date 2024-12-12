@@ -38,17 +38,6 @@ OPA_SERVER_URL = config['opa_server_url']
 POLICIES = config['policies']
 
 def get_art_classifier(model, loss_object, input_shape):
-    """
-    Wraps the TensorFlow model with ART's TensorFlowV2Classifier.
-
-    Args:
-        model (tf.keras.Model): Trained TensorFlow model.
-        loss_object: TensorFlow loss function.
-        input_shape (tuple): Shape of the input data.
-
-    Returns:
-        TensorFlowV2Classifier: ART classifier.
-    """
     return TensorFlowV2Classifier(
         model=model,
         loss_object=loss_object,
@@ -57,37 +46,37 @@ def get_art_classifier(model, loss_object, input_shape):
         clip_values=(0, 1)
     )
 
-def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
+def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y_pred=None):
     """
     Evaluates model fairness using OPA policies.
 
     Args:
-        model (tf.keras.Model): The machine learning model.
-        X (pd.DataFrame or np.ndarray): Input features.
+        model (tf.keras.Model): The machine learning model (can be None if y_pred is provided).
+        X (pd.DataFrame or np.ndarray): Input features (can be None if y_pred is provided).
         y_true (pd.Series or np.ndarray): True labels.
         sensitive_features (pd.Series or np.ndarray): Protected attribute(s).
         thresholds (dict): Thresholds for fairness metrics.
+        y_pred (np.ndarray, optional): Pre-computed predictions (for text models).
 
     Returns:
         bool: True if all fairness policies are satisfied, False otherwise.
         list: List of failed policies.
     """
     try:
-        # Generate predictions
-        y_pred = model.predict(X)
-        y_pred_binary = (y_pred >= 0.5).astype(int)  # Assuming binary classification
+        # Generate predictions if not provided
+        if y_pred is None and model is not None:
+            y_pred = model.predict(X)
+            y_pred_binary = (y_pred >= 0.5).astype(int)
+        else:
+            y_pred_binary = y_pred  # Use provided predictions
 
-        # Log data details
-        # logger.info(f"Evaluating model fairness:")
-        # logger.info(f"X shape: {X.shape}")
-        # logger.info(f"y_true shape: {y_true.shape}")
-        # logger.info(f"sensitive_features shape: {sensitive_features.shape}")
-        # logger.info(f"sensitive_features sample: {sensitive_features}")
-
-        logger.info(f"Number of samples - X_val: {len(X)}, y_val: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
+        logger.info(f"Number of samples - y_true: {len(y_true)}, y_pred: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
+        
         if np.isnan(sensitive_features).any():
             logger.error("sensitive_features contain NaN values.")
+            
         sample_params = {'demographic_parity_difference': {'sensitive_features': sensitive_features}}
+        
         # Create MetricFrame
         metric_frame = MetricFrame(
             metrics={
@@ -97,7 +86,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             y_true=y_true,
             y_pred=y_pred_binary,
             sensitive_features=sensitive_features,
-            sample_params = sample_params
+            sample_params=sample_params
         )
 
         # Extract overall metrics
@@ -105,30 +94,6 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
         
         logger.info(f"Model Metrics: {model_metrics}")
         
-        '''
-        ### via local policy
-        # Check thresholds
-        is_fair = True
-        failed_policies = []
-        for metric_name, value in metric_frame.overall.items():
-            logger.info(f"metric_name: {metric_name}, value: {value}")
-            threshold = thresholds.get(metric_name, None)
-            if threshold is not None:
-                if metric_name in ['demographic_parity_difference']:
-                    # For these metrics, smaller absolute values are better
-                    if abs(value) > threshold:
-                        is_fair = False
-                        failed_policies.append(metric_name)
-                else:
-                    # For metrics like accuracy, higher is better
-                    if value < threshold:
-                        is_fair = False
-                        failed_policies.append(metric_name)
-        logger.info(f"is_fair: {is_fair}, failed_policies: {failed_policies}")
-        return is_fair, failed_policies
-        '''
-        
-        ### via OPA
         input_data = {
             "fairness": {
                 "metrics": model_metrics,
@@ -136,43 +101,24 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds):
             }
         }
 
-        allowed, failed_policies= send_to_opa(input_data, "fairness")
+        allowed, failed_policies = send_to_opa(input_data, "fairness")
 
         if allowed:
             logger.info("Model passed all fairness policies.")
             return True, []
         else:
             logger.warning("Model failed fairness policies.")
-            #For these metrics, smaller absolute values are better
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
-            # For metrics like accuracy, higher is better
             if model_metrics.get("accuracy", 0) < thresholds.get("accuracy", 0):
                 failed_policies.append("accuracy")
             return False, failed_policies
-        
-    except requests.exceptions.RequestException as e:
-        logger.exception("Failed to communicate with OPA.")
-        return False, ["OPA Communication Error"]
+
     except Exception as e:
         logger.exception(f"Error during fairness evaluation: {e}")
         return False, ["Fairness Evaluation Error"]
 
-
 def evaluate_reliability_policy(model, X_test, y_test, thresholds):
-    """
-    Evaluates model reliability using adversarial attacks via ART and sends metrics to OPA for policy evaluation.
-
-    Args:
-        model (tf.keras.Model): The machine learning model.
-        X_test (np.ndarray): Test input data.
-        y_test (np.ndarray): True labels for test data.
-        thresholds (dict): Thresholds for reliability metrics.
-
-    Returns:
-        bool: True if all reliability policies are satisfied, False otherwise.
-        list: List of failed policies.
-    """
     try:
         # Wrap the model with ART classifier
         loss_object = tf.keras.losses.BinaryCrossentropy()
@@ -222,18 +168,6 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         return False, ["Reliability Evaluation Error"]
 
 def evaluate_explainability_policy(model, X_sample, thresholds):
-    """
-    Evaluates model explainability using SHAP's GradientExplainer and sends metrics to OPA for policy evaluation.
-
-    Args:
-        model (tf.keras.Model): The machine learning model.
-        X_sample (np.ndarray): Sample input data for explanation.
-        thresholds (dict): Thresholds for explainability metrics.
-
-    Returns:
-        bool: True if all explainability policies are satisfied, False otherwise.
-        list: List of failed policies.
-    """
     try:
         # Ensure model is compiled
         if not model.optimizer:
@@ -298,32 +232,12 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
 def compute_k_anonymity(df, quasi_identifiers, k):
     """
     Computes k-anonymity for the given DataFrame and quasi-identifiers.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing the data.
-        quasi_identifiers (list): List of columns to consider as quasi-identifiers.
-        k (int): The anonymity threshold.
-
-    Returns:
-        int: The minimum k-anonymity across all quasi-identifiers.
     """
     group_sizes = df.groupby(quasi_identifiers).size()
     min_k = group_sizes.min()
     return min_k
 
 def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
-    """
-    Evaluates privacy policy based on k-anonymity.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing the data.
-        quasi_identifiers (list): Columns considered as quasi-identifiers.
-        k_threshold (int): The minimum required k-anonymity.
-
-    Returns:
-        bool: True if k-anonymity >= threshold, False otherwise.
-        list: List containing 'k_anonymity' if policy fails.
-    """
     try:
         k_threshold = int(k_threshold)  # Ensure k_threshold is a Python int
         k_anonymity = compute_k_anonymity(df, quasi_identifiers, k_threshold)
@@ -354,17 +268,6 @@ def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
         return False, ["Privacy Evaluation Error"]
     
 def send_to_opa(input_data, policy_type):
-    """
-    Sends evaluation data to OPA for policy decision.
-
-    Args:
-        input_data (dict): Data containing metrics and thresholds.
-        policy_type (str): Type of policy (e.g., 'fairness', 'reliability', 'explainability').
-
-    Returns:
-        bool: Whether the policy is allowed.
-        list: List of failed policies.
-    """
     failed_policies = []
     try:
         policy_url = OPA_SERVER_URL + POLICIES.get(policy_type)
@@ -402,7 +305,6 @@ def convert_numpy_types(obj):
     
 def evaluate_explainability_policy_t5(model, X_sample, thresholds):
     try:
-        import shap
         # For T5, define explainability metrics differently
         # Placeholder example: average attention weights
         # Implement actual explainability evaluation as needed

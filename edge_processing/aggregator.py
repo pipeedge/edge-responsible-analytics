@@ -147,11 +147,11 @@ def evaluate_and_aggregate():
                 elif model_type == 't5_small':
                     # Assuming similar processing for 'mt' dataset
                     from datasets.mt_processor import process_medical_transcriptions_data
-                    X_train, X_test, y_train, y_test = process_medical_transcriptions_data("datasets/mt/val")
+                    X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt/val")
                     X_val = X_test
                     y_val = y_test
-                    # Assume no sensitive_features or adapt as needed
-                    sensitive_features = np.zeros(len(X_val))  # Placeholder
+                    
+                    sensitive_features = np.zeros(len(X_val))
 
                 # Log data details
                 logger.info(f"Model Type: {model_type}")
@@ -191,9 +191,51 @@ def evaluate_and_aggregate():
                                 sensitive_features=sensitive_features,
                                 thresholds=fairness_thresholds
                             )
+                        elif model_type == 't5_small':
+                            # For t5_small, evaluate fairness using sensitive features from mt_processor
+                            from transformers import T5Tokenizer
+                            tokenizer = T5Tokenizer.from_pretrained('t5-small')
+                            
+                            # Generate predictions
+                            inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
+                            outputs = aggregated_model.generate(inputs.input_ids)
+                            predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+                            
+                            # Convert predictions to categorical values for fairness evaluation
+                            # You might need to adjust this based on your specific task
+                            from sklearn.preprocessing import LabelEncoder
+                            le = LabelEncoder()
+                            y_pred = le.fit_transform([pred.strip().lower() for pred in predictions])
+                            y_true = le.transform([label.strip().lower() for label in y_val])
+                            
+                            # Extract sensitive features
+                            gender = sf_test['gender'].values
+                            age_group = sf_test['age_group'].values
+                            
+                            # Evaluate fairness for each protected attribute
+                            is_fair_gender, failed_gender = evaluate_fairness_policy(
+                                model=None,  # Not needed as we pass predictions directly
+                                X=None,
+                                y_true=y_true,
+                                y_pred=y_pred,
+                                sensitive_features=gender,
+                                thresholds=fairness_thresholds
+                            )
+                            
+                            is_fair_age, failed_age = evaluate_fairness_policy(
+                                model=None,
+                                X=None,
+                                y_true=y_true,
+                                y_pred=y_pred,
+                                sensitive_features=age_group,
+                                thresholds=fairness_thresholds
+                            )
+                            
+                            # Combine results
+                            is_fair = is_fair_gender and is_fair_age
+                            failed_fairness_policies = failed_gender + failed_age
                         else:
-                            # For t5_small, fairness evaluation might differ
-                            is_fair, failed_fairness_policies = True, []
+                            is_fair, failed_fairness_policies = False, ["unsupported_model_type"]
     
                         # Evaluate explainability
                         if model_type == 'MobileNet':
