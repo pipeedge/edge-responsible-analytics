@@ -34,23 +34,32 @@ def load_mobilenet_model():
 def load_t5_model():
     """
     Memory-efficient T5 model loading for IoT devices.
-    Uses t5-small with minimal memory footprint.
+    Uses t5-small with minimal memory footprint and batch processing.
     """
     model_dir = os.path.abspath("../t5_model")
     os.makedirs(model_dir, exist_ok=True)
     
-    # Set TensorFlow memory growth
+    # Configure TensorFlow for memory efficiency
     try:
         physical_devices = tf.config.list_physical_devices('GPU')
         if physical_devices:
             for device in physical_devices:
                 tf.config.experimental.set_memory_growth(device, True)
+            # Limit GPU memory
             tf.config.experimental.set_virtual_device_configuration(
                 physical_devices[0],
-                [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)]
+                [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)]  # Reduced from 1024
             )
     except:
         logger.info("No GPU available, using CPU only")
+        
+    # Configure TensorFlow CPU memory
+    try:
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.set_soft_device_placement(True)
+    except:
+        logger.warning("Could not set all TensorFlow memory configurations")
     
     try:
         if os.path.exists(os.path.join(model_dir, "config.json")):
@@ -62,13 +71,14 @@ def load_t5_model():
             )
             tokenizer = T5Tokenizer.from_pretrained(
                 model_dir,
-                model_max_length=128  # Reduced from 512 to save memory
+                model_max_length=64  # Further reduced from 128 to save memory
             )
             
             # Set generation config after model initialization
-            model.generation_config.max_new_tokens = 128
+            model.generation_config.max_new_tokens = 64
             model.generation_config.pad_token_id = tokenizer.pad_token_id
             model.generation_config.eos_token_id = tokenizer.eos_token_id
+            model.generation_config.num_beams = 1  # Disable beam search to save memory
             
             return model, tokenizer
             
@@ -80,13 +90,14 @@ def load_t5_model():
         )
         tokenizer = T5Tokenizer.from_pretrained(
             't5-small',
-            model_max_length=128
+            model_max_length=64
         )
         
         # Set generation config
-        model.generation_config.max_new_tokens = 128
+        model.generation_config.max_new_tokens = 64
         model.generation_config.pad_token_id = tokenizer.pad_token_id
         model.generation_config.eos_token_id = tokenizer.eos_token_id
+        model.generation_config.num_beams = 1
         
         # Save model and tokenizer
         model.save_pretrained(model_dir)
