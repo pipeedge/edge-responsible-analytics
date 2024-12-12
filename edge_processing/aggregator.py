@@ -57,13 +57,13 @@ lock = threading.Lock()
 
 # Load thresholds
 thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/')
-with open(thresholds_path+'fairness_thresholds.json') as f:
+with open(os.path.join(thresholds_path,'fairness_thresholds.json')) as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
-with open(thresholds_path+'explainability_thresholds.json') as f:
+with open(os.path.join(thresholds_path,'explainability_thresholds.json')) as f:
     explainability_thresholds = json.load(f)['explainability']['threshold']
-with open(thresholds_path+'reliability_thresholds.json') as f:
+with open(os.path.join(thresholds_path,'reliability_thresholds.json')) as f:
     reliability_thresholds = json.load(f)['reliability']['threshold']
-with open(thresholds_path+'privacy_thresholds.json') as f:
+with open(os.path.join(thresholds_path,'privacy_thresholds.json')) as f:
     privacy_thresholds = json.load(f)['privacy']['threshold']
 
 
@@ -104,176 +104,255 @@ def on_message(client, userdata, msg):
 
 def evaluate_and_aggregate():
     with lock:
-        if len(received_models) >= EXPECTED_DEVICES:
-            logger.info("All models received. Evaluating fairness policies.")
+        # Group received models by model_type
+        model_types = set()
+        for model_info in received_models.values():
+            model_types.add(model_info['model_type'])
+        
+        for model_type in model_types:
+            models_of_type = {device_id:info for device_id, info in received_models.items() if info['model_type'] == model_type}
+            if len(models_of_type) >= EXPECTED_DEVICES:
+                logger.info(f"All models of type '{model_type}' received. Evaluating policies.")
 
-            # Aggregate models
-            try:
-                aggregate_models(received_models, aggregated_model_path)
-                logger.info(f"Aggregated model saved to {aggregated_model_path}")
-            except Exception as e:
-                logger.exception(f"Failed to aggregate models: {e}")
-                return
-
-            # Load the aggregated model for fairness evaluation
-            if not os.path.exists(aggregated_model_path):
-                logger.error(f"Aggregated model not found at {aggregated_model_path}")
-                return
-
-            aggregated_model = tf.keras.models.load_model(aggregated_model_path, compile=False)
-            aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-
-            # Prepare validation data
-            X_val, y_val, sensitive_features = [], [], []
-
-            # Iterate over the generator to collect all batches
-            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
-                X_val.append(batch_X)
-                y_val.append(batch_y)
-                sensitive_features.append(batch_sensitive)
-
-            # Concatenate all batches into single arrays
-            X_val = np.concatenate(X_val, axis=0)
-            y_val = np.concatenate(y_val, axis=0)
-            sensitive_features = np.concatenate(sensitive_features, axis=0)
-            print(X_val.shape, y_val.shape, sensitive_features.shape)
-            
-            num_samples = len(sensitive_features)
-            group_size = num_samples // 3  # Adjust to create 3 groups
-
-            # Create synthetic groups
-            sensitive_features[:group_size] = 0
-            sensitive_features[group_size:2*group_size] = 1
-            sensitive_features[2*group_size:] = 2
-
-            # Log the unique values in sensitive_features
-            unique_values = np.unique(sensitive_features)
-            logger.info(f"Unique sensitive feature values: {unique_values}")
-
-            # Start MLflow run
-            with mlflow.start_run(run_name="AggregatedModel_Evaluation"):
+                # Aggregate models
                 try:
-                    # Convert to DataFrame for privacy evaluation
-                    df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
-                    # print("Columns in df_val:", df_val.columns.tolist())
-                    # Define quasi-identifiers
-                    df_val['gender'] = sensitive_features
-                    QUASI_IDENTIFIERS = ['gender']
-                    missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
-                    if missing_columns:
-                        logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
-                        return
-                    # Perform privacy evaluation
-                    is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
-                                                                          quasi_identifiers=QUASI_IDENTIFIERS, 
-                                                                          k_threshold=privacy_thresholds["k"])
-
-                    if not is_private:
-                        logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation.")
-                        notify_policy_failure(failed_privacy_policies)
-                        return
-
-                    # Evaluate fairness using the policy evaluator
-                    is_fair, failed_fairness_policies = evaluate_fairness_policy(
-                        model=aggregated_model,
-                        X=X_val,
-                        y_true=y_val,
-                        sensitive_features=sensitive_features,
-                        thresholds=fairness_thresholds
-                    )
-
-                    # Evaluate explainability
-                    is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
-
-                    # Evaluate reliability
-                    is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
-
-                    mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds["demographic_parity_difference"])
-                    mlflow.log_metric("is_fair", int(is_fair))
-
-                    if is_fair and is_explainable and is_reliable:
-                        logger.info("Aggregated model passed all policies. Publishing the model.")
-                        publish_aggregated_model(aggregated_model_path)
-                        
-                        # Log the aggregated Model 
-                        mlflow.keras.log_model(
-                            aggregated_model, 
-                            "model", 
-                            signature=infer_signature(X_val, aggregated_model.predict(X_val))
-                        )
-                        # Register the model in MLflow
-                        model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
-                        model_details = mlflow.register_model(model_uri, "AggregatedModel")
-
-                        # Transition to Production stage
-                        mlflow_client.transition_model_version_stage(
-                            name="AggregatedModel",
-                            version=model_details.version,
-                            stage="Production"
-                        )
-
-                        logger.info(f"Registered model version {model_details.version} as Production.")
-                        
-                        # Backup the current aggregated model
-                        if os.path.exists(PREVIOUS_MODEL_PATH):
-                            os.remove(PREVIOUS_MODEL_PATH)
-                        os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
-                        received_models.clear()
-                    else:
-                        failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
-                        logger.warning(f"Aggregated model failed policies: {failed_policies}. Retaining previous model.")
-                        notify_policy_failure(failed_policies)
-                        mlflow.log_param("failed_policies", failed_policies)
-                        # Use the previous aggregated model if it exists
-                        if os.path.exists(PREVIOUS_MODEL_PATH):
-                            with open(PREVIOUS_MODEL_PATH, 'rb') as f:
-                                aggregated_model_bytes = f.read()
-                            aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-                            payload = json.dumps({
-                                'model_data': aggregated_model_b64,
-                                'model_type': 'MobileNet'  # Adjust as needed
-                            })
-                            client.publish(MQTT_TOPIC_AGGREGATED, payload)
-                            logger.info(f"Published previous aggregated model to {MQTT_TOPIC_AGGREGATED}")
-                        else:
-                            logger.error("No previous aggregated model available to deploy.")
-                        received_models.clear()
-
+                    aggregate_models(models_of_type, model_type, aggregated_model_path)
+                    logger.info(f"Aggregated {model_type} model saved to {aggregated_model_path}")
                 except Exception as e:
-                    logger.exception(f"Error during MLflow logging and model registration: {e}")
-                    mlflow.end_run(status="FAILED")
-                    return
+                    logger.exception(f"Failed to aggregate {model_type} models: {e}")
+                    continue
 
-def aggregate_models(received_models, save_path):
+                # Load the aggregated model for evaluation
+                if model_type == 'MobileNet':
+                    aggregated_model = tf.keras.models.load_model(aggregated_model_path, compile=False)
+                    aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                elif model_type == 't5_small':
+                    from transformers import TFT5ForConditionalGeneration, T5Tokenizer
+                    aggregated_model = TFT5ForConditionalGeneration.from_pretrained(aggregated_model_path)
+                else:
+                    logger.error(f"Unsupported model_type: {model_type}")
+                    continue
+
+                # Prepare validation data
+                if model_type == 'MobileNet':
+                    X_val, y_val, sensitive_features = [], [], []
+                    for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
+                        X_val.append(batch_X)
+                        y_val.append(batch_y)
+                        sensitive_features.append(batch_sensitive)
+                    # Concatenate all batches into single arrays
+                    X_val = np.concatenate(X_val, axis=0)
+                    y_val = np.concatenate(y_val, axis=0)
+                    sensitive_features = np.concatenate(sensitive_features, axis=0)
+                elif model_type == 't5_small':
+                    # Assuming similar processing for 'mt' dataset
+                    from datasets.mt_processor import process_medical_transcriptions_data
+                    X_train, X_test, y_train, y_test = process_medical_transcriptions_data("datasets/mt/val")
+                    X_val = X_test
+                    y_val = y_test
+                    # Assume no sensitive_features or adapt as needed
+                    sensitive_features = np.zeros(len(X_val))  # Placeholder
+
+                # Log data details
+                logger.info(f"Model Type: {model_type}")
+                logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
+
+                # Start MLflow run
+                with mlflow.start_run(run_name=f"AggregatedModel_Evaluation_{model_type}"):
+                    try:
+                        # Convert to DataFrame for privacy evaluation
+                        if model_type == 'MobileNet':
+                            df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
+                        elif model_type == 't5_small':
+                            df_val = pd.DataFrame({'transcription': X_val})
+                            # Assuming 'transcription' has been prefix with 'summarize: '
+                        # Define quasi-identifiers
+                        QUASI_IDENTIFIERS = ['gender'] if model_type == 'MobileNet' else []
+                        if QUASI_IDENTIFIERS:
+                            missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
+                            if missing_columns:
+                                logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
+                                continue
+                        # Perform privacy evaluation
+                        if QUASI_IDENTIFIERS:
+                            is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
+                                                                                           quasi_identifiers=QUASI_IDENTIFIERS, 
+                                                                                           k_threshold=privacy_thresholds["k"])
+                        else:
+                            is_private, failed_privacy_policies = True, []
+    
+                        if not is_private:
+                            logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation for {model_type}.")
+                            notify_policy_failure(failed_privacy_policies)
+                            continue
+    
+                        # Evaluate fairness using the policy evaluator
+                        if model_type == 'MobileNet':
+                            is_fair, failed_fairness_policies = evaluate_fairness_policy(
+                                model=aggregated_model,
+                                X=X_val,
+                                y_true=y_val,
+                                sensitive_features=sensitive_features,
+                                thresholds=fairness_thresholds
+                            )
+                        else:
+                            # For t5_small, fairness evaluation might differ
+                            is_fair, failed_fairness_policies = True, []
+    
+                        # Evaluate explainability
+                        if model_type == 'MobileNet':
+                            is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
+                        elif model_type == 't5_small':
+                            # Define explainability for seq2seq model
+                            is_explainable, failed_explainability_policies = evaluate_explainability_policy_t5(aggregated_model, X_val, explainability_thresholds)
+                        else:
+                            is_explainable, failed_explainability_policies = False, ["unsupported_model_type"]
+    
+                        # Evaluate reliability
+                        if model_type == 'MobileNet':
+                            is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
+                        elif model_type == 't5_small':
+                            # Define reliability for seq2seq model
+                            is_reliable, failed_reliability_policies = evaluate_reliability_policy_t5(aggregated_model, X_val, y_val, reliability_thresholds)
+                        else:
+                            is_reliable, failed_reliability_policies = False, ["unsupported_model_type"]
+    
+                        mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds.get("demographic_parity_difference", None))
+                        if model_type == 'MobileNet':
+                            mlflow.log_metric("is_fair", int(is_fair))
+                            mlflow.log_metric("is_explainable", int(is_explainable))
+                            mlflow.log_metric("is_reliable", int(is_reliable))
+                        elif model_type == 't5_small':
+                            mlflow.log_metric("is_fair", int(is_fair))
+                            mlflow.log_metric("is_explainable", int(is_explainable))
+                            mlflow.log_metric("is_reliable", int(is_reliable))
+    
+                        if is_fair and is_explainable and is_reliable:
+                            logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
+                            publish_aggregated_model(model_type, aggregated_model_path)
+                            
+                            # Log the aggregated Model 
+                            if model_type == 'MobileNet':
+                                mlflow.keras.log_model(
+                                    aggregated_model, 
+                                    "model", 
+                                    signature=infer_signature(X_val, aggregated_model.predict(X_val))
+                                )
+                            elif model_type == 't5_small':
+                                mlflow.transformers.log_model(
+                                    aggregated_model, 
+                                    "model", 
+                                    signature=infer_signature(X_val, aggregated_model.generate(tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True).input_ids))
+                                )
+    
+                            # Register the model in MLflow
+                            model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+                            model_name = "aggregated_" + model_type
+                            model_details = mlflow.register_model(model_uri, model_name)
+    
+                            # Transition to Production stage
+                            mlflow_client.transition_model_version_stage(
+                                name=model_name,
+                                version=model_details.version,
+                                stage="Production"
+                            )
+    
+                            logger.info(f"Registered model version {model_details.version} as Production.")
+                            
+                            # Backup the current aggregated model
+                            if os.path.exists(PREVIOUS_MODEL_PATH):
+                                os.remove(PREVIOUS_MODEL_PATH)
+                            os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
+                            # Remove received models of this type
+                            for device_id in list(received_models.keys()):
+                                if received_models[device_id]['model_type'] == model_type:
+                                    del received_models[device_id]
+                        else:
+                            failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
+                            logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
+                            notify_policy_failure(failed_policies)
+                            mlflow.log_param("failed_policies", failed_policies)
+                            # Use the previous aggregated model if it exists
+                            if os.path.exists(PREVIOUS_MODEL_PATH):
+                                with open(PREVIOUS_MODEL_PATH, 'rb') as f:
+                                    aggregated_model_bytes = f.read()
+                                aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+                                payload = json.dumps({
+                                    'model_data': aggregated_model_b64,
+                                    'model_type': model_type  # Adjust as needed
+                                })
+                                client.publish(MQTT_TOPIC_AGGREGATED, payload)
+                                logger.info(f"Published previous aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+                            else:
+                                logger.error("No previous aggregated model available to deploy.")
+                            # Remove received models of this type
+                            for device_id in list(received_models.keys()):
+                                if received_models[device_id]['model_type'] == model_type:
+                                    del received_models[device_id]
+
+                    except Exception as e:
+                        logger.exception(f"Error during MLflow logging and model registration: {e}")
+                        mlflow.end_run(status="FAILED")
+                        continue
+
+def aggregate_models(models_of_type, model_type, save_path):
     """
-    Aggregate models by averaging their weights.
+    Aggregate models by averaging their weights based on model_type.
     """
+    import tempfile
+    from transformers import TFT5ForConditionalGeneration
+
     models = []
-    for device_id, model_info in received_models.items():
+    for device_id, model_info in models_of_type.items():
         model_data = base64.b64decode(model_info['model_data'])
         temp_model_path = f"temp_{device_id}.keras"
-        with open(temp_model_path, 'wb') as f:
-            f.write(model_data)
-        model = tf.keras.models.load_model(temp_model_path, compile=False)
+        if model_type == 'MobileNet':
+            with open(temp_model_path, 'wb') as f:
+                f.write(model_data)
+            model = tf.keras.models.load_model(temp_model_path, compile=False)
+        elif model_type == 't5_small':
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp_file:
+                tmp_file.write(model_data)
+                temp_model_path = tmp_file.name
+            model = TFT5ForConditionalGeneration.from_pretrained(temp_model_path)
+            os.remove(temp_model_path)
+        else:
+            raise ValueError(f"Unsupported model_type: {model_type}")
         models.append(model)
-        os.remove(temp_model_path)
+        if model_type == 'MobileNet':
+            os.remove(temp_model_path)
 
     if not models:
         raise ValueError("No models to aggregate.")
 
-    # Initialize the aggregated model with the first model's weights
-    aggregated_model = models[0]
-    for model in models[1:]:
-        for agg_layer, layer in zip(aggregated_model.layers, model.layers):
-            agg_layer.set_weights([
-                (agg_w + layer_w) / 2
-                for agg_w, layer_w in zip(agg_layer.get_weights(), layer.get_weights())
-            ])
+    if model_type == 'MobileNet':
+        # Initialize the aggregated model with the first model's weights
+        aggregated_model = models[0]
+        for model in models[1:]:
+            for agg_layer, layer in zip(aggregated_model.layers, model.layers):
+                agg_layer_weights = agg_layer.get_weights()
+                layer_weights = layer.get_weights()
+                if len(agg_layer_weights) == len(layer_weights):
+                    new_weights = [(agg_w + layer_w) / 2 for agg_w, layer_w in zip(agg_layer_weights, layer_weights)]
+                    agg_layer.set_weights(new_weights)
+                else:
+                    logger.warning(f"Layer weight mismatch: {agg_layer.name}")
+        # Save the aggregated model in .keras format
+        aggregated_model.save(save_path, save_format='keras')
 
-    # Save the aggregated model in .keras format
-    aggregated_model.save(save_path, save_format='keras')
+    elif model_type == 't5_small':
+        # Average weights for T5 model layers
+        # Initialize the aggregated model with the first model
+        aggregated_model = models[0]
+        for model in models[1:]:
+            for param_agg, param in zip(aggregated_model.parameters(), model.parameters()):
+                param_agg.data = (param_agg.data + param.data) / 2
+        # Save the aggregated model using save_pretrained
+        aggregated_model.save_pretrained(save_path)
+    else:
+        raise ValueError(f"Unsupported model_type: {model_type}")
 
-def publish_aggregated_model(model_path):
+def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker.
     """
@@ -283,16 +362,16 @@ def publish_aggregated_model(model_path):
 
     payload = json.dumps({
         'model_data': aggregated_model_b64,
-        'model_type': 'MobileNet'  # Adjust as needed
+        'model_type': model_type  # Adjust as needed
     })
     client.publish(MQTT_TOPIC_AGGREGATED, payload)
-    logger.info(f"Published aggregated model to {MQTT_TOPIC_AGGREGATED}")
+    logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
 
 def notify_policy_failure(failed_policies):
     """
-    Notify stakeholders about the failed fairness policies.
+    Notify stakeholders about the failed policies.
     """
-    logger.warning(f"Fairness policies failed: {failed_policies}")
+    logger.warning(f"Policies failed: {failed_policies}")
     # Implement additional notification mechanisms as needed (e.g., email, alerts)
 
 def connect_mqtt():
@@ -310,24 +389,38 @@ def connect_mqtt():
     client.loop_start()
     logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
 
-CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-layer-api-service.cloud-layer.svc.cluster.local:8000/upload_model/')
-def send_model_to_cloud(device_id, model_type, model_path):
+def send_to_opa(input_data, policy_type):
+    """
+    Sends evaluation data to OPA for policy decision.
+    
+    Args:
+        input_data (dict): Data containing metrics and thresholds.
+        policy_type (str): Type of policy (e.g., 'fairness', 'reliability', 'explainability').
+    
+    Returns:
+        bool: Whether the policy is allowed.
+        list: List of failed policies.
+    """
+    failed_policies = []
     try:
-        with open(model_path, 'rb') as f:
-            model_bytes = f.read()
-        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-        payload = {
-            'device_id': device_id,
-            'model_type': model_type,
-            'model_data': model_b64
-        }
-        response = requests.post(CLOUD_API_URL, json=payload)
+        policy_url = OPA_SERVER_URL + POLICIES.get(policy_type)
+        if not policy_url:
+            logger.error(f"No policy URL found for policy type: {policy_type}")
+            return False, [f"{policy_type}_policy_not_found"]
+
+        response = requests.post(policy_url, json={"input": input_data})
         if response.status_code == 200:
-            print(f"Model {model_type} from {device_id} uploaded successfully.")
+            result = response.json()
+            allowed = result.get('result', False)
+            if not allowed:
+                failed_policies.append(policy_type)
+            return allowed, failed_policies
         else:
-            print(f"Failed to upload model: {response.text}")
+            logger.error(f"OPA request failed with status code {response.status_code}: {response.text}")
+            return False, [f"{policy_type}_opa_request_failed"]
     except Exception as e:
-        print(f"Error uploading model: {e}")
+        logger.exception(f"Error sending data to OPA: {e}")
+        return False, [f"{policy_type}_opa_exception"]
 
 def main():
     connect_mqtt()

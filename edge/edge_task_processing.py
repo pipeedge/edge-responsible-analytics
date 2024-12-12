@@ -56,17 +56,17 @@ logger = logging.getLogger(__name__)
 def process_task(task):
     if task['type'] == 'inference':
         if task['data_type'] == 'chest_xray':
-            processed_data = process_chest_xray_data(task['data'])
+            processed_data = process_chest_xray_data(task['data_path'])
         elif task['data_type'] == 'mt':
-            processed_data = process_medical_transcriptions_data(task['data'])
+            processed_data = process_medical_transcriptions_data(task['data_path'])
         else:
             return "Unknown data type"
         return perform_inference(processed_data, task['data_type'])
     elif task['type'] == 'training':
         if task['data_type'] == 'chest_xray':
-            training_results = train_model(task['data'], task['data_type'])
+            training_results = train_model(task['data_path'], task['data_type'])
         elif task['data_type'] == 'mt':
-            training_results = train_model(task['data'], task['data_type'])
+            training_results = train_model(task['data_path'], task['data_type'])
         else:
             return "Unknown data type"
         return training_results
@@ -96,12 +96,19 @@ def on_message(client, userdata, msg):
         aggregated_model_b64 = payload.get('model_data')
         if aggregated_model_b64:
             aggregated_model_bytes = base64.b64decode(aggregated_model_b64)
-            aggregated_model_path = 'aggregated_model.keras'
+            aggregated_model_path = 'aggregated_MobileNet.keras' if payload.get('model_type') == 'MobileNet' else 'aggregated_t5_small.keras'
             with open(aggregated_model_path, 'wb') as f:
                 f.write(aggregated_model_bytes)
             print(f"[{DEVICE_ID}] Received aggregated model. Loading {aggregated_model_path}")
             try:
-                new_model = tf.keras.models.load_model(aggregated_model_path)
+                if payload.get('model_type') == 'MobileNet':
+                    new_model = tf.keras.models.load_model(aggregated_model_path)
+                elif payload.get('model_type') == 't5_small':
+                    from transformers import TFT5ForConditionalGeneration
+                    new_model = TFT5ForConditionalGeneration.from_pretrained(aggregated_model_path)
+                else:
+                    print(f"[{DEVICE_ID}] Unsupported model type received: {payload.get('model_type')}")
+                    return
                 with model_lock:
                     global model
                     model = new_model
@@ -127,21 +134,39 @@ def mqtt_loop():
 # Task processing function
 def task_processing(task_type, model_type):
     global model
-    # Load the initial model
-    from load_models import load_mobilenet_model
-    with model_lock:
-        model = load_mobilenet_model()
+    # Map model_type to data_type and data paths
+    if model_type == 'MobileNet':
+        data_type = 'chest_xray'
+        train_data_path = 'datasets/chest_xray/train'
+        inference_data_path = 'datasets/chest_xray/val'
+    elif model_type == 't5_small':
+        data_type = 'mt'
+        train_data_path = 'datasets/mt'
+        inference_data_path = 'datasets/mt'
+    else:
+        logger.error(f"Unsupported model_type: {model_type}")
+        return
+
+    # Load the initial model based on model_type
+    if model_type == 'MobileNet':
+        from load_models import load_mobilenet_model
+        with model_lock:
+            model = load_mobilenet_model()
+    elif model_type == 't5_small':
+        from load_models import load_t5_model
+        with model_lock:
+            model, tokenizer = load_t5_model()
 
     # Define tasks
     inference_task = {
         'type': 'inference',
-        'data_type': 'chest_xray',
-        'data': 'datasets/chest_xray/val'
+        'data_type': data_type,
+        'data_path': inference_data_path
     }
     training_task = {
         'type': 'training',
-        'data_type': 'chest_xray',
-        'data': 'datasets/chest_xray/train'
+        'data_type': data_type,
+        'data_path': train_data_path
     }
 
     if task_type == 'inference':
@@ -157,9 +182,14 @@ def task_processing(task_type, model_type):
         print(f"[{DEVICE_ID}] Training Result: {training_result}")
 
     # Save the trained model
-    model_path = 'mobilenet_model.keras'
-    with model_lock:
-        model.save(model_path, save_format='keras')
+    if model_type == 'MobileNet':
+        model_path = 'mobilenet_model.keras'
+        with model_lock:
+            model.save(model_path, save_format='keras')
+    elif model_type == 't5_small':
+        model_path = 't5_model'
+        with model_lock:
+            model.save_pretrained(model_path)
     print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
 
     # Upload the trained model in a separate thread
@@ -204,7 +234,7 @@ def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
     parser.add_argument('--model_type', type=str, default='MobileNet',
-                        choices=['MobileNet', '', ''],
+                        choices=['MobileNet', 't5_small'],
                         help='Type of model to use (default: MobileNet)')
     parser.add_argument('--task_type', type=str, default='inference',
                         choices=['inference', 'training'],
@@ -233,10 +263,8 @@ def main():
         while True:
             time.sleep(1)  # Keep the thread alive
     except KeyboardInterrupt:
-        print("[{DEVICE_ID}] Shutting down.")
+        print(f"[{DEVICE_ID}] Shutting down.")
         client.disconnect()
 
 if __name__ == "__main__":
     main()
-
-    

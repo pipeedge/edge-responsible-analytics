@@ -6,7 +6,8 @@ from sklearn.model_selection import train_test_split
 import kaggle
 import zipfile
 
-# os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(os.path.dirname(__file__), 'datasets')
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
 
 def download_chest_xray_data():
     # Download the dataset from Kaggle
