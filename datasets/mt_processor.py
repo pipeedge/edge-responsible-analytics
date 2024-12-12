@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 import os
 import json
 import kaggle
+import gc
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
@@ -114,46 +115,35 @@ def preprocess_medical_transcriptions(data, batch_size=32):
 def process_medical_transcriptions_data(data_path, batch_size=32):
     """
     Process medical transcriptions data with batch processing.
+    Memory-efficient implementation.
     """
-    # Download the dataset if not already downloaded
     if not os.path.exists(data_path):
         download_medical_transcriptions_data()
     
-    # Load Medical Transcriptions data
-    data = load_medical_transcriptions_data(data_path)
+    # Load and preprocess in batches
+    chunk_size = 1000  # Size of chunks to read from CSV
+    processed_data = []
     
-    # Preprocess the data in batches
-    X, y, sensitive_features = preprocess_medical_transcriptions(data, batch_size=batch_size)
+    # Process data in chunks
+    for chunk in pd.read_csv(os.path.join(data_path, 'mtsamples.csv'), chunksize=chunk_size):
+        X, y, sf = preprocess_medical_transcriptions(chunk, batch_size)
+        processed_data.append((X, y, sf))
+        
+        # Force garbage collection after each chunk
+        gc.collect()
     
-    # Split the data into training and testing sets
+    # Combine processed chunks
+    X = pd.concat([data[0] for data in processed_data])
+    y = pd.concat([data[1] for data in processed_data])
+    sf = pd.concat([data[2] for data in processed_data])
+    
+    # Split data
     X_train, X_test, y_train, y_test, sf_train, sf_test = train_test_split(
-        X, y, sensitive_features, test_size=0.2, random_state=42)
+        X, y, sf, test_size=0.2, random_state=42)
     
-    # Convert to smaller chunks for saving
-    def save_in_chunks(array, filename, chunk_size=1000):
-        chunks = [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
-        for i, chunk in enumerate(chunks):
-            np.save(f'{filename}_chunk_{i}.npy', chunk)
-        return len(chunks)
-    
-    # Save processed data in chunks
-    train_chunks = save_in_chunks(X_train, 'X_train')
-    test_chunks = save_in_chunks(X_test, 'X_test')
-    
-    # Save smaller arrays normally
-    np.save('y_train.npy', y_train)
-    np.save('y_test.npy', y_test)
-    np.save('sf_train.npy', sf_train)
-    np.save('sf_test.npy', sf_test)
-    
-    # Save chunk information
-    chunk_info = {
-        'train_chunks': train_chunks,
-        'test_chunks': test_chunks,
-        'chunk_size': 1000
-    }
-    with open('chunk_info.json', 'w') as f:
-        json.dump(chunk_info, f)
+    # Clean up
+    del processed_data
+    gc.collect()
     
     return X_train, X_test, y_train, y_test, sf_train, sf_test
 

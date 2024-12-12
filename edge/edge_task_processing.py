@@ -29,7 +29,7 @@ MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 
 # Unique identifier for the end device (can be MAC address or any unique ID)
-DEVICE_ID = os.getenv('DEVICE_ID', 'unknown-device')
+DEVICE_ID = os.getenv('DEVICE_ID', 'device')
 
 # Initialize MQTT Client
 client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv5)
@@ -147,6 +147,30 @@ def mqtt_loop():
 # Task processing function
 def task_processing(task_type, model_type):
     global model
+    
+    # Configure TensorFlow memory growth
+    try:
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                # Limit GPU memory
+                tf.config.experimental.set_virtual_device_configuration(
+                    gpu,
+                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)]
+                )
+    except:
+        logger.info("No GPU available or couldn't configure GPU memory growth")
+    
+    # Limit TensorFlow memory allocation
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            logger.warning(f"GPU memory growth setting failed: {e}")
+    
     # Map model_type to data_type and data paths
     if model_type == 'MobileNet':
         data_type = 'chest_xray'
@@ -170,16 +194,18 @@ def task_processing(task_type, model_type):
         with model_lock:
             model, tokenizer = load_t5_model()
 
-    # Define tasks
+    # Define tasks with batch processing
     inference_task = {
         'type': 'inference',
         'data_type': data_type,
-        'data_path': inference_data_path
+        'data_path': inference_data_path,
+        'batch_size': 16  # Small batch size for memory efficiency
     }
     training_task = {
         'type': 'training',
         'data_type': data_type,
-        'data_path': train_data_path
+        'data_path': train_data_path,
+        'batch_size': 16
     }
 
     if task_type == 'inference':
