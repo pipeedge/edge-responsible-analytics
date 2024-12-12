@@ -177,7 +177,6 @@ def evaluate_and_aggregate():
                             if not is_private:
                                 logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation.")
                                 notify_policy_failure(failed_privacy_policies)
-                                return
     
                         elif model_type == 't5_small':
                             df_val = pd.DataFrame({'transcription': X_val})
