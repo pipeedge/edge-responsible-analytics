@@ -338,33 +338,47 @@ def aggregate_models(models_of_type, model_type, save_path):
     Aggregate models by averaging their weights based on model_type.
     """
     import tempfile
-    from transformers import TFT5ForConditionalGeneration
+    from transformers import TFT5ForConditionalGeneration, TFAutoModelForSequenceClassification
 
     models = []
     for device_id, model_info in models_of_type.items():
         model_data = base64.b64decode(model_info['model_data'])
-        temp_model_path = f"temp_{device_id}.keras"
         if model_type == 'MobileNet':
+            temp_model_path = f"temp_{device_id}.keras"
             with open(temp_model_path, 'wb') as f:
                 f.write(model_data)
             model = tf.keras.models.load_model(temp_model_path, compile=False)
-        elif model_type == 't5_small':
+            os.remove(temp_model_path)
+        elif model_type in ['t5_small', 'tinybert']:
+            # Handle directory-based models (T5 and TinyBERT)
             with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp_file:
                 tmp_file.write(model_data)
                 temp_model_path = tmp_file.name
-            model = TFT5ForConditionalGeneration.from_pretrained(temp_model_path)
+            
+            # Extract the tar file
+            temp_dir = f"temp_model_{device_id}"
+            os.makedirs(temp_dir, exist_ok=True)
+            with tarfile.open(temp_model_path, 'r:gz') as tar:
+                tar.extractall(path=temp_dir)
+            
+            # Load the appropriate model type
+            if model_type == 't5_small':
+                model = TFT5ForConditionalGeneration.from_pretrained(temp_dir)
+            else:  # tinybert
+                model = TFAutoModelForSequenceClassification.from_pretrained(temp_dir)
+            
+            # Cleanup
             os.remove(temp_model_path)
+            shutil.rmtree(temp_dir)
         else:
             raise ValueError(f"Unsupported model_type: {model_type}")
         models.append(model)
-        if model_type == 'MobileNet':
-            os.remove(temp_model_path)
 
     if not models:
         raise ValueError("No models to aggregate.")
 
     if model_type == 'MobileNet':
-        # Initialize the aggregated model with the first model's weights
+        # Aggregate MobileNet models
         aggregated_model = models[0]
         for model in models[1:]:
             for agg_layer, layer in zip(aggregated_model.layers, model.layers):
@@ -375,18 +389,23 @@ def aggregate_models(models_of_type, model_type, save_path):
                     agg_layer.set_weights(new_weights)
                 else:
                     logger.warning(f"Layer weight mismatch: {agg_layer.name}")
-        # Save the aggregated model in .keras format
+        # Save the aggregated model
         aggregated_model.save(save_path, save_format='keras')
 
-    elif model_type == 't5_small':
-        # Average weights for T5 model layers
-        # Initialize the aggregated model with the first model
+    elif model_type in ['t5_small', 'tinybert']:
+        # Aggregate transformer models (T5 or TinyBERT)
         aggregated_model = models[0]
         for model in models[1:]:
-            for param_agg, param in zip(aggregated_model.parameters(), model.parameters()):
-                param_agg.data = (param_agg.data + param.data) / 2
-        # Save the aggregated model using save_pretrained
+            # Average weights for all parameters
+            for param_name, param in aggregated_model.trainable_weights:
+                other_param = next(p for n, p in model.trainable_weights if n == param_name)
+                param.assign((param + other_param) / 2)
+        
+        # Create directory for saving if it doesn't exist
+        os.makedirs(save_path, exist_ok=True)
+        # Save the aggregated model
         aggregated_model.save_pretrained(save_path)
+
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
