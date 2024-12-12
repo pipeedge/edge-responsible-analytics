@@ -69,10 +69,12 @@ with open(os.path.join(thresholds_path,'reliability_thresholds.json')) as f:
 with open(os.path.join(thresholds_path,'privacy_thresholds.json')) as f:
     privacy_thresholds = json.load(f)['privacy']['threshold']
 
-
-# Initialize previous aggregated model path
-PREVIOUS_MODEL_PATH = 'aggregated_model_previous.keras'
-aggregated_model_path = 'aggregated_model.keras'
+# Add at the top with other constants
+MODEL_PATHS = {
+    'MobileNet': 'aggregated_mobilenet.keras',
+    't5_small': 'aggregated_t5',
+    'tinybert': 'aggregated_tinybert'
+}
 
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -117,23 +119,43 @@ def evaluate_and_aggregate():
             if len(models_of_type) >= EXPECTED_DEVICES:
                 logger.info(f"All models of type '{model_type}' received. Evaluating policies.")
 
+                # Get the appropriate model path
+                model_path = MODEL_PATHS.get(model_type)
+                if not model_path:
+                    logger.error(f"No model path defined for model type: {model_type}")
+                    continue
+
+                # Clean up existing model files/directories
+                if os.path.exists(model_path):
+                    if os.path.isdir(model_path):
+                        shutil.rmtree(model_path)
+                    else:
+                        os.remove(model_path)
+
                 # Aggregate models
                 try:
-                    aggregate_models(models_of_type, model_type, aggregated_model_path)
-                    logger.info(f"Aggregated {model_type} model saved to {aggregated_model_path}")
+                    aggregate_models(models_of_type, model_type, model_path)
+                    logger.info(f"Aggregated {model_type} model saved to {model_path}")
                 except Exception as e:
                     logger.exception(f"Failed to aggregate {model_type} models: {e}")
                     continue
 
                 # Load the aggregated model for evaluation
-                if model_type == 'MobileNet':
-                    aggregated_model = tf.keras.models.load_model(aggregated_model_path, compile=False)
-                    aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-                elif model_type == 't5_small':
-                    from transformers import TFT5ForConditionalGeneration, T5Tokenizer
-                    aggregated_model = TFT5ForConditionalGeneration.from_pretrained(aggregated_model_path)
-                else:
-                    logger.error(f"Unsupported model_type: {model_type}")
+                try:
+                    if model_type == 'MobileNet':
+                        aggregated_model = tf.keras.models.load_model(model_path, compile=False)
+                        aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                    elif model_type == 't5_small':
+                        from transformers import TFT5ForConditionalGeneration
+                        aggregated_model = TFT5ForConditionalGeneration.from_pretrained(model_path)
+                    elif model_type == 'tinybert':
+                        from transformers import TFAutoModelForSequenceClassification
+                        aggregated_model = TFAutoModelForSequenceClassification.from_pretrained(model_path)
+                    else:
+                        logger.error(f"Unsupported model_type: {model_type}")
+                        continue
+                except Exception as e:
+                    logger.exception(f"Failed to load aggregated model: {e}")
                     continue
 
                 # Prepare validation data
@@ -270,7 +292,7 @@ def evaluate_and_aggregate():
     
                         if is_fair and is_explainable and is_reliable:
                             logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
-                            publish_aggregated_model(model_type, aggregated_model_path)
+                            publish_aggregated_model(model_type, model_path)
                             
                             # Log the aggregated Model 
                             if model_type == 'MobileNet':
@@ -303,7 +325,7 @@ def evaluate_and_aggregate():
                             # Backup the current aggregated model
                             if os.path.exists(PREVIOUS_MODEL_PATH):
                                 os.remove(PREVIOUS_MODEL_PATH)
-                            os.rename(aggregated_model_path, PREVIOUS_MODEL_PATH)
+                            os.rename(model_path, PREVIOUS_MODEL_PATH)
                             # Remove received models of this type
                             for device_id in list(received_models.keys()):
                                 if received_models[device_id]['model_type'] == model_type:
@@ -415,16 +437,29 @@ def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker.
     """
-    with open(model_path, 'rb') as f:
-        aggregated_model_bytes = f.read()
-    aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+    try:
+        if model_type == 'MobileNet':
+            # Handle single file model
+            with open(model_path, 'rb') as f:
+                aggregated_model_bytes = f.read()
+        else:  # Directory-based models (T5, TinyBERT)
+            # Create a temporary tar file
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                # Create tar archive of the model directory
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                with open(tmp.name, 'rb') as f:
+                    aggregated_model_bytes = f.read()
+                os.unlink(tmp.name)  # Clean up temp file
 
-    payload = json.dumps({
-        'model_data': aggregated_model_b64,
-        'model_type': model_type  # Adjust as needed
-    })
-    client.publish(MQTT_TOPIC_AGGREGATED, payload)
-    logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+        payload = json.dumps({
+            'model_data': aggregated_model_b64,
+            'model_type': model_type
+        })
+        client.publish(MQTT_TOPIC_AGGREGATED, payload)
+        logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+    except Exception as e:
+        logger.error(f"Failed to publish aggregated model: {e}")
 
 def notify_policy_failure(failed_policies):
     """
