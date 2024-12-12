@@ -78,7 +78,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
         else:
             y_pred_binary = y_pred  # Use provided predictions
 
-        logger.info(f"Number of samples - y_true: {len(y_true)}, y_pred: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
+        # logger.info(f"Number of samples - y_true: {len(y_true)}, y_pred: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
         
         # Ensure all inputs are the right type for MetricFrame
         if isinstance(sensitive_features, pd.DataFrame):

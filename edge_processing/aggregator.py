@@ -124,6 +124,12 @@ def evaluate_and_aggregate():
             model_types.add(model_info['model_type'])
         
         for model_type in model_types:
+            # Ensure any existing run is ended before starting a new one
+            try:
+                mlflow.end_run()
+            except Exception as e:
+                logger.warning(f"No active MLflow run to end: {e}")
+
             models_of_type = {device_id:info for device_id, info in received_models.items() if info['model_type'] == model_type}
             if len(models_of_type) >= EXPECTED_DEVICES:
                 logger.info(f"All models of type '{model_type}' received. Evaluating policies.")
@@ -585,14 +591,30 @@ def send_to_opa(input_data, policy_type):
         return False, [f"{policy_type}_opa_exception"]
 
 def main():
-    connect_mqtt()
-    try:
-        while True:
-            time.sleep(1)  # Keep the main thread alive
-    except KeyboardInterrupt:
-        logger.info("Shutting down aggregator.")
-        client.loop_stop()
-        client.disconnect()
+    """
+    Connect to the MQTT broker and subscribe to relevant topics.
+    """
+    # Start parent MLflow run
+    with mlflow.start_run(run_name="Model_Aggregation_Parent"):
+        client.on_message = on_message
+        try:
+            print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+            client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        except Exception as e:
+            logger.exception(f"Failed to connect to MQTT broker: {e}")
+            sys.exit(1)
+        client.subscribe(MQTT_TOPIC_UPLOAD)
+        client.loop_start()
+        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+
+        try:
+            while True:
+                time.sleep(1)  # Keep the thread alive
+        except KeyboardInterrupt:
+            logger.info("Shutting down aggregator.")
+            client.loop_stop()
+            client.disconnect()
+            mlflow.end_run()
 
 if __name__ == "__main__":
     # Define expected number of devices
