@@ -58,37 +58,59 @@ def extract_demographics(description):
             
     return gender, age
 
-def preprocess_medical_transcriptions(data):
-    # Example preprocessing: Extract relevant columns and clean text
+def preprocess_medical_transcriptions(data, batch_size=32):
+    """
+    Preprocess medical transcriptions data in batches to manage memory usage.
+    """
+    # Extract relevant columns
     data = data[['description', 'transcription', 'medical_specialty']]
     data = data.dropna()
     
-    # Extract demographic information
-    demographics = data['description'].apply(extract_demographics)
-    data['gender'] = demographics.apply(lambda x: x[0])
-    data['age'] = demographics.apply(lambda x: x[1])
+    processed_batches = []
+    sensitive_batches = []
+    specialty_batches = []
     
-    # Drop rows where we couldn't extract demographic information
-    data = data.dropna(subset=['gender', 'age'])
-    
-    # Convert age to categorical bins for fairness evaluation
-    data['age_group'] = pd.cut(data['age'], 
-                              bins=[0, 18, 35, 50, 65, 120],
-                              labels=['0-18', '19-35', '36-50', '51-65', '65+'])
-    
-    data['transcription'] = data['transcription'].str.replace('\n', ' ')
-    
-    # Add task-specific prefix for T5
-    data['transcription'] = 'summarize: ' + data['transcription']
-    
-    # Define features and target
-    X = data['transcription']
-    y = data['medical_specialty']
-    sensitive_features = data[['gender', 'age_group']]
+    # Process data in batches
+    for start_idx in range(0, len(data), batch_size):
+        end_idx = min(start_idx + batch_size, len(data))
+        batch = data.iloc[start_idx:end_idx]
+        
+        # Extract demographic information for current batch
+        demographics = batch['description'].apply(extract_demographics)
+        batch['gender'] = demographics.apply(lambda x: x[0])
+        batch['age'] = demographics.apply(lambda x: x[1])
+        
+        # Drop rows where we couldn't extract demographic information
+        batch = batch.dropna(subset=['gender', 'age'])
+        
+        if len(batch) == 0:
+            continue
+            
+        # Convert age to categorical bins for fairness evaluation
+        batch['age_group'] = pd.cut(batch['age'], 
+                                  bins=[0, 18, 35, 50, 65, 120],
+                                  labels=['0-18', '19-35', '36-50', '51-65', '65+'])
+        
+        # Clean transcription text
+        batch['transcription'] = batch['transcription'].str.replace('\n', ' ')
+        batch['transcription'] = 'summarize: ' + batch['transcription']
+        
+        # Store processed batch
+        processed_batches.append(batch['transcription'])
+        specialty_batches.append(batch['medical_specialty'])
+        sensitive_batches.append(batch[['gender', 'age_group']])
+        
+    # Concatenate all processed batches
+    X = pd.concat(processed_batches)
+    y = pd.concat(specialty_batches)
+    sensitive_features = pd.concat(sensitive_batches)
     
     return X, y, sensitive_features
 
-def process_medical_transcriptions_data(data_path):
+def process_medical_transcriptions_data(data_path, batch_size=32):
+    """
+    Process medical transcriptions data with batch processing.
+    """
     # Download the dataset if not already downloaded
     if not os.path.exists(data_path):
         download_medical_transcriptions_data()
@@ -96,25 +118,57 @@ def process_medical_transcriptions_data(data_path):
     # Load Medical Transcriptions data
     data = load_medical_transcriptions_data(data_path)
     
-    # Preprocess the data
-    X, y, sensitive_features = preprocess_medical_transcriptions(data)
+    # Preprocess the data in batches
+    X, y, sensitive_features = preprocess_medical_transcriptions(data, batch_size=batch_size)
     
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test, sf_train, sf_test = train_test_split(
         X, y, sensitive_features, test_size=0.2, random_state=42)
     
-    return X_train, X_test, y_train, y_test, sf_train, sf_test
-
-if __name__ == "__main__":
-    data_path = "datasets/mt"
-    X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data(data_path)
+    # Convert to smaller chunks for saving
+    def save_in_chunks(array, filename, chunk_size=1000):
+        chunks = [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
+        for i, chunk in enumerate(chunks):
+            np.save(f'{filename}_chunk_{i}.npy', chunk)
+        return len(chunks)
     
-    # Save the processed data
-    np.save('X_train.npy', X_train)
-    np.save('X_test.npy', X_test)
+    # Save processed data in chunks
+    train_chunks = save_in_chunks(X_train, 'X_train')
+    test_chunks = save_in_chunks(X_test, 'X_test')
+    
+    # Save smaller arrays normally
     np.save('y_train.npy', y_train)
     np.save('y_test.npy', y_test)
     np.save('sf_train.npy', sf_train)
     np.save('sf_test.npy', sf_test)
     
-    print("Data processing completed and saved.")
+    # Save chunk information
+    chunk_info = {
+        'train_chunks': train_chunks,
+        'test_chunks': test_chunks,
+        'chunk_size': 1000
+    }
+    with open('chunk_info.json', 'w') as f:
+        json.dump(chunk_info, f)
+    
+    return X_train, X_test, y_train, y_test, sf_train, sf_test
+
+def load_data_chunks(prefix, chunk_info):
+    """
+    Load data chunks and concatenate them.
+    """
+    chunks = []
+    for i in range(chunk_info[f'{prefix}_chunks']):
+        chunk = np.load(f'{prefix}_chunk_{i}.npy')
+        chunks.append(chunk)
+    return np.concatenate(chunks)
+
+if __name__ == "__main__":
+    data_path = "datasets/mt"
+    # Process data with smaller batch size
+    X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data(
+        data_path, 
+        batch_size=50  # Reduced batch size for memory efficiency
+    )
+    
+    print("Data processing completed and saved in chunks.")
