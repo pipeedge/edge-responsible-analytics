@@ -34,15 +34,28 @@ def perform_inference(data, data_type, batch_size=16):
         for i in range(0, len(data), batch_size):
             batch = data[i:i + batch_size]
             try:
-                input_ids = tokenizer(batch, return_tensors="tf", padding=True, truncation=True, 
-                                   max_length=64).input_ids  # Reduced max_length
-                outputs = model.generate(
-                    input_ids,
-                    max_length=64,  # Reduced max generation length
-                    num_beams=1,    # No beam search
-                    length_penalty=1.0,
-                    early_stopping=True
+                # Tokenize with padding and truncation
+                inputs = tokenizer(
+                    batch, 
+                    return_tensors="tf", 
+                    padding=True, 
+                    truncation=True,
+                    max_length=64  # Input sequence length
                 )
+                
+                # Generate text with optimized settings
+                outputs = model.generate(
+                    inputs.input_ids,
+                    max_new_tokens=128,  # Only set max_new_tokens, not max_length
+                    do_sample=False,     # Deterministic generation
+                    num_beams=1,         # No beam search for memory efficiency
+                    early_stopping=False, # Disable early stopping with num_beams=1
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                    use_cache=True       # Enable cache for single sample generation
+                )
+                
+                # Decode predictions
                 batch_predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
                 predictions.extend(batch_predictions)
                 
