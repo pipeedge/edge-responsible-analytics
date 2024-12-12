@@ -259,10 +259,43 @@ def evaluate_and_aggregate():
                     from transformers import AutoTokenizer
                     tokenizer = AutoTokenizer.from_pretrained('huawei-noah/TinyBERT_General_4L_312D')
                     
-                    # Generate predictions
-                    inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
-                    outputs = aggregated_model(inputs)  # TinyBERT doesn't use generate()
-                    predictions = tf.nn.softmax(outputs.logits, axis=-1).numpy()
+                    # Generate predictions with proper sequence length handling
+                    inputs = tokenizer(
+                        X_val.tolist(),
+                        return_tensors="tf",
+                        padding=True,
+                        truncation=True,
+                        max_length=512,  # TinyBERT's maximum sequence length
+                        return_attention_mask=True
+                    )
+                    
+                    # Process in batches to manage memory
+                    batch_size = 32
+                    all_predictions = []
+                    
+                    for i in range(0, len(X_val), batch_size):
+                        batch_texts = X_val[i:i + batch_size].tolist()
+                        batch_inputs = tokenizer(
+                            batch_texts,
+                            return_tensors="tf",
+                            padding=True,
+                            truncation=True,
+                            max_length=512,
+                            return_attention_mask=True
+                        )
+                        
+                        # Get predictions for batch
+                        outputs = aggregated_model(
+                            input_ids=batch_inputs["input_ids"],
+                            attention_mask=batch_inputs["attention_mask"],
+                            token_type_ids=batch_inputs["token_type_ids"],
+                            training=False
+                        )
+                        batch_predictions = tf.nn.softmax(outputs.logits, axis=-1).numpy()
+                        all_predictions.append(batch_predictions)
+                    
+                    # Combine all batch predictions
+                    predictions = np.vstack(all_predictions)
                     
                     # Convert predictions to categorical values for fairness evaluation
                     from sklearn.preprocessing import LabelEncoder
