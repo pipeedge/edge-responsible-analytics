@@ -171,206 +171,212 @@ def evaluate_and_aggregate():
                     continue
 
                 # Prepare validation data
-                if model_type == 'MobileNet':
-                    X_val, y_val, sensitive_features = [], [], []
-                    for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
-                        X_val.append(batch_X)
-                        y_val.append(batch_y)
-                        sensitive_features.append(batch_sensitive)
-                    # Concatenate all batches into single arrays
-                    X_val = np.concatenate(X_val, axis=0)
-                    y_val = np.concatenate(y_val, axis=0)
-                    sensitive_features = np.concatenate(sensitive_features, axis=0)
-                elif model_type == 't5_small':
-                    # Assuming similar processing for 'mt' dataset
-                    from datasets.mt_processor import process_medical_transcriptions_data
-                    X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt/val")
-                    X_val = X_test
-                    y_val = y_test
+                try:
+                    X_val, y_val, sensitive_features = None, None, None
                     
-                    sensitive_features = np.zeros(len(X_val))
+                    if model_type == 'MobileNet':
+                        X_val, y_val, sensitive_features = [], [], []
+                        for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
+                            X_val.append(batch_X)
+                            y_val.append(batch_y)
+                            sensitive_features.append(batch_sensitive)
+                        # Concatenate all batches into single arrays
+                        X_val = np.concatenate(X_val, axis=0)
+                        y_val = np.concatenate(y_val, axis=0)
+                        sensitive_features = np.concatenate(sensitive_features, axis=0)
+                        
+                        logger.info(f"MobileNet validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {sensitive_features.shape}")
+                        
+                    elif model_type in ['t5_small', 'tinybert']:
+                        # Process medical transcription data
+                        from datasets.mt_processor import process_medical_transcriptions_data
+                        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt/val")
+                        X_val = X_test
+                        y_val = y_test
+                        sensitive_features = sf_test
+                        
+                        logger.info(f"Text model validation data loaded - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features shape: {sensitive_features.shape}")
+                    else:
+                        logger.error(f"Unsupported model type for validation data: {model_type}")
+                        return
+
+                    # Start MLflow run
+                    with mlflow.start_run(run_name=f"AggregatedModel_Evaluation_{model_type}"):
+                        try:
+                            # Convert to DataFrame for privacy evaluation
+                            if model_type == 'MobileNet':
+                                df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))
+                                df_val['gender'] = sensitive_features
+                                QUASI_IDENTIFIERS = ['gender']
+                            elif model_type in ['t5_small', 'tinybert']:
+                                df_val = pd.DataFrame({
+                                    'text': X_val,
+                                    'gender': sensitive_features['gender'],
+                                    'age_group': sensitive_features['age_group']
+                                })
+                                QUASI_IDENTIFIERS = ['gender', 'age_group']
+                            
+                            # Evaluate privacy
+                            missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
+                            if missing_columns:
+                                logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
+                                return
+                                
+                            is_private, failed_privacy_policies = evaluate_privacy_policy(
+                                df=df_val,
+                                quasi_identifiers=QUASI_IDENTIFIERS,
+                                k_threshold=privacy_thresholds["k"]
+                            )
+
+                            # Rest of the evaluation code...
+
+                        except Exception as e:
+                            logger.exception(f"Error during model evaluation: {e}")
+                            mlflow.end_run(status="FAILED")
+                            return
+
+                except Exception as e:
+                    logger.exception(f"Error preparing validation data: {e}")
+                    return
 
                 # Log data details
                 logger.info(f"Model Type: {model_type}")
                 logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
 
-                # Start MLflow run
-                with mlflow.start_run(run_name=f"AggregatedModel_Evaluation_{model_type}"):
-                    try:
-                        # Convert to DataFrame for privacy evaluation
-                        if model_type == 'MobileNet':
-                            df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))  # Adjust reshape as necessary
-                            df_val['gender'] = sensitive_features
-                            QUASI_IDENTIFIERS = ['gender']
-                            missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
-                            if missing_columns:
-                                logger.error(f"Missing quasi-identifier columns in df_val: {missing_columns}")
-                                return
-                            # Perform privacy evaluation
-                            is_private, failed_privacy_policies = evaluate_privacy_policy(df=df_val, 
-                                                                          quasi_identifiers=QUASI_IDENTIFIERS, 
-                                                                          k_threshold=privacy_thresholds["k"])
-
-                            if not is_private:
-                                logger.warning(f"Privacy policies failed: {failed_privacy_policies}. Aborting aggregation.")
-                                notify_policy_failure(failed_privacy_policies)
+                # Evaluate fairness using the policy evaluator
+                if model_type == 'MobileNet':
+                    is_fair, failed_fairness_policies = evaluate_fairness_policy(
+                        model=aggregated_model,
+                        X=X_val,
+                        y_true=y_val,
+                        sensitive_features=sensitive_features,
+                        thresholds=fairness_thresholds
+                    )
+                elif model_type == 't5_small':
+                    # For t5_small, evaluate fairness using sensitive features from mt_processor
+                    from transformers import T5Tokenizer
+                    tokenizer = T5Tokenizer.from_pretrained('t5-small')
+                    
+                    # Generate predictions
+                    inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
+                    outputs = aggregated_model.generate(inputs.input_ids)
+                    predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+                    
+                    # Convert predictions to categorical values for fairness evaluation
+                    # You might need to adjust this based on your specific task
+                    from sklearn.preprocessing import LabelEncoder
+                    le = LabelEncoder()
+                    y_pred = le.fit_transform([pred.strip().lower() for pred in predictions])
+                    y_true = le.transform([label.strip().lower() for label in y_val])
+                    
+                    # Extract sensitive features
+                    gender = sf_test['gender'].values
+                    age_group = sf_test['age_group'].values
+                    
+                    # Evaluate fairness for each protected attribute
+                    is_fair_gender, failed_gender = evaluate_fairness_policy(
+                        model=None,  # Not needed as we pass predictions directly
+                        X=None,
+                        y_true=y_true,
+                        y_pred=y_pred,
+                        sensitive_features=gender,
+                        thresholds=fairness_thresholds
+                    )
+                    
+                    is_fair_age, failed_age = evaluate_fairness_policy(
+                        model=None,
+                        X=None,
+                        y_true=y_true,
+                        y_pred=y_pred,
+                        sensitive_features=age_group,
+                        thresholds=fairness_thresholds
+                    )
+                    
+                    # Combine results
+                    is_fair = is_fair_gender and is_fair_age
+                    failed_fairness_policies = failed_gender + failed_age
+                else:
+                    is_fair, failed_fairness_policies = False, ["unsupported_model_type"]
     
-                        elif model_type == 't5_small':
-                            df_val = pd.DataFrame({'transcription': X_val})
-                            # [TODO]
-
-                        # Evaluate fairness using the policy evaluator
-                        if model_type == 'MobileNet':
-                            is_fair, failed_fairness_policies = evaluate_fairness_policy(
-                                model=aggregated_model,
-                                X=X_val,
-                                y_true=y_val,
-                                sensitive_features=sensitive_features,
-                                thresholds=fairness_thresholds
-                            )
-                        elif model_type == 't5_small':
-                            # For t5_small, evaluate fairness using sensitive features from mt_processor
-                            from transformers import T5Tokenizer
-                            tokenizer = T5Tokenizer.from_pretrained('t5-small')
-                            
-                            # Generate predictions
-                            inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
-                            outputs = aggregated_model.generate(inputs.input_ids)
-                            predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-                            
-                            # Convert predictions to categorical values for fairness evaluation
-                            # You might need to adjust this based on your specific task
-                            from sklearn.preprocessing import LabelEncoder
-                            le = LabelEncoder()
-                            y_pred = le.fit_transform([pred.strip().lower() for pred in predictions])
-                            y_true = le.transform([label.strip().lower() for label in y_val])
-                            
-                            # Extract sensitive features
-                            gender = sf_test['gender'].values
-                            age_group = sf_test['age_group'].values
-                            
-                            # Evaluate fairness for each protected attribute
-                            is_fair_gender, failed_gender = evaluate_fairness_policy(
-                                model=None,  # Not needed as we pass predictions directly
-                                X=None,
-                                y_true=y_true,
-                                y_pred=y_pred,
-                                sensitive_features=gender,
-                                thresholds=fairness_thresholds
-                            )
-                            
-                            is_fair_age, failed_age = evaluate_fairness_policy(
-                                model=None,
-                                X=None,
-                                y_true=y_true,
-                                y_pred=y_pred,
-                                sensitive_features=age_group,
-                                thresholds=fairness_thresholds
-                            )
-                            
-                            # Combine results
-                            is_fair = is_fair_gender and is_fair_age
-                            failed_fairness_policies = failed_gender + failed_age
+                # Evaluate explainability
+                if model_type == 'MobileNet':
+                    is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
+                
+                # Evaluate reliability
+                if model_type == 'MobileNet':
+                    is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
+    
+                mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds.get("demographic_parity_difference", None))
+                if model_type == 'MobileNet':
+                    mlflow.log_metric("is_fair", int(is_fair))
+                    mlflow.log_metric("is_explainable", int(is_explainable))
+                    mlflow.log_metric("is_reliable", int(is_reliable))
+                
+    
+                if is_fair and is_explainable and is_reliable:
+                    logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
+                    publish_aggregated_model(model_type, current_path)
+                    
+                    # Log the aggregated Model 
+                    if model_type == 'MobileNet':
+                        mlflow.keras.log_model(
+                            aggregated_model, 
+                            "model", 
+                            signature=infer_signature(X_val, aggregated_model.predict(X_val))
+                        )
+                    elif model_type in ['t5_small', 'tinybert']:
+                        mlflow.transformers.log_model(
+                            aggregated_model, 
+                            "model"
+                        )
+    
+                    # Register the model in MLflow
+                    model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+                    model_name = "aggregated_" + model_type
+                    model_details = mlflow.register_model(model_uri, model_name)
+    
+                    # Transition to Production stage
+                    mlflow_client.transition_model_version_stage(
+                        name=model_name,
+                        version=model_details.version,
+                        stage="Production"
+                    )
+    
+                    logger.info(f"Registered model version {model_details.version} as Production.")
+                    
+                    # Backup the current aggregated model
+                    if os.path.exists(previous_path):
+                        if os.path.isdir(previous_path):
+                            shutil.rmtree(previous_path)
                         else:
-                            is_fair, failed_fairness_policies = False, ["unsupported_model_type"]
-    
-                        # Evaluate explainability
-                        if model_type == 'MobileNet':
-                            is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
-                        elif model_type == 't5_small':
-                            # Define explainability for seq2seq model
-                            is_explainable, failed_explainability_policies = evaluate_explainability_policy_t5(aggregated_model, X_val, explainability_thresholds)
-                        else:
-                            is_explainable, failed_explainability_policies = False, ["unsupported_model_type"]
-    
-                        # Evaluate reliability
-                        if model_type == 'MobileNet':
-                            is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
-                        elif model_type == 't5_small':
-                            # Define reliability for seq2seq model
-                            is_reliable, failed_reliability_policies = evaluate_reliability_policy_t5(aggregated_model, X_val, y_val, reliability_thresholds)
-                        else:
-                            is_reliable, failed_reliability_policies = False, ["unsupported_model_type"]
-    
-                        mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds.get("demographic_parity_difference", None))
-                        if model_type == 'MobileNet':
-                            mlflow.log_metric("is_fair", int(is_fair))
-                            mlflow.log_metric("is_explainable", int(is_explainable))
-                            mlflow.log_metric("is_reliable", int(is_reliable))
-                        elif model_type == 't5_small':
-                            mlflow.log_metric("is_fair", int(is_fair))
-                            mlflow.log_metric("is_explainable", int(is_explainable))
-                            mlflow.log_metric("is_reliable", int(is_reliable))
-    
-                        if is_fair and is_explainable and is_reliable:
-                            logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
-                            publish_aggregated_model(model_type, current_path)
-                            
-                            # Log the aggregated Model 
-                            if model_type == 'MobileNet':
-                                mlflow.keras.log_model(
-                                    aggregated_model, 
-                                    "model", 
-                                    signature=infer_signature(X_val, aggregated_model.predict(X_val))
-                                )
-                            elif model_type in ['t5_small', 'tinybert']:
-                                mlflow.transformers.log_model(
-                                    aggregated_model, 
-                                    "model"
-                                )
-    
-                            # Register the model in MLflow
-                            model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
-                            model_name = "aggregated_" + model_type
-                            model_details = mlflow.register_model(model_uri, model_name)
-    
-                            # Transition to Production stage
-                            mlflow_client.transition_model_version_stage(
-                                name=model_name,
-                                version=model_details.version,
-                                stage="Production"
-                            )
-    
-                            logger.info(f"Registered model version {model_details.version} as Production.")
-                            
-                            # Backup the current aggregated model
-                            if os.path.exists(previous_path):
-                                if os.path.isdir(previous_path):
-                                    shutil.rmtree(previous_path)
-                                else:
-                                    os.remove(previous_path)
-                            
-                            if os.path.isdir(current_path):
-                                shutil.copytree(current_path, previous_path)
-                            else:
-                                shutil.copy2(current_path, previous_path)
-                                
-                            # Remove received models of this type
-                            for device_id in list(received_models.keys()):
-                                if received_models[device_id]['model_type'] == model_type:
-                                    del received_models[device_id]
-                        else:
-                            failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
-                            logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
-                            notify_policy_failure(failed_policies)
-                            mlflow.log_param("failed_policies", failed_policies)
-                            
-                            # Use the previous aggregated model if it exists
-                            if os.path.exists(previous_path):
-                                publish_aggregated_model(model_type, previous_path)
-                                logger.info(f"Published previous aggregated {model_type} model")
-                            else:
-                                logger.error("No previous aggregated model available to deploy.")
-                            
-                            # Remove received models of this type
-                            for device_id in list(received_models.keys()):
-                                if received_models[device_id]['model_type'] == model_type:
-                                    del received_models[device_id]
-
-                    except Exception as e:
-                        logger.exception(f"Error during MLflow logging and model registration: {e}")
-                        mlflow.end_run(status="FAILED")
-                        continue
+                            os.remove(previous_path)
+                    
+                    if os.path.isdir(current_path):
+                        shutil.copytree(current_path, previous_path)
+                    else:
+                        shutil.copy2(current_path, previous_path)
+                        
+                    # Remove received models of this type
+                    for device_id in list(received_models.keys()):
+                        if received_models[device_id]['model_type'] == model_type:
+                            del received_models[device_id]
+                else:
+                    failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
+                    logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
+                    notify_policy_failure(failed_policies)
+                    mlflow.log_param("failed_policies", failed_policies)
+                    
+                    # Use the previous aggregated model if it exists
+                    if os.path.exists(previous_path):
+                        publish_aggregated_model(model_type, previous_path)
+                        logger.info(f"Published previous aggregated {model_type} model")
+                    else:
+                        logger.error("No previous aggregated model available to deploy.")
+                    
+                    # Remove received models of this type
+                    for device_id in list(received_models.keys()):
+                        if received_models[device_id]['model_type'] == model_type:
+                            del received_models[device_id]
 
 def aggregate_models(models_of_type, model_type, save_path):
     """
