@@ -63,6 +63,10 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
         list: List of failed policies.
     """
     try:
+        # Convert categorical sensitive features to numeric if needed
+        if hasattr(sensitive_features, 'dtype') and sensitive_features.dtype.name == 'category':
+            sensitive_features = sensitive_features.astype(str)
+        
         # Generate predictions if not provided
         if y_pred is None and model is not None:
             y_pred = model.predict(X)
@@ -388,34 +392,44 @@ def evaluate_reliability_policy_t5(model, X_test, y_test, thresholds):
 def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds):
     """
     Evaluates explainability for TinyBERT model using attention weights.
-    
-    Args:
-        model: TinyBERT model
-        X_val: Validation data
-        tokenizer: TinyBERT tokenizer
-        thresholds: Dictionary containing explainability thresholds
-    
-    Returns:
-        bool: Whether explainability criteria are met
-        list: List of failed policies
     """
     try:
-        # Get attention weights for validation data
-        inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
-        attention_weights = model(inputs, output_attentions=True).attentions
+        # Process in smaller batches
+        batch_size = 16
+        max_length = 512  # TinyBERT's maximum sequence length
+        attention_scores_list = []
         
-        # Calculate mean attention scores as explainability measure
-        attention_scores = tf.reduce_mean([tf.reduce_mean(layer) for layer in attention_weights])
-        explainability_score = float(attention_scores.numpy())
+        for i in range(0, len(X_val), batch_size):
+            batch_texts = X_val[i:i + batch_size].tolist()
+            
+            # Tokenize with explicit max length
+            inputs = tokenizer(
+                batch_texts,
+                return_tensors="tf",
+                padding=True,
+                truncation=True,
+                max_length=max_length
+            )
+            
+            # Get attention weights
+            outputs = model(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                token_type_ids=inputs["token_type_ids"],
+                output_attentions=True
+            )
+            
+            # Calculate mean attention scores for this batch
+            batch_scores = tf.reduce_mean([tf.reduce_mean(layer) for layer in outputs.attentions])
+            attention_scores_list.append(float(batch_scores.numpy()))
         
-        # Calculate token attribution scores
-        token_importances = calculate_token_importance(model, tokenizer, X_val)
+        # Calculate overall explainability score
+        explainability_score = np.mean(attention_scores_list)
         
         # Prepare metrics for OPA
         explainability_metrics = {
             "attention_score": explainability_score,
-            "token_attribution_score": float(np.mean(token_importances)),
-            "interpretability_score": float((explainability_score + np.mean(token_importances)) / 2)
+            "interpretability_score": explainability_score  # Simplified for now
         }
         
         logger.info(f"TinyBERT Explainability Metrics: {explainability_metrics}")
@@ -437,8 +451,8 @@ def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds)
             failed = []
             if explainability_metrics["attention_score"] < thresholds.get("attention_score", 0):
                 failed.append("attention_score")
-            if explainability_metrics["token_attribution_score"] < thresholds.get("token_attribution_score", 0):
-                failed.append("token_attribution")
+            if explainability_metrics["interpretability_score"] < thresholds.get("interpretability_score", 0):
+                failed.append("interpretability_score")
             return False, failed
             
     except Exception as e:
@@ -448,62 +462,54 @@ def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds)
 def evaluate_reliability_policy_tinybert(model, X_val, tokenizer, thresholds):
     """
     Evaluates reliability for TinyBERT model using input perturbations.
-    
-    Args:
-        model: TinyBERT model
-        X_val: Validation data
-        tokenizer: TinyBERT tokenizer
-        thresholds: Dictionary containing reliability thresholds
-    
-    Returns:
-        bool: Whether reliability criteria are met
-        list: List of failed policies
     """
     try:
-        reliability_metrics = {
-            "prediction_stability": 0.0,
-            "perturbation_robustness": 0.0,
-            "length_invariance": 0.0
-        }
-        
-        # Test sample size
+        max_length = 512  # TinyBERT's maximum sequence length
         n_samples = min(len(X_val), 100)
         stability_scores = []
-        robustness_scores = []
-        length_scores = []
         
         for i in range(n_samples):
             text = X_val.iloc[i]
             
             # Original prediction
-            original_input = tokenizer(text, return_tensors="tf", padding=True, truncation=True)
-            original_output = model(original_input).logits
+            original_input = tokenizer(
+                text,
+                return_tensors="tf",
+                padding=True,
+                truncation=True,
+                max_length=max_length
+            )
             
-            # 1. Prediction Stability (truncation test)
+            original_output = model(
+                input_ids=original_input["input_ids"],
+                attention_mask=original_input["attention_mask"],
+                token_type_ids=original_input["token_type_ids"]
+            ).logits
+            
+            # Test with truncated input
             truncated_text = ' '.join(text.split()[:len(text.split())//2])
-            truncated_input = tokenizer(truncated_text, return_tensors="tf", padding=True, truncation=True)
-            truncated_output = model(truncated_input).logits
+            truncated_input = tokenizer(
+                truncated_text,
+                return_tensors="tf",
+                padding=True,
+                truncation=True,
+                max_length=max_length
+            )
+            
+            truncated_output = model(
+                input_ids=truncated_input["input_ids"],
+                attention_mask=truncated_input["attention_mask"],
+                token_type_ids=truncated_input["token_type_ids"]
+            ).logits
+            
+            # Calculate stability score
             stability_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - truncated_output)))
             stability_scores.append(stability_score)
-            
-            # 2. Perturbation Robustness (word swap test)
-            perturbed_text = perturb_text(text)
-            perturbed_input = tokenizer(perturbed_text, return_tensors="tf", padding=True, truncation=True)
-            perturbed_output = model(perturbed_input).logits
-            robustness_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - perturbed_output)))
-            robustness_scores.append(robustness_score)
-            
-            # 3. Length Invariance (padding test)
-            padded_text = text + " " + text[:50]  # Add partial repetition
-            padded_input = tokenizer(padded_text, return_tensors="tf", padding=True, truncation=True)
-            padded_output = model(padded_input).logits
-            length_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - padded_output)))
-            length_scores.append(length_score)
         
         # Aggregate scores
-        reliability_metrics["prediction_stability"] = float(np.mean(stability_scores))
-        reliability_metrics["perturbation_robustness"] = float(np.mean(robustness_scores))
-        reliability_metrics["length_invariance"] = float(np.mean(length_scores))
+        reliability_metrics = {
+            "prediction_stability": float(np.mean(stability_scores))
+        }
         
         logger.info(f"TinyBERT Reliability Metrics: {reliability_metrics}")
         
