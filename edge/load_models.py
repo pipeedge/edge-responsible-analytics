@@ -34,6 +34,7 @@ def load_mobilenet_model():
 def load_t5_model():
     """
     Memory-efficient T5 model loading for IoT devices.
+    Uses t5-small with minimal memory footprint.
     """
     model_dir = os.path.abspath("../t5_model")
     os.makedirs(model_dir, exist_ok=True)
@@ -46,27 +47,31 @@ def load_t5_model():
     
     try:
         if os.path.exists(os.path.join(model_dir, "config.json")):
-            # Load locally saved model
+            # Load locally saved model with minimal memory settings
             model = TFT5ForConditionalGeneration.from_pretrained(
                 model_dir,
-                from_pt=False,  # Ensure loading TensorFlow weights
-                use_cache=False  # Disable caching to save memory
+                from_pt=False,
+                use_cache=False,
+                batch_size=1,  # Process one sample at a time
+                max_length=128  # Limit sequence length
             )
             tokenizer = T5Tokenizer.from_pretrained(
                 model_dir,
-                model_max_length=512  # Limit maximum sequence length
+                model_max_length=128  # Reduced from 512 to save memory
             )
             return model, tokenizer
             
         # Download and save if not found locally
         model = TFT5ForConditionalGeneration.from_pretrained(
-            't5-small',
+            't5-small',  # Using smallest T5 variant
             from_pt=False,
-            use_cache=False
+            use_cache=False,
+            batch_size=1,
+            max_length=128
         )
         tokenizer = T5Tokenizer.from_pretrained(
             't5-small',
-            model_max_length=512
+            model_max_length=128
         )
         
         # Save model and tokenizer
