@@ -228,7 +228,9 @@ def evaluate_and_aggregate():
                                 k_threshold=privacy_thresholds["k"]
                             )
 
-                            # Rest of the evaluation code...
+                            if not is_private:
+                                logger.warning(f"Privacy policies failed: {failed_privacy_policies}.")
+                                notify_policy_failure(failed_privacy_policies)
 
                         except Exception as e:
                             logger.exception(f"Error during model evaluation: {e}")
@@ -239,9 +241,9 @@ def evaluate_and_aggregate():
                     logger.exception(f"Error preparing validation data: {e}")
                     return
 
-                # Log data details
-                logger.info(f"Model Type: {model_type}")
-                logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
+                # # Log data details
+                # logger.info(f"Model Type: {model_type}")
+                # logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
 
                 # Evaluate fairness using the policy evaluator
                 if model_type == 'MobileNet':
@@ -252,8 +254,7 @@ def evaluate_and_aggregate():
                         sensitive_features=sensitive_features,
                         thresholds=fairness_thresholds
                     )
-                elif model_type == 't5_small':
-                    # For t5_small, evaluate fairness using sensitive features from mt_processor
+                elif model_type == 'tinybert':
                     from transformers import T5Tokenizer
                     tokenizer = T5Tokenizer.from_pretrained('t5-small')
                     

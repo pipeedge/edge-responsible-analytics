@@ -384,3 +384,189 @@ def evaluate_reliability_policy_t5(model, X_test, y_test, thresholds):
     except Exception as e:
         logger.exception(f"Error during reliability evaluation for T5: {e}")
         return False, ["Reliability Evaluation Error"]
+
+def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds):
+    """
+    Evaluates explainability for TinyBERT model using attention weights.
+    
+    Args:
+        model: TinyBERT model
+        X_val: Validation data
+        tokenizer: TinyBERT tokenizer
+        thresholds: Dictionary containing explainability thresholds
+    
+    Returns:
+        bool: Whether explainability criteria are met
+        list: List of failed policies
+    """
+    try:
+        # Get attention weights for validation data
+        inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
+        attention_weights = model(inputs, output_attentions=True).attentions
+        
+        # Calculate mean attention scores as explainability measure
+        attention_scores = tf.reduce_mean([tf.reduce_mean(layer) for layer in attention_weights])
+        explainability_score = float(attention_scores.numpy())
+        
+        # Calculate token attribution scores
+        token_importances = calculate_token_importance(model, tokenizer, X_val)
+        
+        # Prepare metrics for OPA
+        explainability_metrics = {
+            "attention_score": explainability_score,
+            "token_attribution_score": float(np.mean(token_importances)),
+            "interpretability_score": float((explainability_score + np.mean(token_importances)) / 2)
+        }
+        
+        logger.info(f"TinyBERT Explainability Metrics: {explainability_metrics}")
+        
+        input_data = {
+            "explainability": {
+                "metrics": explainability_metrics,
+                "threshold": thresholds
+            }
+        }
+        
+        allowed, failed_policies = send_to_opa(input_data, "explainability")
+        
+        if allowed:
+            logger.info("Model passed all explainability policies.")
+            return True, []
+        else:
+            logger.warning("Model failed explainability policies.")
+            failed = []
+            if explainability_metrics["attention_score"] < thresholds.get("attention_score", 0):
+                failed.append("attention_score")
+            if explainability_metrics["token_attribution_score"] < thresholds.get("token_attribution_score", 0):
+                failed.append("token_attribution")
+            return False, failed
+            
+    except Exception as e:
+        logger.exception(f"Error during TinyBERT explainability evaluation: {e}")
+        return False, ["explainability_evaluation_error"]
+
+def evaluate_reliability_policy_tinybert(model, X_val, tokenizer, thresholds):
+    """
+    Evaluates reliability for TinyBERT model using input perturbations.
+    
+    Args:
+        model: TinyBERT model
+        X_val: Validation data
+        tokenizer: TinyBERT tokenizer
+        thresholds: Dictionary containing reliability thresholds
+    
+    Returns:
+        bool: Whether reliability criteria are met
+        list: List of failed policies
+    """
+    try:
+        reliability_metrics = {
+            "prediction_stability": 0.0,
+            "perturbation_robustness": 0.0,
+            "length_invariance": 0.0
+        }
+        
+        # Test sample size
+        n_samples = min(len(X_val), 100)
+        stability_scores = []
+        robustness_scores = []
+        length_scores = []
+        
+        for i in range(n_samples):
+            text = X_val.iloc[i]
+            
+            # Original prediction
+            original_input = tokenizer(text, return_tensors="tf", padding=True, truncation=True)
+            original_output = model(original_input).logits
+            
+            # 1. Prediction Stability (truncation test)
+            truncated_text = ' '.join(text.split()[:len(text.split())//2])
+            truncated_input = tokenizer(truncated_text, return_tensors="tf", padding=True, truncation=True)
+            truncated_output = model(truncated_input).logits
+            stability_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - truncated_output)))
+            stability_scores.append(stability_score)
+            
+            # 2. Perturbation Robustness (word swap test)
+            perturbed_text = perturb_text(text)
+            perturbed_input = tokenizer(perturbed_text, return_tensors="tf", padding=True, truncation=True)
+            perturbed_output = model(perturbed_input).logits
+            robustness_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - perturbed_output)))
+            robustness_scores.append(robustness_score)
+            
+            # 3. Length Invariance (padding test)
+            padded_text = text + " " + text[:50]  # Add partial repetition
+            padded_input = tokenizer(padded_text, return_tensors="tf", padding=True, truncation=True)
+            padded_output = model(padded_input).logits
+            length_score = 1.0 - float(tf.reduce_mean(tf.abs(original_output - padded_output)))
+            length_scores.append(length_score)
+        
+        # Aggregate scores
+        reliability_metrics["prediction_stability"] = float(np.mean(stability_scores))
+        reliability_metrics["perturbation_robustness"] = float(np.mean(robustness_scores))
+        reliability_metrics["length_invariance"] = float(np.mean(length_scores))
+        
+        logger.info(f"TinyBERT Reliability Metrics: {reliability_metrics}")
+        
+        input_data = {
+            "reliability": {
+                "metrics": reliability_metrics,
+                "threshold": thresholds
+            }
+        }
+        
+        allowed, failed_policies = send_to_opa(input_data, "reliability")
+        
+        if allowed:
+            logger.info("Model passed all reliability policies.")
+            return True, []
+        else:
+            logger.warning("Model failed reliability policies.")
+            failed = []
+            for metric, score in reliability_metrics.items():
+                if score < thresholds.get(metric, 0):
+                    failed.append(metric)
+            return False, failed
+            
+    except Exception as e:
+        logger.exception(f"Error during TinyBERT reliability evaluation: {e}")
+        return False, ["reliability_evaluation_error"]
+
+def calculate_token_importance(model, tokenizer, texts, n_samples=100):
+    """
+    Calculates token importance scores using input erasure.
+    """
+    importance_scores = []
+    
+    for text in texts[:n_samples]:
+        # Tokenize text
+        tokens = tokenizer.tokenize(text)
+        base_input = tokenizer(text, return_tensors="tf", padding=True, truncation=True)
+        base_output = model(base_input).logits
+        
+        # Calculate importance for each token
+        token_scores = []
+        for i in range(len(tokens)):
+            # Create copy with token masked
+            masked_tokens = tokens.copy()
+            masked_tokens[i] = tokenizer.mask_token
+            masked_text = tokenizer.convert_tokens_to_string(masked_tokens)
+            masked_input = tokenizer(masked_text, return_tensors="tf", padding=True, truncation=True)
+            masked_output = model(masked_input).logits
+            
+            # Calculate impact of masking
+            impact = float(tf.reduce_mean(tf.abs(base_output - masked_output)))
+            token_scores.append(impact)
+        
+        importance_scores.append(np.mean(token_scores))
+    
+    return importance_scores
+
+def perturb_text(text, p_swap=0.1):
+    """
+    Creates a slightly perturbed version of the input text.
+    """
+    words = text.split()
+    for i in range(len(words)-1):
+        if np.random.random() < p_swap:
+            words[i], words[i+1] = words[i+1], words[i]
+    return ' '.join(words)
