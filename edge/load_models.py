@@ -1,6 +1,9 @@
 import os
 import tensorflow as tf
 from transformers import TFT5ForConditionalGeneration, T5Tokenizer
+import logging
+
+logger = logging.getLogger(__name__)
 
 def load_mobilenet_model():
     model_path = "mobilenet_model.keras"
@@ -29,17 +32,43 @@ def load_mobilenet_model():
     return model
 
 def load_t5_model():
-    model_dir = "../t5_model"
-    if not os.path.exists(model_dir):
-        # Load the model from Hugging Face and save it locally
+    """
+    Load T5 model and tokenizer, downloading and saving locally if needed.
+    """
+    model_dir = os.path.abspath("../t5_model")
+    os.makedirs(model_dir, exist_ok=True)
+    
+    try:
+        # Try to load from local directory first
+        if os.path.exists(os.path.join(model_dir, "config.json")):
+            logger.info(f"Loading T5 model from local directory: {model_dir}")
+            try:
+                model = TFT5ForConditionalGeneration.from_pretrained(model_dir)
+                tokenizer = T5Tokenizer.from_pretrained(model_dir)
+                logger.info("Successfully loaded model and tokenizer from local directory")
+                return model, tokenizer
+            except Exception as e:
+                logger.warning(f"Failed to load from local directory: {e}")
+                # If loading fails, we'll fall through to downloading
+        
+        # Download and save if not found locally
+        logger.info("Downloading T5 model and tokenizer")
         model = TFT5ForConditionalGeneration.from_pretrained('t5-small')
-        model.save_pretrained(model_dir)
         tokenizer = T5Tokenizer.from_pretrained('t5-small')
+        
+        # Save both model and tokenizer
+        logger.info(f"Saving model and tokenizer to {model_dir}")
+        model.save_pretrained(model_dir)
         tokenizer.save_pretrained(model_dir)
-        print(f"[Loader] T5 model and tokenizer saved to {model_dir}")
-    else:
-        # Load the model from the local directory
-        model = TFT5ForConditionalGeneration.from_pretrained(model_dir)
-        tokenizer = T5Tokenizer.from_pretrained(model_dir)
-        print(f"[Loader] T5 model and tokenizer loaded from {model_dir}")
-    return model, tokenizer
+        
+        # Verify files were saved
+        expected_files = ["config.json", "tokenizer.json", "special_tokens_map.json", "spiece.model"]
+        missing_files = [f for f in expected_files if not os.path.exists(os.path.join(model_dir, f))]
+        if missing_files:
+            logger.warning(f"Some expected files are missing: {missing_files}")
+            
+        return model, tokenizer
+        
+    except Exception as e:
+        logger.error(f"Error in load_t5_model: {str(e)}")
+        raise RuntimeError(f"Failed to load T5 model and tokenizer: {str(e)}")
