@@ -69,11 +69,20 @@ with open(os.path.join(thresholds_path,'reliability_thresholds.json')) as f:
 with open(os.path.join(thresholds_path,'privacy_thresholds.json')) as f:
     privacy_thresholds = json.load(f)['privacy']['threshold']
 
-# Add at the top with other constants
+# Model paths configuration
 MODEL_PATHS = {
-    'MobileNet': 'aggregated_mobilenet.keras',
-    't5_small': 'aggregated_t5',
-    'tinybert': 'aggregated_tinybert'
+    'MobileNet': {
+        'current': 'aggregated_mobilenet.keras',
+        'previous': 'previous_mobilenet.keras'
+    },
+    't5_small': {
+        'current': 'aggregated_t5',
+        'previous': 'previous_t5'
+    },
+    'tinybert': {
+        'current': 'aggregated_tinybert',
+        'previous': 'previous_tinybert'
+    }
 }
 
 def on_message(client, userdata, msg):
@@ -119,23 +128,26 @@ def evaluate_and_aggregate():
             if len(models_of_type) >= EXPECTED_DEVICES:
                 logger.info(f"All models of type '{model_type}' received. Evaluating policies.")
 
-                # Get the appropriate model path
-                model_path = MODEL_PATHS.get(model_type)
-                if not model_path:
+                # Get the appropriate model paths
+                model_paths = MODEL_PATHS.get(model_type)
+                if not model_paths:
                     logger.error(f"No model path defined for model type: {model_type}")
                     continue
 
+                current_path = model_paths['current']
+                previous_path = model_paths['previous']
+
                 # Clean up existing model files/directories
-                if os.path.exists(model_path):
-                    if os.path.isdir(model_path):
-                        shutil.rmtree(model_path)
+                if os.path.exists(current_path):
+                    if os.path.isdir(current_path):
+                        shutil.rmtree(current_path)
                     else:
-                        os.remove(model_path)
+                        os.remove(current_path)
 
                 # Aggregate models
                 try:
-                    aggregate_models(models_of_type, model_type, model_path)
-                    logger.info(f"Aggregated {model_type} model saved to {model_path}")
+                    aggregate_models(models_of_type, model_type, current_path)
+                    logger.info(f"Aggregated {model_type} model saved to {current_path}")
                 except Exception as e:
                     logger.exception(f"Failed to aggregate {model_type} models: {e}")
                     continue
@@ -143,14 +155,14 @@ def evaluate_and_aggregate():
                 # Load the aggregated model for evaluation
                 try:
                     if model_type == 'MobileNet':
-                        aggregated_model = tf.keras.models.load_model(model_path, compile=False)
+                        aggregated_model = tf.keras.models.load_model(current_path, compile=False)
                         aggregated_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
                     elif model_type == 't5_small':
                         from transformers import TFT5ForConditionalGeneration
-                        aggregated_model = TFT5ForConditionalGeneration.from_pretrained(model_path)
+                        aggregated_model = TFT5ForConditionalGeneration.from_pretrained(current_path)
                     elif model_type == 'tinybert':
                         from transformers import TFAutoModelForSequenceClassification
-                        aggregated_model = TFAutoModelForSequenceClassification.from_pretrained(model_path)
+                        aggregated_model = TFAutoModelForSequenceClassification.from_pretrained(current_path)
                     else:
                         logger.error(f"Unsupported model_type: {model_type}")
                         continue
@@ -292,7 +304,7 @@ def evaluate_and_aggregate():
     
                         if is_fair and is_explainable and is_reliable:
                             logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
-                            publish_aggregated_model(model_type, model_path)
+                            publish_aggregated_model(model_type, current_path)
                             
                             # Log the aggregated Model 
                             if model_type == 'MobileNet':
@@ -301,11 +313,10 @@ def evaluate_and_aggregate():
                                     "model", 
                                     signature=infer_signature(X_val, aggregated_model.predict(X_val))
                                 )
-                            elif model_type == 't5_small':
+                            elif model_type in ['t5_small', 'tinybert']:
                                 mlflow.transformers.log_model(
                                     aggregated_model, 
-                                    "model", 
-                                    signature=infer_signature(X_val, aggregated_model.generate(tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True).input_ids))
+                                    "model"
                                 )
     
                             # Register the model in MLflow
@@ -323,9 +334,17 @@ def evaluate_and_aggregate():
                             logger.info(f"Registered model version {model_details.version} as Production.")
                             
                             # Backup the current aggregated model
-                            if os.path.exists(PREVIOUS_MODEL_PATH):
-                                os.remove(PREVIOUS_MODEL_PATH)
-                            os.rename(model_path, PREVIOUS_MODEL_PATH)
+                            if os.path.exists(previous_path):
+                                if os.path.isdir(previous_path):
+                                    shutil.rmtree(previous_path)
+                                else:
+                                    os.remove(previous_path)
+                            
+                            if os.path.isdir(current_path):
+                                shutil.copytree(current_path, previous_path)
+                            else:
+                                shutil.copy2(current_path, previous_path)
+                                
                             # Remove received models of this type
                             for device_id in list(received_models.keys()):
                                 if received_models[device_id]['model_type'] == model_type:
@@ -335,19 +354,14 @@ def evaluate_and_aggregate():
                             logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
                             notify_policy_failure(failed_policies)
                             mlflow.log_param("failed_policies", failed_policies)
+                            
                             # Use the previous aggregated model if it exists
-                            if os.path.exists(PREVIOUS_MODEL_PATH):
-                                with open(PREVIOUS_MODEL_PATH, 'rb') as f:
-                                    aggregated_model_bytes = f.read()
-                                aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-                                payload = json.dumps({
-                                    'model_data': aggregated_model_b64,
-                                    'model_type': model_type  # Adjust as needed
-                                })
-                                client.publish(MQTT_TOPIC_AGGREGATED, payload)
-                                logger.info(f"Published previous aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+                            if os.path.exists(previous_path):
+                                publish_aggregated_model(model_type, previous_path)
+                                logger.info(f"Published previous aggregated {model_type} model")
                             else:
                                 logger.error("No previous aggregated model available to deploy.")
+                            
                             # Remove received models of this type
                             for device_id in list(received_models.keys()):
                                 if received_models[device_id]['model_type'] == model_type:
