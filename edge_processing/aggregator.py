@@ -255,20 +255,20 @@ def evaluate_and_aggregate():
                         thresholds=fairness_thresholds
                     )
                 elif model_type == 'tinybert':
-                    from transformers import T5Tokenizer
-                    tokenizer = T5Tokenizer.from_pretrained('t5-small')
+                    # Get the tokenizer for TinyBERT
+                    from transformers import AutoTokenizer
+                    tokenizer = AutoTokenizer.from_pretrained('huawei-noah/TinyBERT_General_4L_312D')
                     
                     # Generate predictions
                     inputs = tokenizer(X_val.tolist(), return_tensors="tf", padding=True, truncation=True)
-                    outputs = aggregated_model.generate(inputs.input_ids)
-                    predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+                    outputs = aggregated_model(inputs)  # TinyBERT doesn't use generate()
+                    predictions = tf.nn.softmax(outputs.logits, axis=-1).numpy()
                     
                     # Convert predictions to categorical values for fairness evaluation
-                    # You might need to adjust this based on your specific task
                     from sklearn.preprocessing import LabelEncoder
                     le = LabelEncoder()
-                    y_pred = le.fit_transform([pred.strip().lower() for pred in predictions])
-                    y_true = le.transform([label.strip().lower() for label in y_val])
+                    y_pred = predictions.argmax(axis=1)  # Get class with highest probability
+                    y_true = le.fit_transform([label.strip().lower() for label in y_val])
                     
                     # Extract sensitive features
                     gender = sf_test['gender'].values
@@ -302,10 +302,24 @@ def evaluate_and_aggregate():
                 # Evaluate explainability
                 if model_type == 'MobileNet':
                     is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
-                
-                # Evaluate reliability
-                if model_type == 'MobileNet':
+                    # Evaluate reliability
                     is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
+                
+                # Add TinyBERT-specific explainability and reliability evaluations
+                if model_type == 'tinybert':
+                    is_explainable, failed_explainability_policies = evaluate_explainability_policy_tinybert(
+                        model=aggregated_model,
+                        X_val=X_val,
+                        tokenizer=tokenizer,
+                        thresholds=explainability_thresholds
+                    )
+                    
+                    is_reliable, failed_reliability_policies = evaluate_reliability_policy_tinybert(
+                        model=aggregated_model,
+                        X_val=X_val,
+                        tokenizer=tokenizer,
+                        thresholds=reliability_thresholds
+                    )
     
                 mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds.get("demographic_parity_difference", None))
                 if model_type == 'MobileNet':
