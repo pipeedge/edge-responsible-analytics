@@ -21,6 +21,8 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import tarfile
+import shutil
+import tempfile
 
 from policy_evaluator import * 
 
@@ -338,7 +340,6 @@ def aggregate_models(models_of_type, model_type, save_path):
     """
     Aggregate models by averaging their weights based on model_type.
     """
-    import tempfile
     from transformers import TFT5ForConditionalGeneration, TFAutoModelForSequenceClassification
 
     models = []
