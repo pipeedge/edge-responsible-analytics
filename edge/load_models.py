@@ -5,6 +5,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Add at the top of the file with other imports
+medical_specialties = [
+    'Surgery', 'Consult', 'Cardiovascular', 'Orthopedic', 'Radiology',
+    'General Medicine', 'Gastroenterology', 'Neurology', 'Urology', 'ENT',
+    'Hematology', 'Obstetrics', 'Neurosurgery', 'Pediatrics', 'Oncology',
+    'Dental', 'Psychiatry', 'Ophthalmology', 'Nephrology', 'Gynecology',
+    'Respiratory', 'Emergency', 'Podiatry', 'Dermatology', 'Pain Management',
+    'Allergy', 'Bariatrics', 'Endocrinology', 'IME-QME', 'Chiropractic',
+    'Physical Medicine', 'Sleep Medicine', 'Psychiatry-Psychology', 'LAB',
+    'Rheumatology', 'Letters', 'Discharge', 'Cosmetic', 'Hospice',
+    'Speech', 'Autopsy', 'Diets', 'Office Notes', 'SOAP', 'Rehab'
+]
+
 def load_mobilenet_model():
     model_path = "mobilenet_model.keras"
     if not os.path.exists(model_path):
@@ -110,10 +123,6 @@ def load_t5_model():
         raise
 
 def load_bert_model():
-    """
-    Memory-efficient TinyBERT model loading for IoT devices.
-    Uses huawei-noah/TinyBERT_General_4L_312D which is much smaller than T5-small.
-    """
     model_dir = os.path.abspath("../bert_model")
     os.makedirs(model_dir, exist_ok=True)
     
@@ -137,7 +146,7 @@ def load_bert_model():
             # Load locally saved model
             model = TFAutoModelForSequenceClassification.from_pretrained(
                 model_dir,
-                from_pt=False,
+                from_pt=False,  # Local model will be in TF format
                 use_cache=False
             )
             tokenizer = AutoTokenizer.from_pretrained(
@@ -149,7 +158,8 @@ def load_bert_model():
         # Download and save if not found locally
         model = TFAutoModelForSequenceClassification.from_pretrained(
             'huawei-noah/TinyBERT_General_4L_312D',
-            from_pt=False,
+            from_pt=True,  # Convert from PyTorch weights
+            num_labels=len(medical_specialties),  # Set number of output classes
             use_cache=False
         )
         tokenizer = AutoTokenizer.from_pretrained(
@@ -157,8 +167,13 @@ def load_bert_model():
             model_max_length=64
         )
         
-        # Save model and tokenizer
-        model.save_pretrained(model_dir)
+        # Compile the model
+        optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+        
+        # Save model and tokenizer in TensorFlow format
+        model.save_pretrained(model_dir, saved_model=True)
         tokenizer.save_pretrained(model_dir)
         
         return model, tokenizer
