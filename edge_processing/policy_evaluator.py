@@ -4,6 +4,7 @@ import requests
 import json
 import logging
 import numpy as np
+import pandas as pd
 from fairlearn.metrics import MetricFrame, demographic_parity_difference
 from sklearn.metrics import accuracy_score
 import tensorflow as tf
@@ -49,23 +50,26 @@ def get_art_classifier(model, loss_object, input_shape):
 def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y_pred=None):
     """
     Evaluates model fairness using OPA policies.
-
-    Args:
-        model (tf.keras.Model): The machine learning model (can be None if y_pred is provided).
-        X (pd.DataFrame or np.ndarray): Input features (can be None if y_pred is provided).
-        y_true (pd.Series or np.ndarray): True labels.
-        sensitive_features (pd.Series or np.ndarray): Protected attribute(s).
-        thresholds (dict): Thresholds for fairness metrics.
-        y_pred (np.ndarray, optional): Pre-computed predictions (for text models).
-
-    Returns:
-        bool: True if all fairness policies are satisfied, False otherwise.
-        list: List of failed policies.
     """
     try:
-        # Convert categorical sensitive features to numeric if needed
-        if hasattr(sensitive_features, 'dtype') and sensitive_features.dtype.name == 'category':
-            sensitive_features = sensitive_features.astype(str)
+        # Handle different types of sensitive features
+        if isinstance(sensitive_features, pd.DataFrame):
+            # Check for NaN values in DataFrame
+            has_nan = sensitive_features.isna().any().any()
+            if has_nan:
+                logger.error("sensitive_features DataFrame contains NaN values")
+        elif isinstance(sensitive_features, pd.Series):
+            # Convert categorical to string and check for NaN
+            if sensitive_features.dtype.name == 'category':
+                sensitive_features = sensitive_features.astype(str)
+            has_nan = sensitive_features.isna().any()
+            if has_nan:
+                logger.error("sensitive_features Series contains NaN values")
+        elif isinstance(sensitive_features, np.ndarray):
+            # For numpy arrays, use pandas NA checking
+            has_nan = pd.isna(sensitive_features).any()
+            if has_nan:
+                logger.error("sensitive_features array contains NaN values")
         
         # Generate predictions if not provided
         if y_pred is None and model is not None:
@@ -76,10 +80,15 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
 
         logger.info(f"Number of samples - y_true: {len(y_true)}, y_pred: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
         
-        if np.isnan(sensitive_features).any():
-            logger.error("sensitive_features contain NaN values.")
+        # Ensure all inputs are the right type for MetricFrame
+        if isinstance(sensitive_features, pd.DataFrame):
+            # If multiple sensitive features, use the first one for now
+            # You might want to evaluate each separately
+            sensitive_feature_col = sensitive_features.iloc[:, 0]
+        else:
+            sensitive_feature_col = sensitive_features
             
-        sample_params = {'demographic_parity_difference': {'sensitive_features': sensitive_features}}
+        sample_params = {'demographic_parity_difference': {'sensitive_features': sensitive_feature_col}}
         
         # Create MetricFrame
         metric_frame = MetricFrame(
@@ -89,7 +98,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
             },
             y_true=y_true,
             y_pred=y_pred_binary,
-            sensitive_features=sensitive_features,
+            sensitive_features=sensitive_feature_col,
             sample_params=sample_params
         )
 
