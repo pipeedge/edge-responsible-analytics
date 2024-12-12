@@ -18,6 +18,7 @@ from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
 import logging
+import pandas as pd
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -54,14 +55,26 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 def process_task(task):
-    if task['type'] == 'inference':
-        if task['data_type'] == 'chest_xray':
-            processed_data = process_chest_xray_data(task['data_path'])
-        elif task['data_type'] == 'mt':
-            processed_data = process_medical_transcriptions_data(task['data_path'])
+    """
+    Process a single task based on its type and data.
+    """
+    data_type = task['data_type']
+    
+    if data_type == "chest_xray":
+        processed_data = process_chest_xray_data(task['data_path'])
+    elif data_type == "medical_transcription":
+        # Ensure the data is properly formatted for the T5 model
+        if isinstance(task['data_path'], str):
+            processed_data = task['data_path']
+        elif isinstance(task['data_path'], (list, pd.Series)):
+            processed_data = list(task['data_path'])
         else:
-            return "Unknown data type"
-        return perform_inference(processed_data, task['data_type'])
+            raise ValueError(f"Unsupported data format for medical transcription: {type(task['data'])}")
+    else:
+        raise ValueError(f"Unsupported data type: {data_type}")
+    
+    if task['type'] == 'inference':
+        return perform_inference(processed_data, data_type)
     elif task['type'] == 'training':
         if task['data_type'] == 'chest_xray':
             training_results = train_model(task['data_path'], task['data_type'])
