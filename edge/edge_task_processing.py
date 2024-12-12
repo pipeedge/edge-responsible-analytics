@@ -62,7 +62,7 @@ def process_task(task):
     
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])
-    elif data_type == "medical_transcription":
+    elif data_type == "mt":
         # Ensure the data is properly formatted for the T5 model
         if isinstance(task['data_path'], str):
             processed_data = task['data_path']
