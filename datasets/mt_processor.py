@@ -62,8 +62,8 @@ def preprocess_medical_transcriptions(data, batch_size=32):
     """
     Preprocess medical transcriptions data in batches to manage memory usage.
     """
-    # Extract relevant columns
-    data = data[['description', 'transcription', 'medical_specialty']]
+    # Extract relevant columns and create a copy to avoid warnings
+    data = data[['description', 'transcription', 'medical_specialty']].copy()
     data = data.dropna()
     
     processed_batches = []
@@ -73,12 +73,14 @@ def preprocess_medical_transcriptions(data, batch_size=32):
     # Process data in batches
     for start_idx in range(0, len(data), batch_size):
         end_idx = min(start_idx + batch_size, len(data))
-        batch = data.iloc[start_idx:end_idx]
+        # Create an explicit copy of the batch
+        batch = data.iloc[start_idx:end_idx].copy()
         
         # Extract demographic information for current batch
         demographics = batch['description'].apply(extract_demographics)
-        batch['gender'] = demographics.apply(lambda x: x[0])
-        batch['age'] = demographics.apply(lambda x: x[1])
+        # Use loc for proper assignment
+        batch.loc[:, 'gender'] = demographics.apply(lambda x: x[0])
+        batch.loc[:, 'age'] = demographics.apply(lambda x: x[1])
         
         # Drop rows where we couldn't extract demographic information
         batch = batch.dropna(subset=['gender', 'age'])
@@ -87,13 +89,15 @@ def preprocess_medical_transcriptions(data, batch_size=32):
             continue
             
         # Convert age to categorical bins for fairness evaluation
-        batch['age_group'] = pd.cut(batch['age'], 
-                                  bins=[0, 18, 35, 50, 65, 120],
-                                  labels=['0-18', '19-35', '36-50', '51-65', '65+'])
+        batch.loc[:, 'age_group'] = pd.cut(
+            batch['age'], 
+            bins=[0, 18, 35, 50, 65, 120],
+            labels=['0-18', '19-35', '36-50', '51-65', '65+']
+        )
         
         # Clean transcription text
-        batch['transcription'] = batch['transcription'].str.replace('\n', ' ')
-        batch['transcription'] = 'summarize: ' + batch['transcription']
+        batch.loc[:, 'transcription'] = batch['transcription'].str.replace('\n', ' ')
+        batch.loc[:, 'transcription'] = 'summarize: ' + batch['transcription']
         
         # Store processed batch
         processed_batches.append(batch['transcription'])
