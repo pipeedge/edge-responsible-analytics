@@ -167,10 +167,20 @@ def load_bert_model():
             model_max_length=64
         )
         
-        # Compile the model
-        optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+        # Configure model for training
+        model.config.update({
+            "learning_rate": 1e-4,
+            "num_train_epochs": 3,
+            "per_device_train_batch_size": 16,
+            "per_device_eval_batch_size": 16
+        })
+        
+        # Compile the model with string identifier for optimizer
+        model.compile(
+            optimizer="adam",  # Using string identifier instead of instance
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=["accuracy"]
+        )
         
         # Save model and tokenizer in TensorFlow format
         model.save_pretrained(model_dir, saved_model=True)
