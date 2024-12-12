@@ -39,9 +39,16 @@ def load_t5_model():
     model_dir = os.path.abspath("../t5_model")
     os.makedirs(model_dir, exist_ok=True)
     
+    # Set TensorFlow memory growth
     try:
-        # Configure model to use less memory
-        tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True)
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if physical_devices:
+            for device in physical_devices:
+                tf.config.experimental.set_memory_growth(device, True)
+            tf.config.experimental.set_virtual_device_configuration(
+                physical_devices[0],
+                [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)]
+            )
     except:
         logger.info("No GPU available, using CPU only")
     
@@ -51,9 +58,7 @@ def load_t5_model():
             model = TFT5ForConditionalGeneration.from_pretrained(
                 model_dir,
                 from_pt=False,
-                use_cache=False,
-                batch_size=1,  # Process one sample at a time
-                max_length=128  # Limit sequence length
+                use_cache=False
             )
             tokenizer = T5Tokenizer.from_pretrained(
                 model_dir,
@@ -65,9 +70,7 @@ def load_t5_model():
         model = TFT5ForConditionalGeneration.from_pretrained(
             't5-small',  # Using smallest T5 variant
             from_pt=False,
-            use_cache=False,
-            batch_size=1,
-            max_length=128
+            use_cache=False
         )
         tokenizer = T5Tokenizer.from_pretrained(
             't5-small',
