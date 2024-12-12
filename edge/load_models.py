@@ -33,42 +33,48 @@ def load_mobilenet_model():
 
 def load_t5_model():
     """
-    Load T5 model and tokenizer, downloading and saving locally if needed.
+    Memory-efficient T5 model loading for IoT devices.
     """
     model_dir = os.path.abspath("../t5_model")
     os.makedirs(model_dir, exist_ok=True)
     
     try:
-        # Try to load from local directory first
+        # Configure model to use less memory
+        tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True)
+    except:
+        logger.info("No GPU available, using CPU only")
+    
+    try:
         if os.path.exists(os.path.join(model_dir, "config.json")):
-            logger.info(f"Loading T5 model from local directory: {model_dir}")
-            try:
-                model = TFT5ForConditionalGeneration.from_pretrained(model_dir)
-                tokenizer = T5Tokenizer.from_pretrained(model_dir)
-                logger.info("Successfully loaded model and tokenizer from local directory")
-                return model, tokenizer
-            except Exception as e:
-                logger.warning(f"Failed to load from local directory: {e}")
-                # If loading fails, we'll fall through to downloading
-        
+            # Load with memory-efficient settings
+            model = TFT5ForConditionalGeneration.from_pretrained(
+                model_dir,
+                low_cpu_mem_usage=True,
+                use_cache=False  # Disable caching to save memory
+            )
+            tokenizer = T5Tokenizer.from_pretrained(
+                model_dir,
+                model_max_length=512  # Limit maximum sequence length
+            )
+            return model, tokenizer
+            
         # Download and save if not found locally
-        logger.info("Downloading T5 model and tokenizer")
-        model = TFT5ForConditionalGeneration.from_pretrained('t5-small')
-        tokenizer = T5Tokenizer.from_pretrained('t5-small')
+        model = TFT5ForConditionalGeneration.from_pretrained(
+            't5-small',
+            low_cpu_mem_usage=True,
+            use_cache=False
+        )
+        tokenizer = T5Tokenizer.from_pretrained(
+            't5-small',
+            model_max_length=512
+        )
         
-        # Save both model and tokenizer
-        logger.info(f"Saving model and tokenizer to {model_dir}")
+        # Save model and tokenizer
         model.save_pretrained(model_dir)
         tokenizer.save_pretrained(model_dir)
         
-        # Verify files were saved
-        expected_files = ["config.json", "tokenizer.json", "special_tokens_map.json", "spiece.model"]
-        missing_files = [f for f in expected_files if not os.path.exists(os.path.join(model_dir, f))]
-        if missing_files:
-            logger.warning(f"Some expected files are missing: {missing_files}")
-            
         return model, tokenizer
         
     except Exception as e:
-        logger.error(f"Error in load_t5_model: {str(e)}")
-        raise RuntimeError(f"Failed to load T5 model and tokenizer: {str(e)}")
+        logger.error(f"Error loading T5 model: {str(e)}")
+        raise
