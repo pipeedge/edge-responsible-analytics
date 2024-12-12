@@ -19,6 +19,7 @@ from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
 import logging
 import pandas as pd
+import numpy as np 
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -87,11 +88,27 @@ def process_task(task):
         return "Unknown task type"
 
 # Function to send the trained model
-def send_trained_model(model_path, model_type='MobileNet'):
+def send_trained_model(model_path, model_type):
     try:
-        with open(model_path, 'rb') as f:
-            model_bytes = f.read()
-        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        if model_type == 'MobileNet':
+            # Handle single file model
+            with open(model_path, 'rb') as f:
+                model_bytes = f.read()
+            model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        else:  # TinyBERT
+            # Handle directory-based model
+            import shutil
+            import tempfile
+            
+            # Create a temporary tar file
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                with open(tmp.name, 'rb') as f:
+                    model_bytes = f.read()
+                model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+                os.unlink(tmp.name)  # Clean up temp file
+        
+        # Send the model
         payload = json.dumps({
             'device_id': DEVICE_ID,
             'model_type': model_type,
@@ -107,28 +124,54 @@ def on_message(client, userdata, msg):
     if msg.topic == MQTT_TOPIC_AGGREGATED:
         payload = json.loads(msg.payload.decode('utf-8'))
         aggregated_model_b64 = payload.get('model_data')
+        model_type = payload.get('model_type')
+        
         if aggregated_model_b64:
-            aggregated_model_bytes = base64.b64decode(aggregated_model_b64)
-            aggregated_model_path = 'aggregated_MobileNet.keras' if payload.get('model_type') == 'MobileNet' else 'aggregated_t5_small.keras'
-            with open(aggregated_model_path, 'wb') as f:
-                f.write(aggregated_model_bytes)
-            print(f"[{DEVICE_ID}] Received aggregated model. Loading {aggregated_model_path}")
             try:
-                if payload.get('model_type') == 'MobileNet':
-                    new_model = tf.keras.models.load_model(aggregated_model_path)
-                elif payload.get('model_type') == 't5_small':
-                    from transformers import TFT5ForConditionalGeneration
-                    new_model = TFT5ForConditionalGeneration.from_pretrained(aggregated_model_path)
-                else:
-                    print(f"[{DEVICE_ID}] Unsupported model type received: {payload.get('model_type')}")
-                    return
+                model_bytes = base64.b64decode(aggregated_model_b64)
+                
+                if model_type == 'MobileNet':
+                    # Handle single file model
+                    model_path = 'mobilenet_model.keras'
+                    with open(model_path, 'wb') as f:
+                        f.write(model_bytes)
+                else:  # TinyBERT
+                    # Handle directory-based model
+                    import tempfile
+                    import tarfile
+                    
+                    model_dir = 'tinybert_model'
+                    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                        tmp.write(model_bytes)
+                        tmp.flush()
+                        
+                        # Clear existing model directory if it exists
+                        if os.path.exists(model_dir):
+                            shutil.rmtree(model_dir)
+                        
+                        # Extract the new model
+                        with tarfile.open(tmp.name, 'r:gz') as tar:
+                            tar.extractall(path=os.path.dirname(model_dir))
+                        
+                        os.unlink(tmp.name)  # Clean up temp file
+                
+                print(f"[{DEVICE_ID}] Received and saved aggregated model")
+                
+                # Load the new model
                 with model_lock:
                     global model
-                    model = new_model
-                print(f"[{DEVICE_ID}] Aggregated model loaded successfully.")
-                model_update_event.set()  # Signal that model has been updated
+                    if model_type == 'MobileNet':
+                        model = tf.keras.models.load_model(model_path, compile=False)
+                        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                    else:  # TinyBERT
+                        from load_models import load_bert_model
+                        model, _ = load_bert_model()  # Reload with saved weights
+                
+                print(f"[{DEVICE_ID}] Aggregated model loaded successfully")
+                model_update_event.set()
+                
             except Exception as e:
-                print(f"[{DEVICE_ID}] Failed to load aggregated model: {e}")
+                print(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
 
 # Set up MQTT callbacks
 client.on_message = on_message
@@ -212,7 +255,7 @@ def task_processing(task_type, model_type):
         # Perform Inference
         print(f"[{DEVICE_ID}] Starting inference task.")
         inference_result = process_task(inference_task)
-        print(f"[{DEVICE_ID}] Inference Result: {inference_result}")
+        print(f"[{DEVICE_ID}] Inference Result: {np.mean(inference_result)}")
 
     if task_type == 'training':
         # Perform Training
@@ -228,7 +271,10 @@ def task_processing(task_type, model_type):
     elif model_type == 'tinybert':
         model_path = 'tinybert_model'
         with model_lock:
+            if os.path.exists(model_path):
+                shutil.rmtree(model_path)  # Clear existing directory
             model.save_pretrained(model_path)
+            tokenizer.save_pretrained(model_path)  # Save tokenizer along with model
     print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
 
     # Upload the trained model in a separate thread
