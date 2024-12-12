@@ -176,7 +176,7 @@ def task_processing(task_type, model_type):
         data_type = 'chest_xray'
         train_data_path = 'datasets/chest_xray/train'
         inference_data_path = 'datasets/chest_xray/val'
-    elif model_type == 't5_small':
+    elif model_type == 'tinybert':
         data_type = 'mt'
         train_data_path = 'datasets/mt'
         inference_data_path = 'datasets/mt'
@@ -189,10 +189,10 @@ def task_processing(task_type, model_type):
         from load_models import load_mobilenet_model
         with model_lock:
             model = load_mobilenet_model()
-    elif model_type == 't5_small':
-        from load_models import load_t5_model
+    elif model_type == 'tinybert':
+        from load_models import load_bert_model
         with model_lock:
-            model, tokenizer = load_t5_model()
+            model, tokenizer = load_bert_model()
 
     # Define tasks with batch processing
     inference_task = {
@@ -225,8 +225,8 @@ def task_processing(task_type, model_type):
         model_path = 'mobilenet_model.keras'
         with model_lock:
             model.save(model_path, save_format='keras')
-    elif model_type == 't5_small':
-        model_path = 't5_model'
+    elif model_type == 'tinybert':
+        model_path = 'tinybert_model'
         with model_lock:
             model.save_pretrained(model_path)
     print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
@@ -273,7 +273,7 @@ def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
     parser.add_argument('--model_type', type=str, default='MobileNet',
-                        choices=['MobileNet', 't5_small'],
+                        choices=['MobileNet', 'tinybert'],
                         help='Type of model to use (default: MobileNet)')
     parser.add_argument('--task_type', type=str, default='inference',
                         choices=['inference', 'training'],

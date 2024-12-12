@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import time
-from load_models import load_mobilenet_model, load_t5_model
+from load_models import load_mobilenet_model, load_bert_model
 import pandas as pd
 import logging
 
@@ -19,7 +19,7 @@ def perform_inference(data, data_type, batch_size=16):
         predictions = model.predict(data)
         return predictions
     elif data_type == "mt":
-        model, tokenizer = load_t5_model()
+        model, tokenizer = load_bert_model()
         
         # Ensure data is in the correct format (list of strings)
         if isinstance(data, pd.Series):
@@ -40,31 +40,20 @@ def perform_inference(data, data_type, batch_size=16):
                     return_tensors="tf", 
                     padding=True, 
                     truncation=True,
-                    max_length=64  # Input sequence length
+                    max_length=64
                 )
                 
-                # Generate text with optimized settings
-                outputs = model.generate(
-                    inputs.input_ids,
-                    max_new_tokens=128,  # Only set max_new_tokens, not max_length
-                    do_sample=False,     # Deterministic generation
-                    num_beams=1,         # No beam search for memory efficiency
-                    early_stopping=False, # Disable early stopping with num_beams=1
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                    use_cache=True       # Enable cache for single sample generation
-                )
-                
-                # Decode predictions
-                batch_predictions = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-                predictions.extend(batch_predictions)
+                # Get predictions
+                outputs = model(inputs)
+                logits = outputs.logits
+                predictions.extend(tf.nn.softmax(logits, axis=-1).numpy().tolist())
                 
                 # Force garbage collection after each batch
                 import gc
                 gc.collect()
                 
             except Exception as e:
-                logger.error(f"Error during T5 inference batch {i}: {str(e)}")
+                logger.error(f"Error during TinyBERT inference batch {i}: {str(e)}")
                 raise
                 
         return predictions

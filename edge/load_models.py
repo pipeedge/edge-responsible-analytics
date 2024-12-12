@@ -108,3 +108,61 @@ def load_t5_model():
     except Exception as e:
         logger.error(f"Error loading T5 model: {str(e)}")
         raise
+
+def load_bert_model():
+    """
+    Memory-efficient TinyBERT model loading for IoT devices.
+    Uses huawei-noah/TinyBERT_General_4L_312D which is much smaller than T5-small.
+    """
+    model_dir = os.path.abspath("../bert_model")
+    os.makedirs(model_dir, exist_ok=True)
+    
+    # Configure TensorFlow for memory efficiency
+    try:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if physical_devices:
+            for device in physical_devices:
+                tf.config.experimental.set_memory_growth(device, True)
+            tf.config.experimental.set_virtual_device_configuration(
+                physical_devices[0],
+                [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)]
+            )
+    except:
+        logger.info("No GPU available, using CPU only")
+    
+    try:
+        from transformers import TFAutoModelForSequenceClassification, AutoTokenizer
+        
+        if os.path.exists(os.path.join(model_dir, "config.json")):
+            # Load locally saved model
+            model = TFAutoModelForSequenceClassification.from_pretrained(
+                model_dir,
+                from_pt=False,
+                use_cache=False
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_dir,
+                model_max_length=64
+            )
+            return model, tokenizer
+            
+        # Download and save if not found locally
+        model = TFAutoModelForSequenceClassification.from_pretrained(
+            'huawei-noah/TinyBERT_General_4L_312D',
+            from_pt=False,
+            use_cache=False
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            'huawei-noah/TinyBERT_General_4L_312D',
+            model_max_length=64
+        )
+        
+        # Save model and tokenizer
+        model.save_pretrained(model_dir)
+        tokenizer.save_pretrained(model_dir)
+        
+        return model, tokenizer
+        
+    except Exception as e:
+        logger.error(f"Error loading TinyBERT model: {str(e)}")
+        raise
