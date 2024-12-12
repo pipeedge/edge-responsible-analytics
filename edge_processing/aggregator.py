@@ -190,7 +190,7 @@ def evaluate_and_aggregate():
                     elif model_type in ['t5_small', 'tinybert']:
                         # Process medical transcription data
                         from datasets.mt_processor import process_medical_transcriptions_data
-                        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt/val")
+                        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt")
                         X_val = X_test
                         y_val = y_test
                         sensitive_features = sf_test
