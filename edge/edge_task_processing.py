@@ -59,7 +59,7 @@ def process_task(task):
     Process a single task based on its type and data.
     """
     data_type = task['data_type']
-    
+    print("data type: ", data_type)
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "mt":
@@ -69,7 +69,7 @@ def process_task(task):
         elif isinstance(task['data_path'], (list, pd.Series)):
             processed_data = list(task['data_path'])
         else:
-            raise ValueError(f"Unsupported data format for medical transcription: {type(task['data'])}")
+            raise ValueError(f"Unsupported data format for medical transcription: {type(task['data_type'])}")
     else:
         raise ValueError(f"Unsupported data type: {data_type}")
     
