@@ -59,7 +59,6 @@ def process_task(task):
     Process a single task based on its type and data.
     """
     data_type = task['data_type']
-    print("data type: ", data_type)
     
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])

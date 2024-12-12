@@ -58,7 +58,11 @@ def load_t5_model():
             model = TFT5ForConditionalGeneration.from_pretrained(
                 model_dir,
                 from_pt=False,
-                use_cache=False
+                use_cache=False,
+                max_new_tokens=128,  # Control generation length
+                pad_token_id=0,  # Explicit padding token
+                eos_token_id=1,  # Explicit end of sequence token
+                return_dict_in_generate=False  # Save memory during generation
             )
             tokenizer = T5Tokenizer.from_pretrained(
                 model_dir,
@@ -70,7 +74,11 @@ def load_t5_model():
         model = TFT5ForConditionalGeneration.from_pretrained(
             't5-small',  # Using smallest T5 variant
             from_pt=False,
-            use_cache=False
+            use_cache=False,
+            max_new_tokens=128,
+            pad_token_id=0,
+            eos_token_id=1,
+            return_dict_in_generate=False
         )
         tokenizer = T5Tokenizer.from_pretrained(
             't5-small',
