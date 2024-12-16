@@ -16,7 +16,7 @@ import tarfile  # Add tarfile for tar operations
 
 #import mlflow
 import tensorflow as tf
-from edge_infer import perform_inference
+from edge_infer import perform_inference, process_inference_results
 from edge_training import train_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
@@ -66,6 +66,14 @@ def process_task(task):
     
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])
+    elif data_type == "cxr8":
+        from datasets.cxr8_processor import process_cxr8_data
+        train_gen, val_gen = process_cxr8_data(batch_size=task.get('batch_size', 32))
+        # For inference, use the validation generator
+        if task['type'] == 'inference':
+            processed_data = val_gen
+        else:
+            processed_data = train_gen
     elif data_type == "mt":
         # Process medical transcription data
         X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data(task['data_path'])
@@ -78,15 +86,39 @@ def process_task(task):
         raise ValueError(f"Unsupported data type: {data_type}")
     
     if task['type'] == 'inference':
-        return perform_inference(processed_data, data_type)
+        predictions = perform_inference(processed_data, data_type)
+        return process_inference_results(predictions, data_type)
     elif task['type'] == 'training':
-        if task['data_type'] == 'chest_xray':
-            training_results = train_model(task['data_path'], task['data_type'])
-        elif task['data_type'] == 'mt':
-            training_results = train_model(task['data_path'], task['data_type'])
-        else:
-            return "Unknown data type"
-        return training_results
+        try:
+            # Map data_type to model_type
+            model_type = 'MobileNet' if data_type in ['chest_xray', 'cxr8'] else 'tinybert'
+            
+            # Get training configuration from task
+            batch_size = task.get('batch_size', 16)  # Default to 16 for IoT devices
+            epochs = 10
+            
+            # Call updated train_model function
+            training_metrics, validation_data = train_model(
+                data_path=task['data_path'],
+                model_type=model_type,
+                batch_size=batch_size,
+                epochs=epochs
+            )
+            
+            # Return combined results
+            return {
+                'status': 'success',
+                'metrics': training_metrics,
+                'validation_data': validation_data,
+                'model_type': model_type
+            }
+            
+        except Exception as e:
+            logger.error(f"Training failed: {str(e)}")
+            return {
+                'status': 'failed',
+                'error': str(e)
+            }
     else:
         return "Unknown task type"
 

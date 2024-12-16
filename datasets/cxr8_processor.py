@@ -1,64 +1,111 @@
-import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import numpy as np
 import tensorflow as tf
+from datasets import load_dataset
 
-def load_chestxray8_data(csv_path, images_dir):
-    # Load the CSV file containing image labels and metadata
-    df = pd.read_csv(csv_path)
+def load_chestxray8_data():
+    # Load dataset from Hugging Face
+    ds = load_dataset("BahaaEldin0/NIH-Chest-Xray-14-Augmented-70-percent")
     
-    # Extract relevant columns
-    df = df[['Image Index', 'Finding Labels', 'Patient Age', 'Patient Gender']]
+    # Convert to pandas DataFrame
+    df = pd.DataFrame({
+        'image': ds['train']['image'],
+        'label': ds['train']['label'],
+        'age': ds['train']['Patient Age'],
+        'gender': ds['train']['Patient Gender'],
+        'view_position': ds['train']['View Position'],
+        'patient_id': ds['train']['Patient ID']
+    })
     
-    # Process labels
-    df['Finding Labels'] = df['Finding Labels'].apply(lambda x: x.split('|') if pd.notnull(x) else [])
-    df['Label'] = df['Finding Labels'].apply(lambda labels: 0 if 'No Finding' in labels else 1)
-    
-    # Encode gender: Male=0, Female=1, Unknown=2
-    df['Patient Gender'] = df['Patient Gender'].apply(lambda x: 0 if x.lower() == 'male' else (1 if x.lower() == 'female' else 2))
+    # Process age into groups for better privacy protection
+    df['age_group'] = pd.cut(df['age'], 
+                            bins=[0, 18, 30, 50, 70, 100],
+                            labels=['0-18', '19-30', '31-50', '51-70', '70+'])
     
     return df
 
-def preprocess_image(image_path):
-    # Load and preprocess the image
-    img = load_img(image_path, target_size=(224, 224), color_mode='rgb')
-    img_array = img_to_array(img)
+def preprocess_image(image):
+    """
+    Preprocess the image data from the dataset.
+    """
+    # Convert PIL image to array
+    img_array = tf.keras.preprocessing.image.img_to_array(image)
+    # Resize to target size
+    img_array = tf.image.resize(img_array, (224, 224))
+    # Preprocess for MobileNetV2
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     return img_array
 
-def prepare_dataset(df, images_dir, test_size=0.2):
-    # Split the data into training and validation sets
-    train_df, val_df = train_test_split(df, test_size=test_size, stratify=df['Label'], random_state=42)
-    
-    def process_data(df):
+def process_data_in_batches(df_subset, batch_size=32):
+    """
+    Process data in batches to manage memory efficiently.
+    """
+    total_samples = len(df_subset)
+    for start_idx in range(0, total_samples, batch_size):
+        end_idx = min(start_idx + batch_size, total_samples)
+        batch_df = df_subset.iloc[start_idx:end_idx]
+        
         images = []
         labels = []
         sensitive_features = []
         
-        for _, row in df.iterrows():
-            image_file = row['Image Index']
-            image_path = os.path.join(images_dir, image_file)
-            if os.path.exists(image_path):
-                images.append(preprocess_image(image_path))
-                labels.append(row['Label'])
-                sensitive_features.append(row['Patient Gender'])
+        for _, row in batch_df.iterrows():
+            # Process image
+            img_array = preprocess_image(row['image'])
+            images.append(img_array)
+            
+            # Process label (assuming binary classification for simplicity)
+            label = 1 if "No Finding" not in row['label'] else 0
+            labels.append(label)
+            
+            # Create sensitive features dictionary
+            sensitive = {
+                'gender': row['gender'],
+                'age_group': row['age_group']
+            }
+            sensitive_features.append(sensitive)
         
-        return np.array(images), np.array(labels), np.array(sensitive_features)
-    
-    X_train, y_train, sensitive_train = process_data(train_df)
-    X_val, y_val, sensitive_val = process_data(val_df)
-    
-    return (X_train, y_train, sensitive_train), (X_val, y_val, sensitive_val)
+        yield (np.array(images), 
+               np.array(labels), 
+               pd.DataFrame(sensitive_features))
 
-# Example usage
+def prepare_dataset(df, test_size=0.2, batch_size=32):
+    """
+    Prepare the dataset for training and testing with batch processing.
+    """
+    # Split the data
+    train_df, val_df = train_test_split(df, test_size=test_size, random_state=42)
+    
+    return (process_data_in_batches(train_df, batch_size), 
+            process_data_in_batches(val_df, batch_size))
+
+def process_cxr8_data(batch_size=32):
+    """
+    Process CXR8 data with batch processing.
+    Returns generators for training and validation data.
+    """
+    try:
+        # Load the dataset
+        df = load_chestxray8_data()
+        
+        # Prepare dataset with batch processing
+        train_generator, val_generator = prepare_dataset(df, batch_size=batch_size)
+        
+        return train_generator, val_generator
+        
+    except Exception as e:
+        print(f"Error processing CXR8 data: {e}")
+        raise
+
 if __name__ == "__main__":
-    csv_path = "path/to/Data_Entry_2017.csv"
-    images_dir = "path/to/images"
+    # Test the data loading and processing
+    train_gen, val_gen = process_cxr8_data(batch_size=32)
     
-    df = load_chestxray8_data(csv_path, images_dir)
-    (X_train, y_train, sensitive_train), (X_val, y_val, sensitive_val) = prepare_dataset(df, images_dir)
+    # Test first batch
+    X_batch, y_batch, sensitive_batch = next(train_gen)
     
-    print(f"Training samples: {len(X_train)}")
-    print(f"Validation samples: {len(X_val)}")
+    print(f"Batch shapes:")
+    print(f"Images: {X_batch.shape}")
+    print(f"Labels: {y_batch.shape}")
+    print(f"Sensitive features: {sensitive_batch.shape}")
