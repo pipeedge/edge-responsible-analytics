@@ -209,21 +209,33 @@ def evaluate_and_aggregate():
                             
                         elif data_type == 'cxr8':
                             from dataset.cxr8_processor import process_cxr8_data
-                            train_gen, val_gen = process_cxr8_data(batch_size=32)
+                            _, val_gen = process_cxr8_data(batch_size=32, max_samples=1000)  # Use smaller sample size
                             
                             # Process validation data
-                            X_val, y_val, sensitive_features = [], [], []
-                            for batch_X, batch_y, batch_sensitive in val_gen:
-                                X_val.append(batch_X)
-                                y_val.append(batch_y)
-                                sensitive_features.append(batch_sensitive)
+                            X_val_list = []
+                            y_val_list = []
+                            sensitive_features_list = []
+                            
+                            # Collect a few batches for validation
+                            num_val_batches = 5  # Limit number of validation batches
+                            for i, (batch_X, batch_y, batch_sensitive) in enumerate(val_gen):
+                                if i >= num_val_batches:
+                                    break
+                                X_val_list.append(batch_X)
+                                y_val_list.append(batch_y)
+                                sensitive_features_list.append(batch_sensitive)
+                            
+                            # Check if we have any data
+                            if not X_val_list:
+                                logger.error("No validation data collected for CXR8")
+                                return
                             
                             # Concatenate batches
-                            X_val = np.concatenate(X_val, axis=0)
-                            y_val = np.concatenate(y_val, axis=0)
-                            sensitive_features = pd.concat(sensitive_features, ignore_index=True)
+                            X_val = np.concatenate(X_val_list, axis=0)
+                            y_val = np.concatenate(y_val_list, axis=0)
+                            sensitive_features = pd.concat(sensitive_features_list, ignore_index=True)
                             
-                            logger.info(f"CXR8 validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {sensitive_features.shape}")
+                            logger.info(f"CXR8 validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {len(sensitive_features)}")
                             
                             # Prepare DataFrame for privacy evaluation
                             df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))
