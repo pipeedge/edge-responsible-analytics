@@ -37,12 +37,20 @@ def perform_inference(data, data_type, batch_size=16):
                         X_batch, _, sf_batch = batch_data
                         batch_predictions = model.predict(X_batch, batch_size=batch_size)
                         predictions.extend(batch_predictions.flatten().tolist())
-                        sensitive_features.append(sf_batch)
+                        # Ensure sf_batch is a DataFrame before appending
+                        if isinstance(sf_batch, pd.DataFrame):
+                            sensitive_features.append(sf_batch)
+                        elif isinstance(sf_batch, np.ndarray):
+                            # Convert numpy array to DataFrame if necessary
+                            sensitive_features.append(pd.DataFrame({
+                                'gender': sf_batch if sf_batch.ndim == 1 else sf_batch[:, 0],
+                                'age_group': sf_batch[:, 1] if sf_batch.ndim > 1 else None
+                            }))
                 
                 # Return predictions along with sensitive features for evaluation
                 return {
                     'predictions': np.array(predictions),
-                    'sensitive_features': pd.concat(sensitive_features) if sensitive_features else None
+                    'sensitive_features': pd.concat(sensitive_features, ignore_index=True) if sensitive_features else None
                 }
             
             # Handle direct input (for chest_xray)
