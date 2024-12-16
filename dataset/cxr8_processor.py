@@ -59,11 +59,22 @@ def preprocess_image(image):
     try:
         # Convert PIL image to array
         img_array = tf.keras.preprocessing.image.img_to_array(image)
+        
+        # Convert to float32 and ensure 3 channels
+        img_array = tf.cast(img_array, tf.float32)
+        if img_array.shape[-1] == 1:
+            img_array = tf.image.grayscale_to_rgb(img_array)
+        elif img_array.shape[-1] == 4:
+            img_array = img_array[:, :, :3]
+            
         # Resize to target size
         img_array = tf.image.resize(img_array, (224, 224))
+        
         # Preprocess for MobileNetV2
         img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-        return img_array
+        
+        return img_array.numpy()  # Convert to numpy array
+        
     except Exception as e:
         logger.error(f"Error preprocessing image: {e}")
         raise
@@ -83,24 +94,30 @@ def process_data_in_batches(df_subset, batch_size=32):
             sensitive_features = []
             
             for _, row in batch_df.iterrows():
-                # Process image
-                img_array = preprocess_image(row['image'])
-                images.append(img_array)
-                
-                # Process label (assuming binary classification for simplicity)
-                label = 1 if "No Finding" not in row['label'] else 0
-                labels.append(label)
-                
-                # Create sensitive features dictionary
-                sensitive = {
-                    'gender': row['gender'],
-                    'age_group': row['age_group']
-                }
-                sensitive_features.append(sensitive)
+                try:
+                    # Process image
+                    img_array = preprocess_image(row['image'])
+                    if img_array is not None and img_array.shape == (224, 224, 3):
+                        images.append(img_array)
+                        
+                        # Process label (assuming binary classification for simplicity)
+                        label = 1 if "No Finding" not in row['label'] else 0
+                        labels.append(label)
+                        
+                        # Create sensitive features dictionary
+                        sensitive = {
+                            'gender': row['gender'],
+                            'age_group': row['age_group']
+                        }
+                        sensitive_features.append(sensitive)
+                except Exception as e:
+                    logger.error(f"Error processing individual image: {e}")
+                    continue
             
-            yield (np.array(images), 
-                   np.array(labels), 
-                   pd.DataFrame(sensitive_features))
+            if images:  # Only yield if we have valid images
+                yield (np.array(images), 
+                       np.array(labels), 
+                       pd.DataFrame(sensitive_features))
                    
         except Exception as e:
             logger.error(f"Error processing batch {start_idx}-{end_idx}: {e}")
