@@ -2,7 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
 import tensorflow as tf
-from dataset import load_dataset
+from datasets import load_dataset
 
 def load_chestxray8_data():
     # Load dataset from Hugging Face
