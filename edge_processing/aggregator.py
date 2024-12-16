@@ -10,7 +10,7 @@ import threading
 import sys
 import logging
 import requests
-from datasets.chest_xray_processor import process_chest_xray_data
+from dataset.chest_xray_processor import process_chest_xray_data
 import mlflow
 import mlflow.tensorflow
 from mlflow.tracking import MlflowClient
@@ -195,7 +195,7 @@ def evaluate_and_aggregate():
                         
                     elif model_type in ['t5_small', 'tinybert']:
                         # Process medical transcription data
-                        from datasets.mt_processor import process_medical_transcriptions_data
+                        from dataset.mt_processor import process_medical_transcriptions_data
                         X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt")
                         X_val = X_test
                         y_val = y_test

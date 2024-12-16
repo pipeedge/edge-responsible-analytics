@@ -6,9 +6,9 @@ import os
 from typing import Dict, Any, Tuple
 import numpy as np
 from load_models import load_mobilenet_model, load_bert_model
-from datasets.chest_xray_processor import process_chest_xray_data
-from datasets.mt_processor import process_medical_transcriptions_data
-from datasets.cxr8_processor import process_cxr8_data
+from dataset.chest_xray_processor import process_chest_xray_data
+from dataset.mt_processor import process_medical_transcriptions_data
+from dataset.cxr8_processor import process_cxr8_data
 import pandas as pd
 
 logger = logging.getLogger(__name__)

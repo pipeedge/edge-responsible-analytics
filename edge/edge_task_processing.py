@@ -18,8 +18,8 @@ import tarfile  # Add tarfile for tar operations
 import tensorflow as tf
 from edge_infer import perform_inference, process_inference_results
 from edge_training import train_model
-from datasets.chest_xray_processor import process_chest_xray_data
-from datasets.mt_processor import process_medical_transcriptions_data
+from dataset.chest_xray_processor import process_chest_xray_data
+from dataset.mt_processor import process_medical_transcriptions_data
 import logging
 import pandas as pd
 import numpy as np 
@@ -67,7 +67,7 @@ def process_task(task):
     if data_type == "chest_xray":
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "cxr8":
-        from datasets.cxr8_processor import process_cxr8_data
+        from dataset.cxr8_processor import process_cxr8_data
         train_gen, val_gen = process_cxr8_data(batch_size=task.get('batch_size', 32))
         # For inference, use the validation generator
         if task['type'] == 'inference':
