@@ -5,7 +5,7 @@ import gc
 import os
 from typing import Dict, Any, Tuple
 import numpy as np
-from load_models import load_mobilenet_model, load_bert_model, load_satellite_model
+from load_models import load_mobilenet_model, load_bert_model
 from datasets.chest_xray_processor import process_chest_xray_data
 from datasets.mt_processor import process_medical_transcriptions_data
 from datasets.odc_processor import ODCProcessor
@@ -209,41 +209,3 @@ def train_model(data_path: str,
     finally:
         # Clean up memory
         gc.collect()
-
-def train_satellite_model(data_path: str,
-                         model_type: str,
-                         region: dict,
-                         time_range: Tuple[str, str],
-                         batch_size: int = 16,
-                         epochs: int = 1) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """
-    Train model on satellite data.
-    """
-    processor = ODCProcessor()
-    model = load_satellite_model(model_type)
-    
-    # Process data in chunks
-    train_data = processor.process_satellite_data(
-        product=data_path,
-        time_range=time_range,
-        region=region,
-        batch_size=batch_size
-    )
-    
-    # Train model
-    history = {'loss': [], 'accuracy': [], 'iou': []}
-    
-    for epoch in range(epochs):
-        for X_batch, y_batch, metadata in train_data:
-            metrics = model.train_on_batch(X_batch, y_batch)
-            history['loss'].append(metrics[0])
-            history['accuracy'].append(metrics[1])
-            history['iou'].append(metrics[2])
-    
-    return {
-        'metrics': {
-            'loss': float(np.mean(history['loss'])),
-            'accuracy': float(np.mean(history['accuracy'])),
-            'iou': float(np.mean(history['iou']))
-        }
-    }
