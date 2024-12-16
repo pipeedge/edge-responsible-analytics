@@ -87,7 +87,10 @@ def process_task(task):
     
     if task['type'] == 'inference':
         predictions = perform_inference(processed_data, data_type)
-        return process_inference_results(predictions, data_type)
+        if isinstance(predictions, dict):
+            # For CXR8 data that includes sensitive features
+            return predictions['predictions']
+        return predictions
     elif task['type'] == 'training':
         try:
             # Map data_type to model_type
@@ -247,13 +250,16 @@ def task_processing(task_type, model_type):
     
     # Map model_type to data_type and data paths
     if model_type == 'MobileNet':
-        data_type = 'chest_xray'
-        train_data_path = 'datasets/chest_xray/train'
-        inference_data_path = 'datasets/chest_xray/val'
+        if data_type == 'chest_xray':
+            train_data_path = 'dataset/chest_xray/train'
+            inference_data_path = 'dataset/chest_xray/val'
+        elif data_type == 'cxr8':  # cxr8
+            train_data_path = 'dataset/cxr8'
+            inference_data_path = 'dataset/cxr8'
     elif model_type == 'tinybert':
         data_type = 'mt'
-        train_data_path = 'datasets/mt'
-        inference_data_path = 'datasets/mt'
+        train_data_path = 'dataset/mt'
+        inference_data_path = 'dataset/mt'
     else:
         logger.error(f"Unsupported model_type: {model_type}")
         return
@@ -354,6 +360,9 @@ def main():
                         help='Type of model to use (default: MobileNet)')
     parser.add_argument('--task_type', type=str, default='inference',
                         choices=['inference', 'training'],
+                        help='Type of task to perform (default: inference)')
+    parser.add_argument('--data_type', type=str, default='chest_xray',
+                        choices=['chest_xray', 'cxr8', 'mt'],
                         help='Type of task to perform (default: inference)')
     
     args = parser.parse_args()
