@@ -11,7 +11,7 @@ os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
 
 def download_chest_xray_data():
     # Download the dataset from Kaggle
-    kaggle.api.dataset_download_files('paultimothymooney/chest-xray-pneumonia', path='datasets/', unzip=True)
+    kaggle.api.dataset_download_files('paultimothymooney/chest-xray-pneumonia', path='dataset/', unzip=True)
 
 def preprocess_chest_xray(image_path):
     # Load and preprocess the image

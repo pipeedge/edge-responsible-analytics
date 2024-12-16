@@ -93,6 +93,7 @@ def on_message(client, userdata, msg):
             device_id = payload.get('device_id')
             model_type = payload.get('model_type')
             model_b64 = payload.get('model_data')
+            data_type = payload.get('data_type')
 
             if device_id and model_type and model_b64:
                 with lock:
@@ -100,7 +101,8 @@ def on_message(client, userdata, msg):
                         logger.info(f"Received {model_type} model from {device_id}")
                         received_models[device_id] = {
                             'model_type': model_type,
-                            'model_data': model_b64
+                            'model_data': model_b64,
+                            'data_type': data_type
                         }
                     else:
                         logger.warning(f"Model from {device_id} already received.")
@@ -130,9 +132,15 @@ def evaluate_and_aggregate():
             except Exception as e:
                 logger.warning(f"No active MLflow run to end: {e}")
 
-            models_of_type = {device_id:info for device_id, info in received_models.items() if info['model_type'] == model_type}
+            models_of_type = {device_id:info for device_id, info in received_models.items() 
+                            if info['model_type'] == model_type}
+            
             if len(models_of_type) >= EXPECTED_DEVICES:
                 logger.info(f"All models of type '{model_type}' received. Evaluating policies.")
+
+                # Get the data type from the first model (assuming all models of same type use same data)
+                data_type = next(iter(models_of_type.values())).get('data_type', 'chest_xray')
+                logger.info(f"Processing models with data_type: {data_type}")
 
                 # Get the appropriate model paths
                 model_paths = MODEL_PATHS.get(model_type)
@@ -181,27 +189,69 @@ def evaluate_and_aggregate():
                     X_val, y_val, sensitive_features = None, None, None
                     
                     if model_type == 'MobileNet':
-                        X_val, y_val, sensitive_features = [], [], []
-                        for batch_X, batch_y, batch_sensitive in process_chest_xray_data("datasets/chest_xray/val", batch_size=32):
-                            X_val.append(batch_X)
-                            y_val.append(batch_y)
-                            sensitive_features.append(batch_sensitive)
-                        # Concatenate all batches into single arrays
-                        X_val = np.concatenate(X_val, axis=0)
-                        y_val = np.concatenate(y_val, axis=0)
-                        sensitive_features = np.concatenate(sensitive_features, axis=0)
-                        
-                        logger.info(f"MobileNet validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {sensitive_features.shape}")
-                        
+                        if data_type == 'chest_xray':
+                            X_val, y_val, sensitive_features = [], [], []
+                            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("dataset/chest_xray/val", batch_size=32):
+                                X_val.append(batch_X)
+                                y_val.append(batch_y)
+                                sensitive_features.append(batch_sensitive)
+                            # Concatenate all batches into single arrays
+                            X_val = np.concatenate(X_val, axis=0)
+                            y_val = np.concatenate(y_val, axis=0)
+                            sensitive_features = np.concatenate(sensitive_features, axis=0)
+                            
+                            logger.info(f"Chest X-ray validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {sensitive_features.shape}")
+                            
+                            # Convert to DataFrame for privacy evaluation
+                            df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))
+                            df_val['gender'] = sensitive_features
+                            QUASI_IDENTIFIERS = ['gender']
+                            
+                        elif data_type == 'cxr8':
+                            from dataset.cxr8_processor import process_cxr8_data
+                            train_gen, val_gen = process_cxr8_data(batch_size=32)
+                            
+                            # Process validation data
+                            X_val, y_val, sensitive_features = [], [], []
+                            for batch_X, batch_y, batch_sensitive in val_gen:
+                                X_val.append(batch_X)
+                                y_val.append(batch_y)
+                                sensitive_features.append(batch_sensitive)
+                            
+                            # Concatenate batches
+                            X_val = np.concatenate(X_val, axis=0)
+                            y_val = np.concatenate(y_val, axis=0)
+                            sensitive_features = pd.concat(sensitive_features, ignore_index=True)
+                            
+                            logger.info(f"CXR8 validation data loaded - X_val: {X_val.shape}, y_val: {y_val.shape}, sensitive_features: {sensitive_features.shape}")
+                            
+                            # Prepare DataFrame for privacy evaluation
+                            df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))
+                            df_val['gender'] = sensitive_features['gender']
+                            df_val['age_group'] = sensitive_features['age_group']
+                            QUASI_IDENTIFIERS = ['gender', 'age_group']
+                            
+                        else:
+                            logger.error(f"Unsupported data type for MobileNet: {data_type}")
+                            return
+                            
                     elif model_type in ['t5_small', 'tinybert']:
                         # Process medical transcription data
                         from dataset.mt_processor import process_medical_transcriptions_data
-                        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("datasets/mt")
+                        X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data("dataset/mt")
                         X_val = X_test
                         y_val = y_test
                         sensitive_features = sf_test
                         
                         logger.info(f"Text model validation data loaded - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features shape: {sensitive_features.shape}")
+                        
+                        # Prepare DataFrame for privacy evaluation
+                        df_val = pd.DataFrame({
+                            'text': X_val,
+                            'gender': sensitive_features['gender'],
+                            'age_group': sensitive_features['age_group']
+                        })
+                        QUASI_IDENTIFIERS = ['gender', 'age_group']
                     else:
                         logger.error(f"Unsupported model type for validation data: {model_type}")
                         return
@@ -209,19 +259,6 @@ def evaluate_and_aggregate():
                     # Start MLflow run
                     with mlflow.start_run(run_name=f"AggregatedModel_Evaluation_{model_type}"):
                         try:
-                            # Convert to DataFrame for privacy evaluation
-                            if model_type == 'MobileNet':
-                                df_val = pd.DataFrame(X_val.reshape(X_val.shape[0], -1))
-                                df_val['gender'] = sensitive_features
-                                QUASI_IDENTIFIERS = ['gender']
-                            elif model_type in ['t5_small', 'tinybert']:
-                                df_val = pd.DataFrame({
-                                    'text': X_val,
-                                    'gender': sensitive_features['gender'],
-                                    'age_group': sensitive_features['age_group']
-                                })
-                                QUASI_IDENTIFIERS = ['gender', 'age_group']
-                            
                             # Evaluate privacy
                             missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
                             if missing_columns:

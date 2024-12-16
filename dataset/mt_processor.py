@@ -13,7 +13,7 @@ os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
 def download_medical_transcriptions_data():
     try:
         print("Downloading Medical Transcriptions data...")
-        kaggle.api.dataset_download_files('tboyle10/medicaltranscriptions', path='datasets/mt', unzip=True)
+        kaggle.api.dataset_download_files('tboyle10/medicaltranscriptions', path='dataset/mt', unzip=True)
     except kaggle.rest.ApiException as e:
         print(f"Error downloading dataset: {e}")
         if e.status == 403:

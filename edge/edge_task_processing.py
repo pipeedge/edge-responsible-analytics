@@ -126,7 +126,7 @@ def process_task(task):
         return "Unknown task type"
 
 # Function to send the trained model
-def send_trained_model(model_path, model_type):
+def send_trained_model(model_path, model_type, data_tpye):
     try:
         if model_type == 'MobileNet':
             # Handle single file model
@@ -146,7 +146,8 @@ def send_trained_model(model_path, model_type):
         payload = json.dumps({
             'device_id': DEVICE_ID,
             'model_type': model_type,
-            'model_data': model_b64
+            'model_data': model_b64,
+            'data_type': data_tpye
         })
         client.publish(MQTT_TOPIC_UPLOAD, payload)
         print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
@@ -315,7 +316,7 @@ def task_processing(task_type, model_type, data_type):
     print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
 
     # Upload the trained model in a separate thread
-    upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type))
+    upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type, data_type))
     upload_thread.start()
 
     try:
