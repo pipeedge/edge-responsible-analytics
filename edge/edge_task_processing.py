@@ -222,7 +222,7 @@ def mqtt_loop():
     client.loop_forever()
 
 # Task processing function
-def task_processing(task_type, model_type):
+def task_processing(task_type, model_type, data_type):
     global model
     
     # Configure TensorFlow memory growth
@@ -363,11 +363,12 @@ def main():
                         help='Type of task to perform (default: inference)')
     parser.add_argument('--data_type', type=str, default='chest_xray',
                         choices=['chest_xray', 'cxr8', 'mt'],
-                        help='Type of task to perform (default: inference)')
+                        help='Type of data to perform (default: chest_xray)')
     
     args = parser.parse_args()
     model_type = args.model_type
     task_type = args.task_type
+    data_type = args.data_type
 
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
 
@@ -383,7 +384,7 @@ def main():
     monitor_thread.start()
 
     # Start task processing in the main thread
-    task_processing(task_type, model_type)
+    task_processing(task_type, model_type, data_type)
     try:
         while True:
             time.sleep(1)  # Keep the thread alive
