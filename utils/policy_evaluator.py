@@ -213,7 +213,7 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         }
 
         # Log explainability metrics
-        logger.info(f"Explainability Metrics: {explainability_metrics}")
+        # logger.info(f"Explainability Metrics: {explainability_metrics}")
 
         # Prepare input data for OPA
         input_data = {
@@ -273,7 +273,7 @@ def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
             return True, []
         else:
             logger.warning("Data failed privacy policies.")
-            failed_policies.append("k_anonymity")
+            # failed_policies.append("k_anonymity")
             return False, failed_policies
     
     except Exception as e:

@@ -4,7 +4,11 @@ from typing import Dict, Any
 import json
 import os
 from .training_coordinator import TrainingCoordinator
-from .policy_evaluator import evaluate_fairness_policy, evaluate_reliability_policy, evaluate_explainability_policy
+from utils.policy_evaluator import (
+    evaluate_fairness_policy,
+    evaluate_reliability_policy,
+    evaluate_explainability_policy
+)
 import tensorflow as tf
 from utils.training import train_model
 

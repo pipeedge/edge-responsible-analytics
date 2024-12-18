@@ -24,7 +24,12 @@ import tarfile
 import shutil
 import tempfile
 
-from policy_evaluator import * 
+from utils.policy_evaluator import *
+
+from utils.model_transfer import ModelTransfer
+
+import schedule
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -84,6 +89,9 @@ MODEL_PATHS = {
         'previous': 'previous_tinybert'
     }
 }
+
+CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://10.200.3.159:8080')
+SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -284,7 +292,6 @@ def evaluate_and_aggregate():
                             )
 
                             if not is_private:
-                                logger.warning(f"Privacy policies failed: {failed_privacy_policies}.")
                                 notify_policy_failure(failed_privacy_policies)
 
                         except Exception as e:
@@ -464,7 +471,7 @@ def evaluate_and_aggregate():
                         if received_models[device_id]['model_type'] == model_type:
                             del received_models[device_id]
                 else:
-                    failed_policies = failed_fairness_policies + failed_explainability_policies + failed_reliability_policies
+                    failed_policies = failed_privacy_policies[0] + failed_fairness_policies[0] + failed_explainability_policies[0] + failed_reliability_policies[0]
                     logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
                     notify_policy_failure(failed_policies)
                     mlflow.log_param("failed_policies", failed_policies)
@@ -474,7 +481,7 @@ def evaluate_and_aggregate():
                         publish_aggregated_model(model_type, previous_path)
                         logger.info(f"Published previous aggregated {model_type} model")
                     else:
-                        logger.error("No previous aggregated model available to deploy.")
+                        logger.warning("No previous aggregated model available to deploy.")
                     
                     # Remove received models of this type
                     for device_id in list(received_models.keys()):
@@ -599,12 +606,13 @@ def connect_mqtt():
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_UPLOAD)
+        client.loop_start()
+        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+        return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
-        sys.exit(1)
-    client.subscribe(MQTT_TOPIC_UPLOAD)
-    client.loop_start()
-    logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+        return False
 
 def send_to_opa(input_data, policy_type):
     """
@@ -639,26 +647,122 @@ def send_to_opa(input_data, policy_type):
         logger.exception(f"Error sending data to OPA: {e}")
         return False, [f"{policy_type}_opa_exception"]
 
+def sync_with_cloud():
+    """
+    Sync aggregated models with the cloud layer periodically.
+    """
+    logger.info("Starting cloud synchronization...")
+    
+    try:
+        # Prepare model updates for each model type
+        for model_type, paths in MODEL_PATHS.items():
+            current_path = paths['current']
+            
+            if not os.path.exists(current_path):
+                logger.warning(f"No aggregated model found for {model_type}")
+                continue
+                
+            # Read and encode the model
+            if os.path.isdir(current_path):
+                # For directory-based models (T5, TinyBERT)
+                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                    shutil.make_archive(tmp.name[:-7], 'gztar', current_path)
+                    with open(tmp.name, 'rb') as f:
+                        model_bytes = f.read()
+                    os.unlink(tmp.name)
+            else:
+                # For single file models (MobileNet)
+                with open(current_path, 'rb') as f:
+                    model_bytes = f.read()
+            
+            model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+            
+            # Prepare metrics from latest evaluation
+            metrics = {
+                'timestamp': datetime.now().isoformat(),
+                'model_type': model_type
+                # Add other relevant metrics here
+            }
+            
+            # Send to cloud
+            payload = {
+                'edge_server_id': 'edge_processor_1',  # Unique ID for this edge server
+                'model_params': model_b64,
+                'metrics': metrics,
+                'model_type': model_type
+            }
+            
+            response = requests.post(f"{CLOUD_API_URL}/edge/update", json=payload)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result['status'] == 'success' and 'model' in result:
+                    # Update local model with global model
+                    global_model_b64 = result['model']
+                    global_model_bytes = base64.b64decode(global_model_b64)
+                    
+                    # Backup current model
+                    if os.path.exists(paths['previous']):
+                        if os.path.isdir(paths['previous']):
+                            shutil.rmtree(paths['previous'])
+                        else:
+                            os.remove(paths['previous'])
+                    
+                    # Save global model
+                    if os.path.isdir(current_path):
+                        # Extract directory-based model
+                        if os.path.exists(current_path):
+                            shutil.rmtree(current_path)
+                        os.makedirs(current_path)
+                        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                            tmp.write(global_model_bytes)
+                            with tarfile.open(tmp.name, 'r:gz') as tar:
+                                tar.extractall(path=current_path)
+                            os.unlink(tmp.name)
+                    else:
+                        # Save single file model
+                        with open(current_path, 'wb') as f:
+                            f.write(global_model_bytes)
+                    
+                    logger.info(f"Updated local {model_type} model with global model")
+                    
+                    # Distribute updated model to edge devices via MQTT
+                    publish_aggregated_model(model_type, current_path)
+                else:
+                    logger.warning(f"Cloud sync failed for {model_type}: {result.get('message')}")
+            else:
+                logger.error(f"Failed to sync with cloud: {response.status_code}")
+                
+    except Exception as e:
+        logger.exception(f"Error during cloud synchronization: {e}")
+
+def schedule_cloud_sync():
+    """
+    Schedule periodic cloud synchronization
+    """
+    schedule.every(SYNC_INTERVAL_MINUTES).minutes.do(sync_with_cloud)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(30)  # Check every minute
+
 def main():
-    """
-    Connect to the MQTT broker and subscribe to relevant topics.
-    """
     # Start parent MLflow run
     with mlflow.start_run(run_name="Model_Aggregation_Parent"):
-        client.on_message = on_message
-        try:
-            print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-            client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        except Exception as e:
-            logger.exception(f"Failed to connect to MQTT broker: {e}")
+        # Connect to MQTT for edge device communication
+        if not connect_mqtt():
+            logger.error("Failed to connect to MQTT broker. Exiting.")
             sys.exit(1)
-        client.subscribe(MQTT_TOPIC_UPLOAD)
-        client.loop_start()
-        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+            
+        # Start cloud sync in a separate thread
+        sync_thread = threading.Thread(target=schedule_cloud_sync)
+        sync_thread.daemon = True
+        sync_thread.start()
+        logger.info("Started cloud synchronization thread")
 
         try:
             while True:
-                time.sleep(1)  # Keep the thread alive
+                time.sleep(1)  # Keep the main thread alive
         except KeyboardInterrupt:
             logger.info("Shutting down aggregator.")
             client.loop_stop()

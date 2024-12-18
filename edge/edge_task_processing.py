@@ -23,6 +23,7 @@ from dataset.mt_processor import process_medical_transcriptions_data
 import logging
 import pandas as pd
 import numpy as np 
+from utils.model_transfer import ModelTransfer
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -172,9 +173,6 @@ def on_message(client, userdata, msg):
                         f.write(model_bytes)
                 else:  # TinyBERT
                     # Handle directory-based model
-                    import tempfile
-                    import tarfile
-                    
                     model_dir = 'tinybert_model'
                     with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                         tmp.write(model_bytes)
@@ -190,7 +188,7 @@ def on_message(client, userdata, msg):
                         
                         os.unlink(tmp.name)  # Clean up temp file
                 
-                print(f"[{DEVICE_ID}] Received and saved aggregated model")
+                logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
                 
                 # Load the new model
                 with model_lock:
@@ -202,11 +200,11 @@ def on_message(client, userdata, msg):
                         from load_models import load_bert_model
                         model, _ = load_bert_model()  # Reload with saved weights
                 
-                print(f"[{DEVICE_ID}] Aggregated model loaded successfully")
+                logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
                 model_update_event.set()
                 
             except Exception as e:
-                print(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
+                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
 
 # Set up MQTT callbacks
 client.on_message = on_message
@@ -386,6 +384,7 @@ def main():
 
     # Start task processing in the main thread
     task_processing(task_type, model_type, data_type)
+    
     try:
         while True:
             time.sleep(1)  # Keep the thread alive
