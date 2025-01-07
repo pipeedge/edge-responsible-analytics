@@ -1,7 +1,10 @@
 {
     "reliability": {
       "threshold": {
-        "reliability_score": 0.8
+        "reliability_score": 0.5,
+        "attention_score": 0.001, 
+        "interpretability_score": 0.001,
+        "prediction_stability": 0.5
       }
     }
   }

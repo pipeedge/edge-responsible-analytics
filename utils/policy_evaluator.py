@@ -51,6 +51,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
     """
     Evaluates model fairness using OPA policies.
     """
+    logger.info("Evaluate fairness policy.")
     try:
         # Handle different types of sensitive features
         if isinstance(sensitive_features, pd.DataFrame):
@@ -132,6 +133,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
         return False, ["Fairness Evaluation Error"]
 
 def evaluate_reliability_policy(model, X_test, y_test, thresholds):
+    logger.info("Evaluate reliability policy.")
     try:
         # Wrap the model with ART classifier
         loss_object = tf.keras.losses.BinaryCrossentropy()
@@ -181,6 +183,7 @@ def evaluate_reliability_policy(model, X_test, y_test, thresholds):
         return False, ["Reliability Evaluation Error"]
 
 def evaluate_explainability_policy(model, X_sample, thresholds):
+    logger.info("Evaluate explainability policy.")
     try:
         # Ensure model is compiled
         if not model.optimizer:
@@ -251,6 +254,7 @@ def compute_k_anonymity(df, quasi_identifiers, k):
     return min_k
 
 def evaluate_privacy_policy(df, quasi_identifiers, k_threshold):
+    logger.info("Evaluate privacy policy.")
     try:
         k_threshold = int(k_threshold)  # Ensure k_threshold is a Python int
         k_anonymity = compute_k_anonymity(df, quasi_identifiers, k_threshold)
@@ -317,6 +321,7 @@ def convert_numpy_types(obj):
         return obj
     
 def evaluate_explainability_policy_t5(model, X_sample, thresholds):
+    logger.info("Evaluate explainability policy t5.")
     try:
         # For T5, define explainability metrics differently
         # Placeholder example: average attention weights
@@ -366,6 +371,7 @@ def evaluate_reliability_policy_t5(model, X_test, y_test, thresholds):
         bool: True if reliability policies are satisfied.
         list: List of failed policies.
     """
+    logger.info("Evaluate reliability policy t5.")
     try:
         from art.estimators.text import TFTextClassifier
         from art.attacks.evasion import TextAttack
@@ -402,6 +408,7 @@ def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds)
     """
     Evaluates explainability for TinyBERT model using attention weights.
     """
+    logger.info("Evaluate explainability policy tinybert.")
     try:
         # Process in smaller batches
         batch_size = 16
@@ -457,12 +464,9 @@ def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds)
             return True, []
         else:
             logger.warning("Model failed explainability policies.")
-            failed = []
-            if explainability_metrics["attention_score"] < thresholds.get("attention_score", 0):
-                failed.append("attention_score")
-            if explainability_metrics["interpretability_score"] < thresholds.get("interpretability_score", 0):
-                failed.append("interpretability_score")
-            return False, failed
+            if explainability_metrics["attention_score"] < thresholds.get("attention_score", 0) or explainability_metrics["interpretability_score"] < thresholds.get("interpretability_score", 0):
+                failed_policies.append("attention_score")
+            return False, failed_policies
             
     except Exception as e:
         logger.exception(f"Error during TinyBERT explainability evaluation: {e}")
@@ -472,6 +476,7 @@ def evaluate_reliability_policy_tinybert(model, X_val, tokenizer, thresholds):
     """
     Evaluates reliability for TinyBERT model using input perturbations.
     """
+    logger.info("Evaluate reliability policy tinybert.")
     try:
         max_length = 512  # TinyBERT's maximum sequence length
         n_samples = min(len(X_val), 100)
@@ -536,11 +541,13 @@ def evaluate_reliability_policy_tinybert(model, X_val, tokenizer, thresholds):
             return True, []
         else:
             logger.warning("Model failed reliability policies.")
-            failed = []
-            for metric, score in reliability_metrics.items():
-                if score < thresholds.get(metric, 0):
-                    failed.append(metric)
-            return False, failed
+            # failed = []
+            # for metric, score in reliability_metrics.items():
+            #     if score < thresholds.get(metric, 0):
+            #         failed.append(metric)
+            if reliability_metrics.get("prediction_stability", 0) < thresholds.get("prediction_stability", 0):
+                failed_policies.append("prediction_stability")
+            return False, failed_policies
             
     except Exception as e:
         logger.exception(f"Error during TinyBERT reliability evaluation: {e}")
