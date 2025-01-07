@@ -8,3 +8,4 @@ kaggle
 fairlearn
 pillow
 psutil
+tf_keras

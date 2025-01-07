@@ -5,13 +5,38 @@ import os
 from sklearn.model_selection import train_test_split
 import kaggle
 import zipfile
+import shutil
 
+# Get the absolute path to the kaggle.json file
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
+KAGGLE_CONFIG_DIR = os.path.join(ROOT_DIR, '..', 'kaggle_credentials')
 
 def download_chest_xray_data():
-    # Download the dataset from Kaggle
-    kaggle.api.dataset_download_files('paultimothymooney/chest-xray-pneumonia', path='dataset/', unzip=True)
+    """
+    Download the dataset from Kaggle using credentials from the correct path
+    """
+    try:
+        # Create Kaggle config directory if it doesn't exist
+        os.makedirs(os.path.expanduser('~/.kaggle'), exist_ok=True)
+        
+        # Copy kaggle.json to the default location
+        kaggle_json_src = os.path.join(KAGGLE_CONFIG_DIR, 'kaggle.json')
+        kaggle_json_dst = os.path.expanduser('~/.kaggle/kaggle.json')
+        
+        if not os.path.exists(kaggle_json_dst):
+            shutil.copy2(kaggle_json_src, kaggle_json_dst)
+            # Set appropriate permissions
+            os.chmod(kaggle_json_dst, 0o600)
+        
+        # Download the dataset
+        kaggle.api.dataset_download_files(
+            'paultimothymooney/chest-xray-pneumonia',
+            path='dataset/',
+            unzip=True
+        )
+        
+    except Exception as e:
+        raise Exception(f"Failed to download dataset: {str(e)}")
 
 def preprocess_chest_xray(image_path):
     # Load and preprocess the image
