@@ -55,36 +55,39 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
     try:
         # Handle different types of sensitive features
         if isinstance(sensitive_features, pd.DataFrame):
-            # Check for NaN values in DataFrame
             has_nan = sensitive_features.isna().any().any()
             if has_nan:
                 logger.error("sensitive_features DataFrame contains NaN values")
         elif isinstance(sensitive_features, pd.Series):
-            # Convert categorical to string and check for NaN
             if sensitive_features.dtype.name == 'category':
                 sensitive_features = sensitive_features.astype(str)
             has_nan = sensitive_features.isna().any()
             if has_nan:
                 logger.error("sensitive_features Series contains NaN values")
         elif isinstance(sensitive_features, np.ndarray):
-            # For numpy arrays, use pandas NA checking
             has_nan = pd.isna(sensitive_features).any()
             if has_nan:
                 logger.error("sensitive_features array contains NaN values")
         
-        # Generate predictions if not provided
+        # Handle predictions based on model type
         if y_pred is None and model is not None:
-            y_pred = model.predict(X)
-            y_pred_binary = (y_pred >= 0.5).astype(int)
-        else:
-            y_pred_binary = y_pred  # Use provided predictions
-
-        # logger.info(f"Number of samples - y_true: {len(y_true)}, y_pred: {len(y_pred_binary)}, sensitive_features: {len(sensitive_features)}")
+            if isinstance(y_true[0], str):  # For TinyBERT
+                # Get predictions from model
+                outputs = model(input_ids=X["input_ids"],
+                              attention_mask=X["attention_mask"],
+                              token_type_ids=X["token_type_ids"])
+                y_pred = outputs.logits.numpy().argmax(axis=1)
+                
+                # Convert string labels to numeric using LabelEncoder
+                from sklearn.preprocessing import LabelEncoder
+                le = LabelEncoder()
+                y_true = le.fit_transform([label.strip().lower() for label in y_true])
+            else:  # For other models (e.g., MobileNet)
+                y_pred = model.predict(X)
+                y_pred = (y_pred >= 0.5).astype(int)  # Convert to binary
         
         # Ensure all inputs are the right type for MetricFrame
         if isinstance(sensitive_features, pd.DataFrame):
-            # If multiple sensitive features, use the first one for now
-            # You might want to evaluate each separately
             sensitive_feature_col = sensitive_features.iloc[:, 0]
         else:
             sensitive_feature_col = sensitive_features
@@ -98,7 +101,7 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
                 "demographic_parity_difference": demographic_parity_difference,
             },
             y_true=y_true,
-            y_pred=y_pred_binary,
+            y_pred=y_pred,  # Now standardized for all model types
             sensitive_features=sensitive_feature_col,
             sample_params=sample_params
         )
@@ -124,8 +127,6 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
             logger.warning("Model failed fairness policies.")
             if model_metrics.get("demographic_parity_difference", 0) > thresholds.get("demographic_parity_difference", 0):
                 failed_policies.append("demographic_parity")
-            if model_metrics.get("accuracy", 0) < thresholds.get("accuracy", 0):
-                failed_policies.append("accuracy")
             return False, failed_policies
 
     except Exception as e:
