@@ -471,7 +471,12 @@ def evaluate_and_aggregate():
                         if received_models[device_id]['model_type'] == model_type:
                             del received_models[device_id]
                 else:
-                    failed_policies = failed_privacy_policies[0] + failed_fairness_policies[0] + failed_explainability_policies[0] + failed_reliability_policies[0]
+                    failed_policies = []
+                    if failed_privacy_policies: failed_policies.extend(failed_privacy_policies[0])
+                    if failed_fairness_policies: failed_policies.extend(failed_fairness_policies[0])
+                    if failed_explainability_policies: failed_policies.extend(failed_explainability_policies[0])
+                    if failed_reliability_policies: failed_policies.extend(failed_reliability_policies[0])
+                    
                     logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
                     notify_policy_failure(failed_policies)
                     mlflow.log_param("failed_policies", failed_policies)
