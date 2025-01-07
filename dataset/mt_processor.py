@@ -4,11 +4,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import os
 import json
-import kaggle
 import gc
+from utils.kaggle_setup import setup_kaggle_credentials
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-os.environ['KAGGLE_CONFIG_DIR'] = os.path.join(ROOT_DIR, 'kaggle_credentials')
+setup_kaggle_credentials()
+import kaggle
 
 def download_medical_transcriptions_data():
     try:
