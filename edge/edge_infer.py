@@ -28,7 +28,7 @@ def perform_inference(data, data_type, batch_size=16):
             model = load_mobilenet_model()
             
             # Handle generator input (for CXR8)
-            if isinstance(data, dict):
+            if isinstance(data, Generator):
                 predictions = []
                 sensitive_features = []
                 
