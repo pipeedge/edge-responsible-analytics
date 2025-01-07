@@ -3,7 +3,7 @@ package policies.explainability
 default allow = false
 
 allow {
-    input.explainability_score >= input.thresholds.explainability
-    input.attention_score >= input.thresholds.attention
-    input.interpretability_score >= input.thresholds.interpretability
-}
+    input.explainability.metrics.explainability_score >= input.explainability.threshold.explainability
+    input.explainability.metrics.attention_score >= input.explainability.threshold.attention_score
+    input.explainability.metrics.interpretability_score >= input.explainability.threshold.interpretability_score
+}   
