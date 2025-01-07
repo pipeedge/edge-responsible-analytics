@@ -472,10 +472,10 @@ def evaluate_and_aggregate():
                             del received_models[device_id]
                 else:
                     failed_policies = []
-                    if failed_privacy_policies: failed_policies.extend(failed_privacy_policies[0])
-                    if failed_fairness_policies: failed_policies.extend(failed_fairness_policies[0])
-                    if failed_explainability_policies: failed_policies.extend(failed_explainability_policies[0])
-                    if failed_reliability_policies: failed_policies.extend(failed_reliability_policies[0])
+                    if failed_privacy_policies: failed_policies.append(failed_privacy_policies[0])
+                    if failed_fairness_policies: failed_policies.append(failed_fairness_policies[0])
+                    if failed_explainability_policies: failed_policies.append(failed_explainability_policies[0])
+                    if failed_reliability_policies: failed_policies.append(failed_reliability_policies[0])
                     
                     logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
                     notify_policy_failure(failed_policies)
