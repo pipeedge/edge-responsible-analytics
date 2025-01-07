@@ -464,7 +464,7 @@ def evaluate_explainability_policy_tinybert(model, X_val, tokenizer, thresholds)
             return True, []
         else:
             logger.warning("Model failed explainability policies.")
-            if explainability_metrics["attention_score"] > thresholds.get("attention_score", 0) or explainability_metrics["interpretability_score"] > thresholds.get("interpretability_score", 0):
+            if explainability_metrics["attention_score"] < thresholds.get("attention_score", 0) or explainability_metrics["interpretability_score"] < thresholds.get("interpretability_score", 0):
                 failed_policies.append("attention_score")
             return False, failed_policies
             
@@ -545,7 +545,7 @@ def evaluate_reliability_policy_tinybert(model, X_val, tokenizer, thresholds):
             # for metric, score in reliability_metrics.items():
             #     if score < thresholds.get(metric, 0):
             #         failed.append(metric)
-            if reliability_metrics.get("prediction_stability", 0) > thresholds.get("prediction_stability", 0):
+            if reliability_metrics.get("prediction_stability", 0) < thresholds.get("prediction_stability", 0):
                 failed_policies.append("prediction_stability")
             return False, failed_policies
             
