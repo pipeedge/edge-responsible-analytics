@@ -3,7 +3,6 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import os
 from sklearn.model_selection import train_test_split
-import kaggle
 import zipfile
 import shutil
 
@@ -11,23 +10,37 @@ import shutil
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 KAGGLE_CONFIG_DIR = os.path.join(ROOT_DIR, '..', 'kaggle_credentials')
 
-def download_chest_xray_data():
+# Setup Kaggle credentials before importing the kaggle module
+def setup_kaggle_credentials():
     """
-    Download the dataset from Kaggle using credentials from the correct path
+    Setup Kaggle credentials before any Kaggle API operations
     """
     try:
         # Create Kaggle config directory if it doesn't exist
-        os.makedirs(os.path.expanduser('~/.kaggle'), exist_ok=True)
+        kaggle_dir = os.path.expanduser('~/.kaggle')
+        os.makedirs(kaggle_dir, exist_ok=True)
         
         # Copy kaggle.json to the default location
         kaggle_json_src = os.path.join(KAGGLE_CONFIG_DIR, 'kaggle.json')
-        kaggle_json_dst = os.path.expanduser('~/.kaggle/kaggle.json')
+        kaggle_json_dst = os.path.join(kaggle_dir, 'kaggle.json')
         
         if not os.path.exists(kaggle_json_dst):
             shutil.copy2(kaggle_json_src, kaggle_json_dst)
             # Set appropriate permissions
             os.chmod(kaggle_json_dst, 0o600)
-        
+            
+    except Exception as e:
+        raise Exception(f"Failed to setup Kaggle credentials: {str(e)}")
+
+# Setup credentials before importing kaggle
+setup_kaggle_credentials()
+import kaggle
+
+def download_chest_xray_data():
+    """
+    Download the dataset from Kaggle using credentials
+    """
+    try:
         # Download the dataset
         kaggle.api.dataset_download_files(
             'paultimothymooney/chest-xray-pneumonia',
