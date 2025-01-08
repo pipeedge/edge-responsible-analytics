@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+      - name: mlflow
+        image: mlflow:latest  # Make sure to use your actual MLflow image
+        ports:
+        - containerPort: 5002
+        env:
+        - name: BACKEND_STORE_URI
+          value: "sqlite:///mlflow.db"  # Adjust based on your database setup
+        - name: DEFAULT_ARTIFACT_ROOT
+          value: "/mlruns"
+        volumeMounts:
+        - name: mlflow-data
+          mountPath: /mlruns
+      volumes:
+      - name: mlflow-data
+        persistentVolumeClaim:
+          claimName: mlflow-pvc

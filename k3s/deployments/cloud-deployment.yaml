@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-layer-deployment
+  labels:
+    app: cloud-layer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-layer
+  template:
+    metadata:
+      labels:
+        app: cloud-layer
+    spec:
+      containers:
+      - name: cloud-layer
+        image: edgemlops/cloud-layer:latest
+        ports:
+        - containerPort: 8080
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "http://edge-processing-service:5002"
+          - name: MODEL_REGISTRY_URI
+            value: "http://edge-processing-service:5002"

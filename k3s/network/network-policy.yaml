@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: edge-cloud-communication
+spec:
+  podSelector:
+    matchLabels:
+      app: edge-processing
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: edge-device
+    - podSelector:
+        matchLabels:
+          app: cloud-layer
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: cloud-layer
+    - podSelector:
+        matchLabels:
+          app: mosquitto

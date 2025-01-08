@@ -35,7 +35,7 @@ COPY opa/policies/fairness_thresholds.json  \
      ./
 
 # Copy the 'datasets' directory into the Docker image
-COPY datasets/ ./datasets/
+COPY dataset/ ./dataset/
 # Copy kaggle.json into the Docker image
 COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
 # Set permissions for kaggle.json
@@ -43,23 +43,20 @@ RUN chmod 600 /app/.kaggle/kaggle.json
 # Set the Kaggle configuration directory
 ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 
-# Install OPA
-RUN curl -L -o opa https://openpolicyagent.org/downloads/v0.55.0/opa_linux_amd64_static && \
-    chmod 755 opa && \
-    mv opa /usr/local/bin
+# # Install OPA
+# RUN curl -L -o opa https://openpolicyagent.org/downloads/v0.55.0/opa_linux_amd64_static && \
+#     chmod 755 opa && \
+#     mv opa /usr/local/bin
 
-# Create directory for OPA policies
-RUN mkdir -p /app/opa/policies
+# # Create directory for OPA policies
+# RUN mkdir -p /app/opa/policies
 
 # Copy policy files into /app/opa/policies/
-COPY opa/policies/*.rego \
-     opa/policies/*.json \
-     /app/opa/policies/
+# COPY opa/policies/*.rego \
+#      opa/policies/*.json \
+#      /app/opa/policies/
 
 # Expose necessary ports
 EXPOSE 8000 5002 8181
 
-# Update CMD to run both OPA and aggregator
-COPY docker/edge_processing_server/start.sh .
-RUN chmod +x start.sh
-CMD ["./start.sh"]
+CMD ["python3", "aggregator.py"]

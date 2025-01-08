@@ -8,7 +8,8 @@ data:
     {
       "reliability": {
         "threshold": {
-          "reliability_score": 0.8
+          "reliability_score": 0.5,
+          "prediction_stability": 0.5
         }
       }
     }
@@ -18,5 +19,9 @@ data:
     # default allow = false
 
     allow {
-        input.reliability_score >= input.threshold.reliability_score
+      input.reliability.metrics.reliability_score >= input.reliability.threshold.reliability_score
+    }
+
+    allow {
+      input.reliability.metrics.prediction_stability >= input.reliability.threshold.prediction_stability
     }

@@ -7,7 +7,7 @@ data:
   privacy_thresholds.json: |
     {
       "privacy": {
-        "threshold": {
+        "thresholds": {
           "privacy_score": 0.7
           }
         }
@@ -18,5 +18,5 @@ data:
     # default allow = false
 
     allow {
-      input.privacy_score >= input.thresholds.privacy_score
+      input.privacy.k_anonymity >= input.privacy.thresholds.privacy_score
     }
