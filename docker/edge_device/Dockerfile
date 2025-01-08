@@ -39,5 +39,6 @@ ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 # Expose necessary ports
 EXPOSE 8001
 
-# Command to run the edge device script
-CMD ["python3", "edge_task_processing.py"]
+# Change the CMD to ENTRYPOINT and CMD
+ENTRYPOINT ["python3", "edge_task_processing.py"]
+CMD ["--model_type", "MobileNet", "--data_type", "chest_xray"]

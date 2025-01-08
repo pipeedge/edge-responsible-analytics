@@ -15,6 +15,7 @@ import mlflow
 import mlflow.tensorflow
 from mlflow.tracking import MlflowClient
 from mlflow.models import infer_signature
+from typing import Dict
 
 import paho.mqtt.client as mqtt
 import tensorflow as tf
@@ -500,13 +501,76 @@ def evaluate_and_aggregate():
                         if received_models[device_id]['model_type'] == model_type:
                             del received_models[device_id]
 
+def adaptive_aggregation(models_of_type: Dict[str, Dict], model_type: str) -> Dict[str, float]:
+    """
+    Compute adaptive weights for model aggregation based on data diversity and underrepresentation.
+    
+    Args:
+        models_of_type: Dictionary of models with their metadata
+        model_type: Type of the model being aggregated
+        
+    Returns:
+        Dictionary mapping device_ids to their computed weights
+    """
+    import numpy as np
+    from scipy.stats import entropy
+    
+    device_weights = {}
+    total_samples = sum(len(info.get('data_distribution', [])) for info in models_of_type.values())
+    
+    # Compute entropy and inverse frequency for each device
+    for device_id, info in models_of_type.items():
+        data_dist = np.array(info.get('data_distribution', []))
+        if len(data_dist) == 0:
+            logger.warning(f"No data distribution information for device {device_id}")
+            device_weights[device_id] = 1.0 / len(models_of_type)
+            continue
+            
+        # Normalize distribution
+        data_dist = data_dist / np.sum(data_dist)
+        
+        # Compute entropy (diversity)
+        H_k = entropy(data_dist)
+        
+        # Compute inverse frequency (underrepresentation)
+        global_dist = np.zeros_like(data_dist)
+        for other_info in models_of_type.values():
+            other_dist = np.array(other_info.get('data_distribution', []))
+            if len(other_dist) > 0:
+                global_dist += other_dist
+        global_dist = global_dist / np.sum(global_dist)
+        
+        # Avoid division by zero
+        global_dist = np.maximum(global_dist, 1e-10)
+        gamma_k = np.sum(data_dist / global_dist) / len(data_dist)
+        
+        # Combine metrics with balancing parameter beta
+        beta = 0.5  # Can be adjusted based on requirements
+        combined_score = beta * H_k + (1 - beta) * gamma_k
+        device_weights[device_id] = combined_score
+    
+    # Normalize weights
+    total_weight = sum(device_weights.values())
+    if total_weight > 0:
+        device_weights = {k: v/total_weight for k, v in device_weights.items()}
+    else:
+        # Fallback to uniform weights if something goes wrong
+        device_weights = {k: 1.0/len(models_of_type) for k in models_of_type.keys()}
+    
+    return device_weights
+
 def aggregate_models(models_of_type, model_type, save_path):
     """
     Aggregate models by averaging their weights based on model_type.
     """
     from transformers import TFT5ForConditionalGeneration, TFAutoModelForSequenceClassification
+    
+    # Compute adaptive weights for aggregation
+    device_weights = adaptive_aggregation(models_of_type, model_type)
+    logger.info(f"Computed adaptive weights for aggregation: {device_weights}")
 
     models = []
+    weights = []
     for device_id, model_info in models_of_type.items():
         model_data = base64.b64decode(model_info['model_data'])
         if model_type == 'MobileNet':
@@ -539,33 +603,42 @@ def aggregate_models(models_of_type, model_type, save_path):
         else:
             raise ValueError(f"Unsupported model_type: {model_type}")
         models.append(model)
+        weights.append(device_weights[device_id])
 
     if not models:
         raise ValueError("No models to aggregate.")
 
     if model_type == 'MobileNet':
-        # Aggregate MobileNet models
+        # Aggregate MobileNet models with adaptive weights
         aggregated_model = models[0]
-        for model in models[1:]:
-            for agg_layer, layer in zip(aggregated_model.layers, model.layers):
-                agg_layer_weights = agg_layer.get_weights()
-                layer_weights = layer.get_weights()
-                if len(agg_layer_weights) == len(layer_weights):
-                    new_weights = [(agg_w + layer_w) / 2 for agg_w, layer_w in zip(agg_layer_weights, layer_weights)]
-                    agg_layer.set_weights(new_weights)
-                else:
-                    logger.warning(f"Layer weight mismatch: {agg_layer.name}")
+        for layer in aggregated_model.layers:
+            if layer.weights:  # Only process layers with weights
+                weighted_weights = []
+                for model, weight in zip(models, weights):
+                    layer_weights = model.get_layer(layer.name).get_weights()
+                    weighted_weights.append([w * weight for w in layer_weights])
+                
+                # Sum up the weighted weights
+                new_weights = []
+                for layer_weights in zip(*weighted_weights):
+                    new_weights.append(sum(w for w in layer_weights))
+                
+                layer.set_weights(new_weights)
+                
         # Save the aggregated model
         aggregated_model.save(save_path, save_format='keras')
 
     elif model_type in ['t5_small', 'tinybert']:
-        # Aggregate transformer models (T5 or TinyBERT)
+        # Aggregate transformer models (T5 or TinyBERT) with adaptive weights
         aggregated_model = models[0]
-        for model in models[1:]:
-            # Average weights for all parameters
-            for param_name, param in aggregated_model.trainable_weights:
+        for param_name, param in aggregated_model.trainable_weights:
+            weighted_params = []
+            for model, weight in zip(models, weights):
                 other_param = next(p for n, p in model.trainable_weights if n == param_name)
-                param.assign((param + other_param) / 2)
+                weighted_params.append(other_param * weight)
+            
+            # Sum up the weighted parameters
+            param.assign(sum(weighted_params))
         
         # Create directory for saving if it doesn't exist
         os.makedirs(save_path, exist_ok=True)

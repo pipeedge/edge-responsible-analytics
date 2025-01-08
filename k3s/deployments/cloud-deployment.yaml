@@ -24,3 +24,5 @@ spec:
             value: "http://edge-processing-service:5002"
           - name: MODEL_REGISTRY_URI
             value: "http://edge-processing-service:5002"
+      nodeSelector:
+        node-type: cloud

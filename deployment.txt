@@ -89,13 +89,16 @@ sudo swapoff -a
 
 
 # docker builds
-## Rebuild Edge Device Image
+## Build Edge Device Image
    docker build -f docker/edge_device/Dockerfile -t edgemlops/edge-device:latest --push .
 
-## Rebuild Edge Processing Server Image
+## Build Edge Processing Server Image
    docker build -f docker/edge_processing_server/Dockerfile -t edgemlops/edge-processing-server:latest --push .
 
    docker buildx build -f docker/edge_processing_server/Dockerfile --platform linux/amd64,linux/arm64 -t edgemlops/edge-processing-server:latest --push .
+
+## Build Cloud Image
+   docker build -f docker/cloud/Dockerfile -t edgemlops/cloud:latest --push .
 
 # check logs
    kubectl logs deployment/edge-processing-deployment -n default
