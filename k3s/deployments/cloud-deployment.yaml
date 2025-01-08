@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: cloud-layer
-        image: edgemlops/cloud-layer:latest
+        image: edgemlops/cloud:latest
         ports:
         - containerPort: 8080
         env:

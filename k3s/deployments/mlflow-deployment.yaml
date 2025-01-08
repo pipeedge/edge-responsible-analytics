@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: mlflow
-        image: mlflow:latest  # Make sure to use your actual MLflow image
+        image: mlflow/mlflow:latest 
         ports:
         - containerPort: 5002
         env:
