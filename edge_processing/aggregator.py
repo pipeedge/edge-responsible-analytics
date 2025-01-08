@@ -435,8 +435,15 @@ def evaluate_and_aggregate():
                             signature=infer_signature(X_val, aggregated_model.predict(X_val))
                         )
                     elif model_type in ['t5_small', 'tinybert']:
+                        # Create a pipeline for the model
+                        from transformers import Pipeline, pipeline
+                        nlp_pipeline = pipeline(
+                            task="text-classification",
+                            model=aggregated_model,
+                            tokenizer=tokenizer
+                        )
                         mlflow.transformers.log_model(
-                            aggregated_model, 
+                            nlp_pipeline,
                             "model"
                         )
     
