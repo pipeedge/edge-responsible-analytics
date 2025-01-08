@@ -113,3 +113,10 @@ kubectl label node [node_name] device-id=node-2
 kubectl get nodes --show-labels
 #### check where each pod is scheduled
 kubectl get pods -l app=edge-device -o wide
+
+
+======
+k3s
+======
+sudo k3s kubectl get nodes
+sudo k3s kubectl get pods -A

@@ -23,8 +23,8 @@ RUN pip install --upgrade pip && pip install -r requirements_edge_processing.txt
 
 # Copy application code from the 'edge' directory
 COPY edge_processing/aggregator.py \
-     edge_processing/policy_evaluator.py \
-     edge_processing/opa_config.yaml \
+     utils/policy_evaluator.py \
+     utils/opa_config.yaml \
      ./
 
 # Copy policy JSON files into /opa/policies/
