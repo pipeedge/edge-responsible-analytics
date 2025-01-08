@@ -43,8 +43,23 @@ RUN chmod 600 /app/.kaggle/kaggle.json
 # Set the Kaggle configuration directory
 ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 
+# Install OPA
+RUN curl -L -o opa https://openpolicyagent.org/downloads/v0.55.0/opa_linux_amd64_static && \
+    chmod 755 opa && \
+    mv opa /usr/local/bin
+
+# Create directory for OPA policies
+RUN mkdir -p /app/opa/policies
+
+# Copy policy files into /app/opa/policies/
+COPY opa/policies/*.rego \
+     opa/policies/*.json \
+     /app/opa/policies/
+
 # Expose necessary ports
 EXPOSE 8000 5002 8181
 
-# Command to run the aggregator
-CMD ["python3", "aggregator.py"]
+# Update CMD to run both OPA and aggregator
+COPY docker/edge_processing_server/start.sh .
+RUN chmod +x start.sh
+CMD ["./start.sh"]

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+mlflow
+prometheus-client
+numpy
+pydantic
+python-multipart
+psutil 
