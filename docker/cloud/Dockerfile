@@ -31,4 +31,4 @@ COPY utils/ ./utils/
 EXPOSE 8080 8000
 
 # Start the API server
-CMD ["python", "api_server.py"] 
+CMD ["python3", "api_server.py"] 

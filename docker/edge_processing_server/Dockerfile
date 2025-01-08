@@ -12,9 +12,8 @@ WORKDIR /app
 # Install system dependencies for building h5py
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        gcc \
-        python3-dev \
-        libhdf5-serial-dev \
+        pkg-config \
+        libhdf5-dev \
         build-essential && \
     rm -rf /var/lib/apt/lists/*
 
