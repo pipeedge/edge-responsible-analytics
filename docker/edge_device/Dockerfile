@@ -29,6 +29,8 @@ COPY edge/edge_task_processing.py \
 
 # Copy the 'datasets' directory into the Docker image
 COPY dataset/ ./dataset/
+COPY kaggle_credentials/ ./kaggle_credentials/
+
 # Copy kaggle.json into the Docker image
 COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
 # Set permissions for kaggle.json

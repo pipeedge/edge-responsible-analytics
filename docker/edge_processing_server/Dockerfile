@@ -28,6 +28,7 @@ COPY edge_processing/aggregator.py \
      ./
 
 COPY utils/ ./utils/
+COPY kaggle_credentials/ ./kaggle_credentials/
 
 # Copy policy JSON files into /opa/policies/
 COPY opa/policies/fairness_thresholds.json  \
