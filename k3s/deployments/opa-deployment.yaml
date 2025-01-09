@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: opa
-  namespace: default
   labels:
     app: opa
 spec:
@@ -15,17 +14,8 @@ spec:
       labels:
         app: opa
     spec:
-      tolerations:
-        - key: "node-role.kubernetes.io/control-plane"
-          operator: "Exists"
-          effect: "NoSchedule"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "node-role.kubernetes.io/control-plane"
-                    operator: "Exists"
+      nodeSelector:
+        node-type: processing
       containers:
         - name: opa
           image: openpolicyagent/opa:edge-static
@@ -42,18 +32,6 @@ spec:
           volumeMounts:
             - name: opa-policies
               mountPath: /policies
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8181
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8181
-            initialDelaySeconds: 15
-            periodSeconds: 20
       volumes:
         - name: opa-policies
           projected:
