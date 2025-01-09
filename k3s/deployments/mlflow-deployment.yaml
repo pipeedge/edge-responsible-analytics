@@ -26,16 +26,14 @@ spec:
                 - liang-local-server-2
                 - liang-cloud-server
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - mlflow
-              topologyKey: "kubernetes.io/hostname"
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - mlflow
+            topologyKey: "kubernetes.io/hostname"
       containers:
       - name: mlflow
         image: ghcr.io/mlflow/mlflow:v2.19.0
@@ -43,20 +41,14 @@ spec:
         args: [
           "--host", "0.0.0.0",
           "--port", "5002",
-          "--backend-store-uri", "$(BACKEND_STORE_URI)",
-          "--default-artifact-root", "$(DEFAULT_ARTIFACT_ROOT)"
+          "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
+          "--default-artifact-root", "/mlflow/artifacts"
         ]
         ports:
         - containerPort: 5002
-        env:
-        - name: BACKEND_STORE_URI
-          value: "sqlite:///mlflow.db"  # Adjust based on your database setup
-        - name: DEFAULT_ARTIFACT_ROOT
-          value: "/mlruns"
         volumeMounts:
-        - name: mlflow-data
-          mountPath: /mlruns
+        - name: mlflow-storage
+          mountPath: /mlflow
       volumes:
-      - name: mlflow-data
-        persistentVolumeClaim:
-          claimName: mlflow-pvc
+      - name: mlflow-storage
+        emptyDir: {}
