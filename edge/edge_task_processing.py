@@ -22,8 +22,7 @@ from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
 import logging
 import pandas as pd
-import numpy as np 
-from utils.model_transfer import ModelTransfer
+import numpy as np
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
