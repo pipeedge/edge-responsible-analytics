@@ -27,6 +27,8 @@ COPY edge_processing/aggregator.py \
      utils/opa_config.yaml \
      ./
 
+COPY utils/ ./utils/
+
 # Copy policy JSON files into /opa/policies/
 COPY opa/policies/fairness_thresholds.json  \
      opa/policies/reliability_thresholds.json \

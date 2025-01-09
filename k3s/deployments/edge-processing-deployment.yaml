@@ -5,7 +5,7 @@ metadata:
   labels:
     app: edge-processing
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: edge-processing
@@ -14,8 +14,25 @@ spec:
       labels:
         app: edge-processing
     spec:
-      imagePullSecrets:
-        - name: mlops
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                - liang-local-server-2
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - edge-processing
+            topologyKey: "kubernetes.io/hostname"
       containers:
       - name: edge-processing
         image: edgemlops/edge-processing-server:latest
@@ -36,16 +53,14 @@ spec:
             value: "2"
           - name: CLOUD_API_URL
             value: "http://cloud-layer-service:8080"
-      tolerations:
-        - key: "node-role.kubernetes.io/control-plane"
-          operator: "Exists"
-          effect: "NoSchedule"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "node-role.kubernetes.io/control-plane"
-                    operator: "Exists"
-      nodeSelector:
-        node-type: processing
+          - name: PYTHONPATH
+            value: "/app"
+          - name: PYTHONUNBUFFERED
+            value: "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"

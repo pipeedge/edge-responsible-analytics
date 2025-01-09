@@ -3,12 +3,10 @@ from typing import List, Dict
 import numpy as np
 from datetime import datetime
 import logging
-from utils.policy_evaluator import (
-    evaluate_fairness_policy,
-    evaluate_reliability_policy,
-    evaluate_explainability_policy,
-    evaluate_privacy_policy
-)
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
+from utils.policy_evaluator import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

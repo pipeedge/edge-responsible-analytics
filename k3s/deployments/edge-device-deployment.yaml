@@ -5,7 +5,7 @@ metadata:
   labels:
     app: edge-device
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: edge-device
@@ -24,8 +24,10 @@ spec:
                   - key: device-id
                     operator: In
                     values:
-                      - node-1
-                      - node-2
+                      - liang-edge-1
+                      - liang-edge-2
+                      - liang-edge-3
+                      - liang-edge-4
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -68,5 +70,3 @@ spec:
                 configMapKeyRef:
                   name: edge-device-config
                   key: data_type
-      nodeSelector:
-        node-type: edge
