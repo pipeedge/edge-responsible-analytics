@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mlflow
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: mlflow
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: mlflow
-        image: mlflow/mlflow:latest 
+        image: ghcr.io/mlflow/mlflow:v2.9.2
         ports:
         - containerPort: 5002
         env:
@@ -31,3 +31,5 @@ spec:
       - name: mlflow-data
         persistentVolumeClaim:
           claimName: mlflow-pvc
+      nodeSelector:
+        node-type: processing
