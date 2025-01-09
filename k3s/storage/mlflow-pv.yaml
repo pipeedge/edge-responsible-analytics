@@ -9,6 +9,7 @@ spec:
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
   hostPath:
     path: /mnt/mlflow-data
   nodeAffinity:
