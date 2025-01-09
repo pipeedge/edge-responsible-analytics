@@ -19,11 +19,11 @@ data:
 
     # default allow = false
 
-    allow {
+    allow if {
       input.explainability.metrics.explainability_score >= input.explainability.threshold.explainability_score
     }
 
-    allow {
+    allow if {
       input.explainability.metrics.attention_score >= input.explainability.threshold.attention_score
       input.explainability.metrics.interpretability_score >= input.explainability.threshold.interpretability_score
     }

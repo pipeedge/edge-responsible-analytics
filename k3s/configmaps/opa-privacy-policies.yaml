@@ -17,6 +17,6 @@ data:
 
     # default allow = false
 
-    allow {
+    allow if {
       input.privacy.k_anonymity >= input.privacy.thresholds.privacy_score
     }

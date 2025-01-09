@@ -133,12 +133,12 @@ sudo k3s kubectl apply -f k3s/configmaps/opa-explainability-policies.yaml
 sudo k3s kubectl apply -f k3s/configmaps/opa-privacy-policies.yaml
 sudo k3s kubectl apply -f k3s/configmaps/opa-aggregator-thresholds.yaml
 
-sudo k3s kubectl apply -f k3s/services/cloud-service.yaml
-sudo k3s kubectl apply -f k3s/services/edge-processing-service.yaml
-sudo k3s kubectl apply -f k3s/services/edge-device-service.yaml
-sudo k3s kubectl apply -f k3s/services/mlflow-service.yaml
-sudo k3s kubectl apply -f k3s/services/mqtt-service.yaml
-sudo k3s kubectl apply -f k3s/services/opa-service.yaml
+sudo k3s kubectl apply -f k3s/services/cloud_service.yaml
+sudo k3s kubectl apply -f k3s/services/edge_processing_service.yaml
+sudo k3s kubectl apply -f k3s/services/edge_device_service.yaml
+sudo k3s kubectl apply -f k3s/services/mlflow_service.yaml
+sudo k3s kubectl apply -f k3s/services/mqtt_service.yaml
+sudo k3s kubectl apply -f k3s/services/opa_service.yaml
 
 sudo k3s kubectl apply -f k3s/deployments/cloud-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment.yaml
@@ -152,6 +152,7 @@ sudo k3s kubectl apply -f k3s/storage/cloud-pvc.yaml
 sudo k3s kubectl apply -f k3s/storage/mlflow-pvc.yaml
 
 
+sudo k3s kubectl get services
+sudo k3s kubectl get pods --all-namespaces
 
-
-
+sudo k3s kubectl logs mlflow-7c95fd894d-564cm
