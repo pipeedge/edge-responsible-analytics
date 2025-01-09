@@ -123,3 +123,35 @@ k3s
 ======
 sudo k3s kubectl get nodes
 sudo k3s kubectl get pods -A
+
+sudo k3s kubectl apply -f k3s/configmaps/cloud-config.yaml
+sudo k3s kubectl apply -f k3s/configmaps/edge-device-config.yaml
+sudo k3s kubectl apply -f k3s/configmaps/mqtt.yaml
+sudo k3s kubectl apply -f k3s/configmaps/opa-fairness-policies.yaml
+sudo k3s kubectl apply -f k3s/configmaps/opa-reliability-policies.yaml
+sudo k3s kubectl apply -f k3s/configmaps/opa-explainability-policies.yaml
+sudo k3s kubectl apply -f k3s/configmaps/opa-privacy-policies.yaml
+sudo k3s kubectl apply -f k3s/configmaps/opa-aggregator-thresholds.yaml
+
+sudo k3s kubectl apply -f k3s/services/cloud-service.yaml
+sudo k3s kubectl apply -f k3s/services/edge-processing-service.yaml
+sudo k3s kubectl apply -f k3s/services/edge-device-service.yaml
+sudo k3s kubectl apply -f k3s/services/mlflow-service.yaml
+sudo k3s kubectl apply -f k3s/services/mqtt-service.yaml
+sudo k3s kubectl apply -f k3s/services/opa-service.yaml
+
+sudo k3s kubectl apply -f k3s/deployments/cloud-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-device-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/mlflow-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/mqtt-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/opa-deployment.yaml
+
+sudo k3s kubectl apply -f k3s/storage/cloud-pv.yaml
+sudo k3s kubectl apply -f k3s/storage/cloud-pvc.yaml
+sudo k3s kubectl apply -f k3s/storage/mlflow-pvc.yaml
+
+
+
+
+
