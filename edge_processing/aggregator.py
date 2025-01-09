@@ -64,7 +64,8 @@ received_models = {}
 lock = threading.Lock()
 
 # Load thresholds
-thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/')
+# thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/')
+thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opa/policies/')
 logger.info(f"Loading thresholds from {thresholds_path}")
 with open(os.path.join(thresholds_path,'fairness_thresholds.json')) as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
