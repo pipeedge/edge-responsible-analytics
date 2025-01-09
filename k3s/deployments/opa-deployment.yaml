@@ -72,7 +72,8 @@ spec:
                     - key: explainability.rego
                       path: explainability.rego
               - configMap:
-                  name: opa-privacy-policies                  items:
+                  name: opa-privacy-policies                  
+                  items:
                     - key: privacy_thresholds.json
                       path: privacy_thresholds.json
                     - key: privacy.rego

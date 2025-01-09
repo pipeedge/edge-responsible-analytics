@@ -99,6 +99,7 @@ sudo swapoff -a
 
 ## Build Cloud Image
    docker build -f docker/cloud/Dockerfile -t edgemlops/cloud:latest --push .
+   docker buildx build --platform linux/amd64,linux/arm64 -t edgemlops/cloud:latest -f docker/cloud/Dockerfile --push .
 
 # check logs
    kubectl logs deployment/edge-processing-deployment -n default
@@ -147,6 +148,10 @@ sudo k3s kubectl apply -f k3s/deployments/mlflow-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/mqtt-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/opa-deployment.yaml
 
+sudo k3s kubectl delete -f k3s/deployments/mlflow-deployment.yaml
+sudo k3s kubectl delete -f k3s/deployments/mqtt-deployment.yaml
+sudo k3s kubectl delete -f k3s/deployments/opa-deployment.yaml
+
 sudo k3s kubectl apply -f k3s/storage/cloud-pv.yaml
 sudo k3s kubectl apply -f k3s/storage/cloud-pvc.yaml
 sudo k3s kubectl apply -f k3s/storage/mlflow-pvc.yaml
@@ -157,6 +162,7 @@ sudo k3s kubectl get pods --all-namespaces
 
 sudo k3s kubectl logs [pod_name]
 sudo k3s kubectl describe pod [pod_name]
+sudo k3s kubectl delete pod [pod_name]
 
 # Show all pods with their node assignments
 sudo k3s kubectl get pods -o wide
