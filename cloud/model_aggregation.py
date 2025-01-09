@@ -49,9 +49,9 @@ class FederatedModelAggregator:
         X_val, y_val, sensitive_features = validation_data
         
         # Evaluate all policies
-        fairness_result = evaluate_fairness_policy(model, X_val, y_val, sensitive_features, thresholds)
-        reliability_result = evaluate_reliability_policy(model, X_val, y_val, thresholds)
-        explainability_result = evaluate_explainability_policy(model, X_val, thresholds)
+        fairness_result = evaluate_fairness_policy(model, X_val, y_val, sensitive_features, thresholds.get('fairness'))
+        reliability_result = evaluate_reliability_policy(model, X_val, y_val, thresholds.get('reliability'))
+        explainability_result = evaluate_explainability_policy(model, X_val, thresholds.get('explainability'))
         
         # Combine results
         passed_all = all([

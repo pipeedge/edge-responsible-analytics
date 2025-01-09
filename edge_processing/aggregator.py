@@ -65,6 +65,7 @@ lock = threading.Lock()
 
 # Load thresholds
 thresholds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../opa/policies/')
+logger.info(f"Loading thresholds from {thresholds_path}")
 with open(os.path.join(thresholds_path,'fairness_thresholds.json')) as f:
     fairness_thresholds = json.load(f)['fairness']['threshold']
 with open(os.path.join(thresholds_path,'explainability_thresholds.json')) as f:
@@ -762,11 +763,17 @@ def sync_with_cloud():
             
             model_b64 = base64.b64encode(model_bytes).decode('utf-8')
             
+            upload_thresholds = {
+                'fairness': fairness_thresholds,
+                'reliability': reliability_thresholds,
+                'explainability': explainability_thresholds,
+                'privacy': privacy_thresholds
+            }
             # Prepare metrics from latest evaluation
             metrics = {
                 'timestamp': datetime.now().isoformat(),
-                'model_type': model_type
-                # Add other relevant metrics here
+                'model_type': model_type,
+                'thresholds': upload_thresholds
             }
             
             # Send to cloud

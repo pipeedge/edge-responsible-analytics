@@ -31,12 +31,12 @@ COPY utils/ ./utils/
 COPY kaggle_credentials/ ./kaggle_credentials/
 COPY opa/policies/ ./opa/policies/
 
-# Copy policy JSON files into /opa/policies/
-COPY opa/policies/fairness_thresholds.json  \
-     opa/policies/reliability_thresholds.json \
-     opa/policies/explainability_thresholds.json \
-     opa/policies/privacy_thresholds.json \
-     ./
+# # Copy policy JSON files into /opa/policies/
+# COPY opa/policies/fairness_thresholds.json  \
+#      opa/policies/reliability_thresholds.json \
+#      opa/policies/explainability_thresholds.json \
+#      opa/policies/privacy_thresholds.json \
+#      ./
 
 # Copy the 'datasets' directory into the Docker image
 COPY dataset/ ./dataset/
