@@ -42,13 +42,23 @@ spec:
           "--host", "0.0.0.0",
           "--port", "5002",
           "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
-          "--default-artifact-root", "/mlflow/artifacts"
+          "--default-artifact-root", "/mlflow/artifacts",
+          "--workers", "4"
         ]
         ports:
         - containerPort: 5002
         volumeMounts:
         - name: mlflow-storage
           mountPath: /mlflow
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
       volumes:
       - name: mlflow-storage
-        emptyDir: {}
+        hostPath:
+          path: /mnt/mlflow-data
+          type: DirectoryOrCreate
