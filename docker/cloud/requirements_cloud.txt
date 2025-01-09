@@ -6,3 +6,9 @@ numpy
 pydantic
 python-multipart
 psutil 
+fairlearn
+sklearn
+tensorflow
+requests
+shap
+pyyaml

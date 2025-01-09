@@ -10,7 +10,6 @@ import threading
 import sys
 import logging
 import requests
-from dataset.chest_xray_processor import process_chest_xray_data
 import mlflow
 import mlflow.tensorflow
 from mlflow.tracking import MlflowClient
@@ -199,6 +198,7 @@ def evaluate_and_aggregate():
                     
                     if model_type == 'MobileNet':
                         if data_type == 'chest_xray':
+                            from dataset.chest_xray_processor import process_chest_xray_data
                             X_val, y_val, sensitive_features = [], [], []
                             for batch_X, batch_y, batch_sensitive in process_chest_xray_data("dataset/chest_xray/val", batch_size=32):
                                 X_val.append(batch_X)

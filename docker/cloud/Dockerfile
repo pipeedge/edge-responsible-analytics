@@ -1,5 +1,4 @@
-# Use buildx with platform specification
-FROM --platform=$TARGETPLATFORM python:3.9-slim
+FROM python:3.8-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
