@@ -1,4 +1,5 @@
-FROM python:3.8-slim
+# Use buildx with platform specification
+FROM --platform=$TARGETPLATFORM python:3.9-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -18,17 +19,11 @@ RUN apt-get update && \
 COPY docker/cloud/requirements_cloud.txt .
 RUN pip install --no-cache-dir -r requirements_cloud.txt
 
-# Copy cloud service files
-COPY cloud/api_server.py \
-     cloud/model_aggregation.py \
-     cloud/monitoring_service.py \
-     ./
-
-# Copy utils directory for policy evaluation
+# Copy application files
+COPY cloud/ ./cloud/
 COPY utils/ ./utils/
 
 # Expose ports for FastAPI and Prometheus
 EXPOSE 8080 8000
 
-# Start the API server
-CMD ["python3", "api_server.py"] 
+CMD ["python", "cloud/api_server.py"]

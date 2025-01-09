@@ -5,7 +5,7 @@ metadata:
   labels:
     app: opa
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: opa
@@ -14,21 +14,35 @@ spec:
       labels:
         app: opa
     spec:
-      nodeSelector:
-        node-type: processing
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                - liang-local-server-2
+                - liang-cloud-server
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - opa
+            topologyKey: "kubernetes.io/hostname"
       containers:
         - name: opa
           image: openpolicyagent/opa:edge-static
           args:
             - "run"
             - "--server"
-            - "--addr=0.0.0.0:8181"
-            - "--set=decision_logs.console=true"
-            - "--set=decision_logs.format=json"
-            - "--watch"
+            - "--addr=:8181"
+            - "--log-level=debug"
             - "/policies"
-          ports:
-            - containerPort: 8181
           volumeMounts:
             - name: opa-policies
               mountPath: /policies
@@ -58,8 +72,7 @@ spec:
                     - key: explainability.rego
                       path: explainability.rego
               - configMap:
-                  name: opa-privacy-policies
-                  items:
+                  name: opa-privacy-policies                  items:
                     - key: privacy_thresholds.json
                       path: privacy_thresholds.json
                     - key: privacy.rego

@@ -21,8 +21,27 @@ spec:
         - containerPort: 8080
         env:
           - name: MLFLOW_TRACKING_URI
-            value: "http://edge-processing-service:5002"
+            value: "http://mlflow:5002"
           - name: MODEL_REGISTRY_URI
-            value: "http://edge-processing-service:5002"
+            value: "http://mlflow:5002"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
       nodeSelector:
-        node-type: cloud
+        kubernetes.io/hostname: liang-cloud-server

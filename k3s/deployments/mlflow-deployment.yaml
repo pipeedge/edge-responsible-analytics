@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mlflow
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: mlflow
@@ -14,9 +14,29 @@ spec:
       labels:
         app: mlflow
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                - liang-local-server-2
+                - liang-cloud-server
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - mlflow
+            topologyKey: "kubernetes.io/hostname"
       containers:
       - name: mlflow
-        image: ghcr.io/mlflow/mlflow:v2.9.2
+        image: ghcr.io/mlflow/mlflow:v2.19.0
         ports:
         - containerPort: 5002
         env:
@@ -31,5 +51,3 @@ spec:
       - name: mlflow-data
         persistentVolumeClaim:
           claimName: mlflow-pvc
-      nodeSelector:
-        node-type: processing
