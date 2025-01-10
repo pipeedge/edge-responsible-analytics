@@ -22,8 +22,10 @@ spec:
         env:
           - name: MLFLOW_TRACKING_URI
             value: "http://mlflow-service:5002"
-          - name: MODEL_REGISTRY_URI
-            value: "http://mlflow-service:5002"
+          - name: PROMETHEUS_PORT
+            value: "8000"
+          - name: MODEL_STORAGE_PATH
+            value: "/app/models"
         livenessProbe:
           httpGet:
             path: /health

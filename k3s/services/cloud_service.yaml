@@ -3,12 +3,15 @@ kind: Service
 metadata:
   name: cloud-service
   labels:
-    app: cloud
+    app: cloud-layer
 spec:
   selector:
-    app: cloud
+    app: cloud-layer
   ports:
     - protocol: TCP
       port: 8080
       targetPort: 8080
+    - name: prometheus
+      port: 8000
+      targetPort: 8000
   type: ClusterIP
