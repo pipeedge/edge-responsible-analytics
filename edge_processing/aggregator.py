@@ -25,9 +25,6 @@ import shutil
 import tempfile
 
 from utils.policy_evaluator import *
-
-from utils.model_transfer import ModelTransfer
-
 import schedule
 from datetime import datetime
 

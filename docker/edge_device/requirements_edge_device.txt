@@ -9,3 +9,4 @@ fairlearn
 pillow
 psutil
 tf_keras
+datasets
