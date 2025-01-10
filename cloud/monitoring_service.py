@@ -1,8 +1,6 @@
 from prometheus_client import start_http_server, Gauge, Counter
-import mlflow
 import logging
 from typing import Dict
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

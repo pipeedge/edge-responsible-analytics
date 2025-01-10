@@ -6,7 +6,7 @@ import logging
 import sys
 import os
 import tempfile
-import json
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from utils.policy_evaluator import *
 
