@@ -39,7 +39,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for k8s probes"""
+    """Health check endpoint for k3s probes"""
     try:
         # Check MLflow connection
         mlflow_status = "healthy" if aggregator.check_mlflow_connection() else "unhealthy"

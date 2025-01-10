@@ -51,6 +51,10 @@ spec:
             value: "models/aggregated"
           - name: EXPECTED_DEVICES
             value: "2"
+          - name: EDGE_SERVER_ID
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
           - name: CLOUD_API_URL
             value: "http://cloud-layer-service:8080"
           - name: PYTHONPATH
