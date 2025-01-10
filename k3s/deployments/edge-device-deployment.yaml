@@ -17,15 +17,17 @@ spec:
       imagePullSecrets:
         - name: mlops
       affinity:
-        podAffinity:
+        nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - edge-processing
-              topologyKey: "kubernetes.io/hostname"
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - liang-edge-1
+                  - liang-edge-2
+                  - liang-edge-3
+                  - liang-edge-4
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
