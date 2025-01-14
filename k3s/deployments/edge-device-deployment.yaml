@@ -48,6 +48,8 @@ spec:
               memory: "1Gi"
               cpu: "500m"
           env:              
+            - name: NETWORK_INTERFACE
+              value: "eth0"
             - name: MQTT_BROKER
               value: "mosquitto-service"
             - name: MQTT_PORT

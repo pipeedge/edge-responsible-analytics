@@ -861,5 +861,5 @@ def main():
 
 if __name__ == "__main__":
     # Define expected number of devices
-    EXPECTED_DEVICES = 1  # Adjust as needed
+    # EXPECTED_DEVICES = 1  # Adjust as needed
     main()
