@@ -252,8 +252,9 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     X_train = X_train[:max_samples]
     y_train = y_train[:max_samples]
     
-    # Convert labels to indices
-    label_to_id = {label: idx for idx, label in enumerate(medical_specialties)}
+    # Clean labels and convert to indices
+    y_train = [label.strip() for label in y_train]  # Remove leading/trailing whitespace
+    label_to_id = {label: idx for idx, label in enumerate(sorted(set(medical_specialties)))}
     y_train = [label_to_id[label] for label in y_train]
     
     # Tokenize inputs
@@ -280,7 +281,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     best_loss = float('inf')
     best_accuracy = 0.0
     
-    # Train with manual loop for better memory control
+    # Training loop
     for epoch in range(epochs):
         print(f"Epoch {epoch + 1}/{epochs}")
         total_loss = 0
