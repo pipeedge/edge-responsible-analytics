@@ -121,8 +121,8 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
               f"val_loss={epoch_val_loss:.4f}, val_accuracy={epoch_val_accuracy:.4f}")
         
         # Reset metrics
-        train_acc_metric.reset_states()
-        val_acc_metric.reset_states()
+        train_acc_metric.reset_state()
+        val_acc_metric.reset_state()
         gc.collect()
     
     # Save the model
