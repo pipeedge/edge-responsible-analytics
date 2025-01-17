@@ -415,6 +415,7 @@ def task_processing(task_type, model_type, data_type):
         'type': 'training',
         'data_type': data_type,
         'data_path': train_data_path,
+        'model_type': model_type,
         'epochs': 5,  # Reduced epochs for edge devices
         'model_variant': model_type.lower(),  # For MT tasks to choose between t5/tinybert
         'samples_per_class': 50 if model_type == 'MobileNet' else None,  # For MobileNet
