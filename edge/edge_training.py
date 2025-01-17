@@ -342,14 +342,18 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     import tensorflow.keras.optimizers as tf_optimizers
     optimizer = tf_optimizers.Adam(
         learning_rate=1e-4,
-        weight_decay=0.01,  # L2 regularization
-        clipnorm=1.0,  # Gradient clipping
-        use_ema=True,  # Use exponential moving average
-        ema_momentum=0.99,
-        ema_overwrite_frequency=None
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-7,
+        clipnorm=1.0  # Keep gradient clipping for stability
     )
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    
+    # Compile the model with the optimizer
+    model.compile(
+        optimizer=optimizer,
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=['accuracy']
+    )
     
     # Training metrics
     best_loss = float('inf')
@@ -379,23 +383,16 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                     dtype=tf.int32
                 )
                 
-                # Get predictions and calculate loss
-                loss, logits = train_step(
-                    model=model,
-                    optimizer=optimizer,
-                    inputs=inputs,
-                    targets=labels,
-                    loss_fn=loss_fn
-                )
-                
-                # Update metrics
-                train_acc_metric.update_state(labels, logits)
+                # Train on batch
+                history = model.train_on_batch(inputs, labels)
+                loss = history[0]
+                accuracy = history[1]
                 
                 total_loss += loss
                 steps += 1
                 
                 if steps % 10 == 0:
-                    print(f"Step {steps}, Loss: {total_loss/steps}")
+                    print(f"Step {steps}, Loss: {total_loss/steps}, Accuracy: {accuracy}")
                 
                 # Force garbage collection
                 gc.collect()
@@ -420,30 +417,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                 # Convert labels to tensor (already numeric from label encoder)
                 labels = tf.convert_to_tensor(batch_labels, dtype=tf.int32)
                 
-                # Get predictions and calculate loss
-                loss, logits = train_step(
-                    model=model,
-                    optimizer=optimizer,
-                    inputs=inputs,
-                    targets=labels,
-                    loss_fn=loss_fn
-                )
-                
-                # Update metrics
-                train_acc_metric.update_state(labels, logits)
+                # Train on batch
+                history = model.train_on_batch(inputs, labels)
+                loss = history[0]
+                accuracy = history[1]
                 
                 total_loss += loss
                 steps += 1
                 
                 if steps % 10 == 0:
-                    print(f"Step {steps}, Loss: {total_loss/steps}")
+                    print(f"Step {steps}, Loss: {total_loss/steps}, Accuracy: {accuracy}")
                 
                 # Force garbage collection
                 gc.collect()
         
         # Calculate epoch metrics
         epoch_loss = total_loss / steps
-        epoch_accuracy = train_acc_metric.result().numpy()
+        epoch_accuracy = accuracy  # Use the last batch accuracy
         
         # Update best metrics
         if epoch_accuracy > best_accuracy:
@@ -453,8 +443,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         
         print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
         
-        # Reset metrics
-        train_acc_metric.reset_state()
+        # Force garbage collection
         gc.collect()
     
     # Save the model
