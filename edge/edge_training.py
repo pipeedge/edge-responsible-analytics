@@ -338,8 +338,16 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             print("Sample of actual labels:", y_train[:10])
             raise
     
-    # Configure optimizer and loss function with compatible settings
-    optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=1e-4)
+    # Configure optimizer and loss function with Keras 3 compatible settings
+    import tensorflow.keras.optimizers as tf_optimizers
+    optimizer = tf_optimizers.Adam(
+        learning_rate=1e-4,
+        weight_decay=0.01,  # L2 regularization
+        clipnorm=1.0,  # Gradient clipping
+        use_ema=True,  # Use exponential moving average
+        ema_momentum=0.99,
+        ema_overwrite_frequency=None
+    )
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
     
