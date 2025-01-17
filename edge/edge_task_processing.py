@@ -115,10 +115,21 @@ def process_task(task):
         results_dir = os.path.join(os.getcwd(), "inference_results")
         os.makedirs(results_dir, exist_ok=True)
         
+        # Convert predictions to JSON-serializable format
+        if isinstance(predictions, np.ndarray):
+            predictions_json = predictions.tolist()
+        elif isinstance(predictions, dict):
+            predictions_json = {
+                k: v.tolist() if isinstance(v, np.ndarray) else v 
+                for k, v in predictions.items()
+            }
+        else:
+            predictions_json = predictions
+        
         # Prepare results dictionary
         results = {
             'status': 'success',
-            'predictions': predictions.tolist() if isinstance(predictions, np.ndarray) else predictions,
+            'predictions': predictions_json,
             'model_type': task.get('model_type'),
             'data_type': data_type,
             'timestamp': datetime.now().isoformat(),
