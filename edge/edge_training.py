@@ -14,12 +14,18 @@ def train_step(model, optimizer, inputs, targets, loss_fn):
     with reduce_retracing enabled
     """
     with tf.GradientTape() as tape:
-        predictions = model(inputs, training=True)
+        # For BERT models, we need to handle the output structure
+        outputs = model(inputs, training=True)
+        if hasattr(outputs, 'logits'):
+            predictions = outputs.logits
+        else:
+            predictions = outputs
+        
         loss = loss_fn(targets, predictions)
     
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    return loss
+    return loss, predictions
 
 def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
     """
@@ -73,7 +79,7 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
         # Training steps
         for images, labels in train_generator:
             # Call train_step with all required arguments
-            loss = train_step(
+            loss, predictions = train_step(
                 model=model,
                 optimizer=optimizer,
                 inputs=images,
@@ -81,7 +87,6 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
                 loss_fn=loss_fn
             )
             
-            predictions = model(images, training=False)
             train_acc_metric.update_state(labels, predictions)
             
             total_loss += loss
@@ -201,8 +206,7 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
             )
             
             # Update metrics
-            predictions = model(batch_inputs, training=False)
-            train_acc_metric.update_state(batch_targets, predictions)
+            train_acc_metric.update_state(batch_targets, loss)
             
             total_loss += loss
             steps += 1
@@ -303,21 +307,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                     max_length=64
                 )
                 
+                # Convert gender labels to numeric
+                labels = tf.convert_to_tensor(
+                    sensitive_features['gender'].map({'male': 0, 'female': 1}).values,
+                    dtype=tf.int32
+                )
+                
                 # Get predictions and calculate loss
-                loss = train_step(
+                loss, logits = train_step(
                     model=model,
                     optimizer=optimizer,
                     inputs=inputs,
-                    targets=sensitive_features['gender'].map({'male': 0, 'female': 1}),
+                    targets=labels,
                     loss_fn=loss_fn
                 )
                 
                 # Update metrics
-                predictions = model(inputs, training=False)
-                train_acc_metric.update_state(
-                    sensitive_features['gender'].map({'male': 0, 'female': 1}),
-                    predictions.logits
-                )
+                train_acc_metric.update_state(labels, logits)
                 
                 total_loss += loss
                 steps += 1
@@ -345,18 +351,20 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                     max_length=64
                 )
                 
+                # Convert labels to tensor
+                labels = tf.convert_to_tensor(batch_labels, dtype=tf.int32)
+                
                 # Get predictions and calculate loss
-                loss = train_step(
+                loss, logits = train_step(
                     model=model,
                     optimizer=optimizer,
                     inputs=inputs,
-                    targets=batch_labels,
+                    targets=labels,
                     loss_fn=loss_fn
                 )
                 
                 # Update metrics
-                predictions = model(inputs, training=False)
-                train_acc_metric.update_state(batch_labels, predictions.logits)
+                train_acc_metric.update_state(labels, logits)
                 
                 total_loss += loss
                 steps += 1
