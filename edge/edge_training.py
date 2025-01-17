@@ -253,30 +253,59 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         X_train = X_train[:max_samples]
         y_train = y_train[:max_samples]
         
+        # Print original labels for debugging
+        print("Original medical specialties:", medical_specialties[:5], "...")
+        print("Sample original labels:", y_train[:5], "...")
+        
+        # Create standardized versions of both medical_specialties and y_train labels
+        def standardize_label(label):
+            # Remove any leading/trailing whitespace
+            label = label.strip()
+            # Replace various forms of separators with underscores
+            label = label.replace(' / ', '_').replace('/', '_').replace(' - ', '_').replace('-', '_')
+            # Replace spaces with underscores
+            label = label.replace(' ', '_')
+            return label
+        
+        # Standardize medical specialties
+        clean_specialties = [standardize_label(spec) for spec in medical_specialties]
+        # Create reverse mapping to handle variations
+        specialty_mapping = {
+            standardize_label(spec): spec for spec in medical_specialties
+        }
+        
+        # Print mappings for debugging
+        print("\nSpecialty mappings (first 5):")
+        for orig, clean in list(zip(medical_specialties, clean_specialties))[:5]:
+            print(f"{orig} -> {clean}")
+        
         # Clean labels and convert to indices
-        y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
+        y_train_clean = [standardize_label(label) for label in y_train]
         
-        # Create a clean version of medical_specialties and mapping
-        clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
+        # Create label to ID mapping
         label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
-        
-        # Print debug information
-        print(f"Number of clean specialties: {len(clean_specialties)}")
-        print(f"Number of samples before filtering: {len(y_train)}")
         
         # Convert labels to indices, handling unknown labels
         y_train_indices = []
         valid_indices = []
-        for idx, label in enumerate(y_train):
-            if label in label_to_id:
-                y_train_indices.append(label_to_id[label])
+        skipped_labels = set()
+        
+        for idx, (orig_label, clean_label) in enumerate(zip(y_train, y_train_clean)):
+            if clean_label in label_to_id:
+                y_train_indices.append(label_to_id[clean_label])
                 valid_indices.append(idx)
             else:
-                print(f"Skipping unknown label: {label}")
+                skipped_labels.add(orig_label)
+        
+        # Print summary of skipped labels
+        if skipped_labels:
+            print("\nUnique skipped labels:")
+            for label in sorted(skipped_labels):
+                print(f"- {label}")
         
         # Check if we have enough valid samples
         if len(valid_indices) < 4:  # Minimum batch size
-            raise ValueError(f"Not enough valid samples for training. Found only {len(valid_indices)} valid samples.")
+            raise ValueError(f"Not enough valid samples for training. Found only {len(valid_indices)} valid samples out of {len(y_train)}.")
         
         # Filter X_train to only include samples with valid labels
         X_train = [X_train[i] for i in valid_indices]
@@ -284,7 +313,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         # Convert to numpy arrays
         y_train_indices = np.array(y_train_indices)
         
-        print(f"Training with {len(X_train)} valid samples")
+        print(f"\nTraining with {len(X_train)} valid samples out of {len(y_train)} total samples")
+        print(f"Number of unique valid labels: {len(set(y_train_indices))}")
         
         # Tokenize inputs
         inputs = tokenizer(
@@ -312,7 +342,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         
         # Training loop
         for epoch in range(epochs):
-            print(f"Epoch {epoch + 1}/{epochs}")
+            print(f"\nEpoch {epoch + 1}/{epochs}")
             total_loss = 0
             steps = 0
             
