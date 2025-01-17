@@ -335,14 +335,14 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     
     # Configure optimizer and loss function
     import tensorflow.raw_ops as raw_ops
-    optimizer = tf.keras.optimizers.Adam(
+    # Use TensorFlow optimizer directly instead of Keras
+    optimizer = tf.optimizers.Adam(
         learning_rate=1e-4,
         beta_1=0.9,
         beta_2=0.999,
-        epsilon=1e-7
+        epsilon=1e-7,
+        name='adam_opt'  # Add explicit name to avoid conflicts
     )
-    # Convert Keras optimizer to raw TensorFlow optimizer
-    optimizer = optimizer._optimizer
     
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
