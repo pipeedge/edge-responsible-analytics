@@ -33,6 +33,9 @@ def train_step(model, optimizer, inputs, targets, loss_fn):
         for grad, var in zip(gradients, trainable_vars)
     ]
     
+    # Clip gradients
+    gradients, _ = tf.clip_by_global_norm(gradients, clip_norm=1.0)
+    
     optimizer.apply_gradients(zip(gradients, trainable_vars))
     return loss, predictions
 
@@ -254,14 +257,6 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     """
     Train TinyBERT model on edge device with memory-efficient processing.
     Handles both Medical Transcriptions and MIMIC datasets.
-    
-    Args:
-        data_path: Path to the dataset
-        epochs: Number of training epochs
-        max_samples: Maximum number of samples to use for training
-        
-    Returns:
-        Dictionary containing training metrics
     """
     print("Starting TinyBERT training on edge device...")
     
@@ -289,7 +284,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     if "mimic" in data_path.lower():
         from dataset.mimic_processor import process_mimic_data
         train_gen, val_gen = process_mimic_data(
-            batch_size=8,  # Small batch size for edge devices
+            batch_size=8,
             max_samples=max_samples
         )
         is_mimic = True
@@ -297,7 +292,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         from dataset.mt_processor import process_medical_transcriptions_data
         X_train, _, y_train, _, sf_train, _ = process_medical_transcriptions_data(
             data_path,
-            batch_size=8  # Small batch size for edge devices
+            batch_size=8
         )
         is_mimic = False
         
@@ -338,27 +333,15 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             print("Sample of actual labels:", y_train[:10])
             raise
     
-    # Configure training parameters
-    training_args = {
-        'learning_rate': 1e-4,
-        'num_train_epochs': epochs,
-        'per_device_train_batch_size': 8,
-        'per_device_eval_batch_size': 8,
-        'gradient_accumulation_steps': 1,
-        'gradient_checkpointing': True,  # Memory optimization
-        'fp16': False,  # Disable mixed precision for edge devices
-        'optim': 'adamw_torch'  # Use string identifier for optimizer
-    }
-    
-    # Update model configuration with training arguments
-    model.config.update(training_args)
-    
-    # Compile the model with string-based optimizer configuration
-    model.compile(
-        optimizer='adamw_hf',  # Use Hugging Face's AdamW optimizer
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=['accuracy']
+    # Configure optimizer and loss function
+    optimizer = tf.keras.optimizers.Adam(
+        learning_rate=1e-4,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-7
     )
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
     
     # Training metrics
     best_loss = float('inf')
@@ -388,15 +371,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                     dtype=tf.int32
                 )
                 
-                # Train on batch
-                history = model.train_on_batch(inputs, labels)
-                loss = history[0]
-                accuracy = history[1]
+                # Train step
+                loss, logits = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=inputs,
+                    targets=labels,
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                train_acc_metric.update_state(labels, logits)
                 
                 total_loss += loss
                 steps += 1
                 
                 if steps % 10 == 0:
+                    accuracy = train_acc_metric.result().numpy()
                     print(f"Step {steps}, Loss: {total_loss/steps}, Accuracy: {accuracy}")
                 
                 # Force garbage collection
@@ -422,15 +413,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                 # Convert labels to tensor (already numeric from label encoder)
                 labels = tf.convert_to_tensor(batch_labels, dtype=tf.int32)
                 
-                # Train on batch
-                history = model.train_on_batch(inputs, labels)
-                loss = history[0]
-                accuracy = history[1]
+                # Train step
+                loss, logits = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=inputs,
+                    targets=labels,
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                train_acc_metric.update_state(labels, logits)
                 
                 total_loss += loss
                 steps += 1
                 
                 if steps % 10 == 0:
+                    accuracy = train_acc_metric.result().numpy()
                     print(f"Step {steps}, Loss: {total_loss/steps}, Accuracy: {accuracy}")
                 
                 # Force garbage collection
@@ -438,7 +437,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         
         # Calculate epoch metrics
         epoch_loss = total_loss / steps
-        epoch_accuracy = accuracy  # Use the last batch accuracy
+        epoch_accuracy = train_acc_metric.result().numpy()
         
         # Update best metrics
         if epoch_accuracy > best_accuracy:
@@ -448,7 +447,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         
         print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
         
-        # Force garbage collection
+        # Reset metrics
+        train_acc_metric.reset_state()
         gc.collect()
     
     # Save the model
