@@ -334,14 +334,22 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             raise
     
     # Configure optimizer and loss function
+    import tensorflow.raw_ops as raw_ops
     optimizer = tf.keras.optimizers.Adam(
         learning_rate=1e-4,
         beta_1=0.9,
         beta_2=0.999,
         epsilon=1e-7
     )
+    # Convert Keras optimizer to raw TensorFlow optimizer
+    optimizer = optimizer._optimizer
+    
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    
+    # Create model save directory
+    model_save_dir = os.path.join(os.getcwd(), "tinybert_model")
+    os.makedirs(model_save_dir, exist_ok=True)
     
     # Training metrics
     best_loss = float('inf')
@@ -452,17 +460,17 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         gc.collect()
     
     # Save the model
-    model.save_pretrained("tinybert_model")
-    tokenizer.save_pretrained("tinybert_model")
+    model.save_pretrained(model_save_dir)
+    tokenizer.save_pretrained(model_save_dir)
     
     # Save label encoder mapping if using MT dataset
     if not is_mimic:
         import json
         label_mapping = {label: idx for idx, label in enumerate(clean_specialties)}
-        with open("tinybert_model/label_mapping.json", "w") as f:
+        with open(os.path.join(model_save_dir, "label_mapping.json"), "w") as f:
             json.dump(label_mapping, f)
         # Also save specialty mapping for reference
-        with open("tinybert_model/specialty_mapping.json", "w") as f:
+        with open(os.path.join(model_save_dir, "specialty_mapping.json"), "w") as f:
             json.dump(specialty_mapping, f)
     
     return {
