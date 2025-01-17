@@ -119,22 +119,20 @@ def process_task(task):
             if data_type in ['chest_xray', 'cxr8']:
                 from edge_training import train_mobilenet_edge
                 
-                # Get training parameters from task or use defaults
-                epochs = task.get('epochs', 2)
-                samples_per_class = task.get('samples_per_class', 50)
-                
-                # Train MobileNet with edge optimizations
                 history = train_mobilenet_edge(
                     data_path=task['data_path'],
-                    epochs=epochs,
-                    samples_per_class=samples_per_class
+                    epochs=task.get('epochs', 2),
+                    samples_per_class=task.get('samples_per_class', 50)
                 )
                 
+                # History now contains all metrics directly
                 training_metrics = {
-                    'loss': float(np.mean(history.history['loss'])),
-                    'accuracy': float(np.mean(history.history['accuracy'])),
-                    'val_loss': float(np.mean(history.history['val_loss'])),
-                    'val_accuracy': float(np.mean(history.history['val_accuracy']))
+                    'loss': history['loss'],
+                    'accuracy': history['accuracy'],
+                    'val_loss': history['val_loss'],
+                    'val_accuracy': history['val_accuracy'],
+                    'best_accuracy': history['best_accuracy'],
+                    'best_loss': history['best_loss']
                 }
                 
             elif data_type == 'mt':
@@ -175,7 +173,7 @@ def process_task(task):
             }
             
         except Exception as e:
-            logger.error(f"Training failed: {str(e)}")
+            logger.error(f"Training failed: {e}")
             return {
                 'status': 'failed',
                 'error': str(e)

@@ -42,22 +42,27 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
         shuffle=True
     )
     
+    val_generator = datagen.flow_from_directory(
+        data_path,
+        target_size=(224, 224),
+        batch_size=batch_size,
+        class_mode='binary',
+        subset='validation',
+        shuffle=False
+    )
+    
     # Create the model
     model = load_mobilenet_model()
-    
-    # Define the training step
-    @tf.function(reduce_retracing=True)
-    def train_step(images, labels):
-        with tf.GradientTape() as tape:
-            predictions = model(images, training=True)
-            loss = loss_fn(labels, predictions)
-        gradients = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-        return loss
     
     # Configure training
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
     loss_fn = tf.keras.losses.BinaryCrossentropy()
+    train_acc_metric = tf.keras.metrics.BinaryAccuracy()
+    val_acc_metric = tf.keras.metrics.BinaryAccuracy()
+    
+    # Training metrics
+    best_loss = float('inf')
+    best_accuracy = 0.0
     
     # Training loop
     for epoch in range(epochs):
@@ -65,20 +70,61 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
         total_loss = 0
         steps = 0
         
+        # Training steps
         for images, labels in train_generator:
             loss = train_step(images, labels)
+            predictions = model(images, training=False)
+            train_acc_metric.update_state(labels, predictions)
+            
             total_loss += loss
             steps += 1
             
             if steps % 10 == 0:
                 print(f"Step {steps}, Loss: {total_loss/steps}")
             
-            if steps * batch_size >= samples_per_class * 2:  # For binary classification
+            if steps * batch_size >= samples_per_class * 2:
                 break
         
+        # Validation steps
+        val_loss = 0
+        val_steps = 0
+        for val_images, val_labels in val_generator:
+            val_predictions = model(val_images, training=False)
+            val_loss += loss_fn(val_labels, val_predictions)
+            val_acc_metric.update_state(val_labels, val_predictions)
+            val_steps += 1
+            
+            if val_steps * batch_size >= samples_per_class:
+                break
+        
+        # Calculate epoch metrics
+        epoch_loss = total_loss / steps
+        epoch_accuracy = train_acc_metric.result().numpy()
+        epoch_val_loss = val_loss / val_steps
+        epoch_val_accuracy = val_acc_metric.result().numpy()
+        
+        # Update best metrics
+        if epoch_val_accuracy > best_accuracy:
+            best_accuracy = epoch_val_accuracy
+        if epoch_val_loss < best_loss:
+            best_loss = epoch_val_loss
+        
+        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}, "
+              f"val_loss={epoch_val_loss:.4f}, val_accuracy={epoch_val_accuracy:.4f}")
+        
+        # Reset metrics
+        train_acc_metric.reset_states()
+        val_acc_metric.reset_states()
         gc.collect()
     
-    return total_loss / steps
+    return {
+        'loss': float(epoch_loss),
+        'accuracy': float(epoch_accuracy),
+        'val_loss': float(epoch_val_loss),
+        'val_accuracy': float(epoch_val_accuracy),
+        'best_accuracy': float(best_accuracy),
+        'best_loss': float(best_loss)
+    }
 
 def train_t5_edge(data_path, epochs=5, max_samples=200):
     print("Starting T5 training on edge device...")
