@@ -338,19 +338,24 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             print("Sample of actual labels:", y_train[:10])
             raise
     
-    # Configure optimizer and loss function with Keras 3 compatible settings
-    import tensorflow.keras.optimizers as tf_optimizers
-    optimizer = tf_optimizers.Adam(
-        learning_rate=1e-4,
-        beta_1=0.9,
-        beta_2=0.999,
-        epsilon=1e-7,
-        clipnorm=1.0  # Keep gradient clipping for stability
-    )
+    # Configure training parameters
+    training_args = {
+        'learning_rate': 1e-4,
+        'num_train_epochs': epochs,
+        'per_device_train_batch_size': 8,
+        'per_device_eval_batch_size': 8,
+        'gradient_accumulation_steps': 1,
+        'gradient_checkpointing': True,  # Memory optimization
+        'fp16': False,  # Disable mixed precision for edge devices
+        'optim': 'adamw_torch'  # Use string identifier for optimizer
+    }
     
-    # Compile the model with the optimizer
+    # Update model configuration with training arguments
+    model.config.update(training_args)
+    
+    # Compile the model with string-based optimizer configuration
     model.compile(
-        optimizer=optimizer,
+        optimizer='adamw_hf',  # Use Hugging Face's AdamW optimizer
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=['accuracy']
     )
