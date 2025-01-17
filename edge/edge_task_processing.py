@@ -2,6 +2,15 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("edge_device.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
+
 import tensorflow as tf
 def configure_memory_settings():
     """Configure TensorFlow for memory-efficient training on edge devices"""
@@ -72,15 +81,6 @@ model = None
 # Set up MLflow tracking
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler("edge_device.log"),
-                        logging.StreamHandler()
-                    ])
-logger = logging.getLogger(__name__)
 
 def process_task(task):
     """
