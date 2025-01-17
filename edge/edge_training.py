@@ -279,6 +279,14 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         X_train = X_train[:max_samples]
         y_train = y_train[:max_samples]
         sf_train = sf_train[:max_samples]
+        
+        # Create label encoder for medical specialties
+        from sklearn.preprocessing import LabelEncoder
+        label_encoder = LabelEncoder()
+        # Fit encoder on all possible medical specialties to ensure consistent mapping
+        label_encoder.fit(medical_specialties)
+        # Transform the labels
+        y_train_encoded = label_encoder.transform(y_train)
     
     # Configure optimizer and loss function
     optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
@@ -340,7 +348,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             batch_size = 8
             for i in range(0, len(X_train), batch_size):
                 batch_texts = X_train[i:i + batch_size]
-                batch_labels = y_train[i:i + batch_size]
+                batch_labels = y_train_encoded[i:i + batch_size]  # Use encoded labels
                 
                 # Tokenize batch
                 inputs = tokenizer(
@@ -351,7 +359,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                     max_length=64
                 )
                 
-                # Convert labels to tensor
+                # Convert labels to tensor (already numeric from label encoder)
                 labels = tf.convert_to_tensor(batch_labels, dtype=tf.int32)
                 
                 # Get predictions and calculate loss
@@ -394,6 +402,13 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     # Save the model
     model.save_pretrained("tinybert_model")
     tokenizer.save_pretrained("tinybert_model")
+    
+    # Save label encoder mapping if using MT dataset
+    if not is_mimic:
+        import json
+        label_mapping = {label: idx for idx, label in enumerate(label_encoder.classes_)}
+        with open("tinybert_model/label_mapping.json", "w") as f:
+            json.dump(label_mapping, f)
     
     return {
         'loss': float(epoch_loss),
