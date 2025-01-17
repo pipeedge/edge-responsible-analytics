@@ -38,7 +38,8 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # MLflow Configuration
-mlflow.set_tracking_uri("http://mlflow-service:5002")  # Adjust if MLflow runs on a different host/port
+mlflow.set_tracking_uri("http://10.200.3.159:5002")
+# mlflow.set_tracking_uri("http://mlflow-service:5002") 
 mlflow.set_experiment("Model_Evaluation")
 # Initialize MLflow client
 mlflow_client = MlflowClient()
