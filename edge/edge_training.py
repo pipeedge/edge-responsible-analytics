@@ -252,46 +252,21 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     X_train = X_train[:max_samples]
     y_train = y_train[:max_samples]
     
-    # Define label mapping for actual dataset labels to our standardized labels
-    label_mapping = {
-        'Cardiovascular_Pulmonary': 'Cardiovascular',
-        'SOAP_Chart_Progress Notes': 'SOAP',
-        'Consult - History and Phy.': 'Consult',
-        'Physical Medicine - Rehab': 'Physical Medicine',
-        'Discharge Summary': 'Discharge',
-        'Emergency Room Reports': 'Emergency',
-        'Obstetrics_Gynecology': 'Gynecology',
-        'Pediatrics - Neonatal': 'Pediatrics',
-        'Hematology - Oncology': 'Hematology',
-        'Psychiatry_Psychology': 'Psychiatry',
-        'ENT - Otolaryngology': 'ENT',
-        'Hospice - Palliative Care': 'Hospice',
-        'IME-QME-Work Comp etc.': 'IME-QME'
-    }
+    # Clean labels and convert to indices
+    y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
     
-    # Clean and map labels
-    y_train = [label.strip() for label in y_train]
-    y_train = [label_mapping.get(label, label) for label in y_train]
+    # Create a clean version of medical_specialties
+    clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
+    label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
     
-    # Create label to id mapping using our standard medical_specialties
-    label_to_id = {label.strip(): idx for idx, label in enumerate(medical_specialties)}
-    
-    # Convert labels to indices with error handling
+    # Convert labels to indices, with error handling
     y_train_indices = []
-    X_train_filtered = []
-    
-    for x, label in zip(X_train, y_train):
-        if label in label_to_id:
-            y_train_indices.append(label_to_id[label])
-            X_train_filtered.append(x)
-        else:
-            print.warning(f"Skipping unknown label: {label}")
-    
-    if not y_train_indices:
-        raise ValueError("No valid labels found in the dataset")
-    
-    # Update X_train to only include samples with valid labels
-    X_train = X_train_filtered
+    for label in y_train:
+        if label not in label_to_id:
+            print(f"Unknown label encountered: {label}")
+            # Use a default label or skip the sample
+            continue
+        y_train_indices.append(label_to_id[label])
     
     # Tokenize inputs
     inputs = tokenizer(
@@ -324,19 +299,20 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         steps = 0
         
         for batch_inputs, batch_labels in dataset:
-            with tf.GradientTape() as tape:
-                outputs = model(batch_inputs, training=True)
-                loss = loss_fn(batch_labels, outputs.logits)
-            
-            gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-            
-            total_loss += loss
-            steps += 1
+            loss = train_step(
+                model=model,
+                optimizer=optimizer,
+                inputs=batch_inputs,
+                targets=batch_labels,
+                loss_fn=loss_fn
+            )
             
             # Update metrics
             predictions = model(batch_inputs, training=False)
             train_acc_metric.update_state(batch_labels, predictions.logits)
+            
+            total_loss += loss
+            steps += 1
             
             if steps % 10 == 0:
                 print(f"Step {steps}, Loss: {total_loss/steps}")
