@@ -23,8 +23,17 @@ def train_step(model, optimizer, inputs, targets, loss_fn):
         
         loss = loss_fn(targets, predictions)
     
-    gradients = tape.gradient(loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+    # Clean variable names to avoid optimizer issues
+    trainable_vars = model.trainable_variables
+    gradients = tape.gradient(loss, trainable_vars)
+    
+    # Clean gradients of any None values
+    gradients = [
+        tf.zeros_like(var) if grad is None else grad
+        for grad, var in zip(gradients, trainable_vars)
+    ]
+    
+    optimizer.apply_gradients(zip(gradients, trainable_vars))
     return loss, predictions
 
 def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
@@ -259,6 +268,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     # Load model and tokenizer with memory-efficient settings
     model, tokenizer = load_bert_model()
     
+    # Create a clean mapping for medical specialties
+    specialty_mapping = {
+        'Cardiovascular / Pulmonary': 'Cardiovascular',
+        'SOAP / Chart / Progress Notes': 'Office Notes',
+        'Consult - History and Phy.': 'Consult',
+        'Physical Medicine - Rehab': 'Physical Medicine',
+        'Discharge Summary': 'Discharge',
+        'Emergency Room Reports': 'Emergency',
+        'Obstetrics / Gynecology': 'Obstetrics',
+        'Pediatrics - Neonatal': 'Pediatrics',
+        'Hematology - Oncology': 'Hematology',
+        'Psychiatry / Psychology': 'Psychiatry',
+        'ENT - Otolaryngology': 'ENT',
+        'Hospice - Palliative Care': 'Hospice',
+        'IME-QME-Work Comp etc.': 'IME-QME'
+    }
+    
     # Determine dataset type and load appropriate data
     if "mimic" in data_path.lower():
         from dataset.mimic_processor import process_mimic_data
@@ -283,6 +309,9 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         # Clean labels by stripping whitespace and standardizing format
         y_train = [label.strip() for label in y_train]
         clean_specialties = [specialty.strip() for specialty in medical_specialties]
+        
+        # Map specialties using the specialty_mapping
+        y_train = [specialty_mapping.get(label, label) for label in y_train]
         
         # Create label encoder for medical specialties
         from sklearn.preprocessing import LabelEncoder
@@ -309,8 +338,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             print("Sample of actual labels:", y_train[:10])
             raise
     
-    # Configure optimizer and loss function
-    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+    # Configure optimizer and loss function with compatible settings
+    optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=1e-4)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
     
@@ -430,6 +459,9 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         label_mapping = {label: idx for idx, label in enumerate(clean_specialties)}
         with open("tinybert_model/label_mapping.json", "w") as f:
             json.dump(label_mapping, f)
+        # Also save specialty mapping for reference
+        with open("tinybert_model/specialty_mapping.json", "w") as f:
+            json.dump(specialty_mapping, f)
     
     return {
         'loss': float(epoch_loss),
