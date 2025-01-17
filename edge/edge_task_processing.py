@@ -128,10 +128,16 @@ def process_task(task):
             # Handle different types of prediction outputs
             if isinstance(predictions, dict):
                 # For CXR8 data that includes sensitive features
-                inference_results['predictions'] = predictions['predictions'].tolist() if isinstance(predictions['predictions'], np.ndarray) else predictions['predictions']
+                if isinstance(predictions['predictions'], pd.DataFrame):
+                    inference_results['predictions'] = predictions['predictions'].to_dict(orient='records')
+                else:
+                    inference_results['predictions'] = predictions['predictions'].tolist() if isinstance(predictions['predictions'], np.ndarray) else predictions['predictions']
                 inference_results['sensitive_features'] = predictions.get('sensitive_features', {})
             else:
-                inference_results['predictions'] = predictions.tolist() if isinstance(predictions, np.ndarray) else predictions
+                if isinstance(predictions, pd.DataFrame):
+                    inference_results['predictions'] = predictions.to_dict(orient='records')
+                else:
+                    inference_results['predictions'] = predictions.tolist() if isinstance(predictions, np.ndarray) else predictions
             
             # Create results directory if it doesn't exist
             results_dir = os.path.join(os.getcwd(), "inference_results")
