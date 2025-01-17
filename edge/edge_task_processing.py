@@ -50,7 +50,6 @@ import tarfile  # Add tarfile for tar operations
 #import mlflow
 import tensorflow as tf
 from edge_infer import perform_inference, process_inference_results
-from edge_training import train_model
 from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
 import pandas as pd
