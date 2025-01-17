@@ -261,18 +261,30 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         def standardize_label(label):
             # Remove any leading/trailing whitespace
             label = label.strip()
-            # Replace various forms of separators with underscores
-            label = label.replace(' / ', '_').replace('/', '_').replace(' - ', '_').replace('-', '_')
+            # Take only the first part of compound labels (before any separator)
+            label = label.split('/')[0].split('-')[0].strip()
             # Replace spaces with underscores
             label = label.replace(' ', '_')
             return label
         
+        # Create mapping for special cases
+        special_cases = {
+            'Cardiovascular / Pulmonary': 'Cardiovascular',
+            'Consult - History and Phy.': 'Consult',
+            'SOAP / Chart / Progress Notes': 'General',
+            'Physical Medicine - Rehab': 'Physical_Medicine',
+            'Obstetrics / Gynecology': 'Obstetrics',
+            'Pediatrics - Neonatal': 'Pediatrics',
+            'ENT - Otolaryngology': 'ENT',
+            'Hematology - Oncology': 'Hematology',
+            'Hospice - Palliative Care': 'Hospice',
+            'IME-QME-Work Comp etc.': 'General',
+            'Emergency Room Reports': 'Emergency',
+            'Discharge Summary': 'General'
+        }
+        
         # Standardize medical specialties
         clean_specialties = [standardize_label(spec) for spec in medical_specialties]
-        # Create reverse mapping to handle variations
-        specialty_mapping = {
-            standardize_label(spec): spec for spec in medical_specialties
-        }
         
         # Print mappings for debugging
         print("\nSpecialty mappings (first 5):")
@@ -280,10 +292,18 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             print(f"{orig} -> {clean}")
         
         # Clean labels and convert to indices
-        y_train_clean = [standardize_label(label) for label in y_train]
+        y_train_clean = []
+        for label in y_train:
+            if label in special_cases:
+                y_train_clean.append(special_cases[label])
+            else:
+                y_train_clean.append(standardize_label(label))
         
         # Create label to ID mapping
-        label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
+        unique_labels = sorted(set(clean_specialties))
+        label_to_id = {label: idx for idx, label in enumerate(unique_labels)}
+        
+        print("\nValid labels:", unique_labels)
         
         # Convert labels to indices, handling unknown labels
         y_train_indices = []
