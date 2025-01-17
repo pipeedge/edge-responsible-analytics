@@ -260,6 +260,10 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
         label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
         
+        # Print debug information
+        print(f"Number of clean specialties: {len(clean_specialties)}")
+        print(f"Number of samples before filtering: {len(y_train)}")
+        
         # Convert labels to indices, handling unknown labels
         y_train_indices = []
         valid_indices = []
@@ -267,6 +271,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             if label in label_to_id:
                 y_train_indices.append(label_to_id[label])
                 valid_indices.append(idx)
+            else:
+                print(f"Skipping unknown label: {label}")
         
         # Check if we have enough valid samples
         if len(valid_indices) < 4:  # Minimum batch size
@@ -356,6 +362,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         tokenizer.save_pretrained("tinybert_model")
         
         return {
+            'status': 'success',
+            'model_type': 'tinybert',
             'loss': float(epoch_loss),
             'accuracy': float(epoch_accuracy),
             'best_accuracy': float(best_accuracy),
@@ -366,6 +374,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         print(f"Training failed with error: {str(e)}")
         return {
             'status': 'failed',
+            'model_type': 'tinybert',
             'error': str(e)
         }
 
