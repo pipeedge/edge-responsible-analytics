@@ -115,21 +115,14 @@ def process_task(task):
         results_dir = os.path.join(os.getcwd(), "inference_results")
         os.makedirs(results_dir, exist_ok=True)
         
-        # Convert predictions to JSON-serializable format
-        if isinstance(predictions, np.ndarray):
-            predictions_json = predictions.tolist()
-        elif isinstance(predictions, dict):
-            predictions_json = {
-                k: v.tolist() if isinstance(v, np.ndarray) else v 
-                for k, v in predictions.items()
-            }
-        else:
-            predictions_json = predictions
+        if isinstance(predictions, dict):
+            # For CXR8 data that includes sensitive features
+            return predictions['predictions']
         
         # Prepare results dictionary
         results = {
             'status': 'success',
-            'predictions': predictions_json,
+            'predictions': np.mean(predictions),
             'model_type': task.get('model_type'),
             'data_type': data_type,
             'timestamp': datetime.now().isoformat(),
@@ -151,9 +144,6 @@ def process_task(task):
             
         logger.info(f"Inference results saved to {results_file}")
         
-        if isinstance(predictions, dict):
-            # For CXR8 data that includes sensitive features
-            return predictions['predictions']
         return predictions
             
     elif task['type'] == 'training':
