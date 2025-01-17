@@ -54,6 +54,7 @@ from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -156,18 +157,64 @@ def process_task(task):
                         max_samples=task.get('max_samples', 300)
                     )
             
-            return {
+            # Save training results to JSON
+            results = {
                 'status': 'success',
                 'metrics': training_metrics,
+                'model_type': task['model_type'],
+                'data_type': data_type,
+                'timestamp': datetime.now().isoformat(),
+                'device_id': DEVICE_ID,
+                'task_config': {
+                    'epochs': task.get('epochs', 5),
+                    'max_samples': task.get('max_samples'),
+                    'samples_per_class': task.get('samples_per_class'),
+                    'model_variant': task.get('model_variant', 'tinybert')
+                }
+            }
+            
+            # Create results directory if it doesn't exist
+            results_dir = os.path.join(os.getcwd(), "training_results")
+            os.makedirs(results_dir, exist_ok=True)
+            
+            # Save results to JSON file with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            results_file = os.path.join(
+                results_dir, 
+                f"training_results_{data_type}_{task['model_type']}_{timestamp}.json"
+            )
+            
+            with open(results_file, 'w') as f:
+                json.dump(results, f, indent=2)
+            
+            logger.info(f"Training results saved to {results_file}")
+            
+            return results
+            
+        except Exception as e:
+            error_result = {
+                'status': 'failed',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat(),
+                'device_id': DEVICE_ID,
+                'data_type': data_type,
                 'model_type': task['model_type']
             }
             
-        except Exception as e:
-            logger.error(f"Training failed: {e}")
-            return {
-                'status': 'failed',
-                'error': str(e)
-            }
+            # Save error results
+            results_dir = os.path.join(os.getcwd(), "training_results")
+            os.makedirs(results_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            error_file = os.path.join(
+                results_dir,
+                f"training_error_{data_type}_{task['model_type']}_{timestamp}.json"
+            )
+            
+            with open(error_file, 'w') as f:
+                json.dump(error_result, f, indent=2)
+                
+            logger.error(f"Training error saved to {error_file}")
+            return error_result
     else:
         return "Unknown task type"
 
