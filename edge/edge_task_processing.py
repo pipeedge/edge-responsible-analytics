@@ -4,22 +4,26 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 
 import tensorflow as tf
 def configure_memory_settings():
-    """Configure TensorFlow for memory-efficient training on Raspberry Pi"""
-    # Limit TensorFlow memory growth
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-    
-    # Limit CPU memory usage
-    tf.config.threading.set_inter_op_parallelism_threads(2)
-    tf.config.threading.set_intra_op_parallelism_threads(2)
-    
-    # Set memory limit (adjust based on your Pi's RAM)
-    tf.config.set_logical_device_configuration(
-        tf.config.list_physical_devices('CPU')[0],
-        [tf.config.LogicalDeviceConfiguration(memory_limit=1024)])
-    
+    """Configure TensorFlow for memory-efficient training on edge devices"""
+    try:
+        # Limit TensorFlow memory growth for GPUs if available
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        
+        # Limit CPU memory usage through thread settings
+        tf.config.threading.set_inter_op_parallelism_threads(2)
+        tf.config.threading.set_intra_op_parallelism_threads(2)
+        
+        # Remove the unsupported CPU memory limit configuration
+        # Instead, use soft device placement
+        tf.config.set_soft_device_placement(True)
+        
+        logger.info("Memory settings configured successfully")
+    except Exception as e:
+        logger.warning(f"Error configuring memory settings: {e}")
+
 configure_memory_settings()
 
 import paho.mqtt.client as mqtt
