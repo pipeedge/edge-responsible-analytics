@@ -2,6 +2,26 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 
+import tensorflow as tf
+def configure_memory_settings():
+    """Configure TensorFlow for memory-efficient training on Raspberry Pi"""
+    # Limit TensorFlow memory growth
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    
+    # Limit CPU memory usage
+    tf.config.threading.set_inter_op_parallelism_threads(2)
+    tf.config.threading.set_intra_op_parallelism_threads(2)
+    
+    # Set memory limit (adjust based on your Pi's RAM)
+    tf.config.set_logical_device_configuration(
+        tf.config.list_physical_devices('CPU')[0],
+        [tf.config.LogicalDeviceConfiguration(memory_limit=1024)])
+    
+configure_memory_settings()
+
 import paho.mqtt.client as mqtt
 import json
 import threading
@@ -93,10 +113,6 @@ def process_task(task):
         return predictions
     elif task['type'] == 'training':
         try:
-            # Configure memory settings for edge device
-            from edge_training import configure_memory_settings
-            configure_memory_settings()
-            
             # Map data_type to appropriate training function and parameters
             if data_type in ['chest_xray', 'cxr8']:
                 from edge_training import train_mobilenet_edge
@@ -250,10 +266,13 @@ client.on_message = on_message
 
 # Connect to MQTT Broker
 def connect_mqtt():
-    print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-    client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-    client.subscribe(MQTT_TOPIC_AGGREGATED)
-    print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+    try:
+        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+    except Exception as e:
+        logger.exception(f"Failed to connect to MQTT broker: {e}")
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
@@ -262,11 +281,6 @@ def mqtt_loop():
 # Task processing function
 def task_processing(task_type, model_type, data_type):
     global model
-    
-    # Configure TensorFlow memory settings for edge device
-    from edge_training import configure_memory_settings
-    configure_memory_settings()
-    
     # Map model_type to data paths
     if model_type == 'MobileNet':
         if data_type == 'chest_xray':
