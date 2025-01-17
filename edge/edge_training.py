@@ -255,18 +255,23 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     # Clean labels and convert to indices
     y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
     
-    # Create a clean version of medical_specialties
+    # Create a clean version of medical_specialties and mapping
     clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
     label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
     
-    # Convert labels to indices, with error handling
+    # Convert labels to indices, handling unknown labels
     y_train_indices = []
-    for label in y_train:
-        if label not in label_to_id:
-            print(f"Unknown label encountered: {label}")
-            # Use a default label or skip the sample
-            continue
-        y_train_indices.append(label_to_id[label])
+    valid_indices = []
+    for idx, label in enumerate(y_train):
+        if label in label_to_id:
+            y_train_indices.append(label_to_id[label])
+            valid_indices.append(idx)
+    
+    # Filter X_train to only include samples with valid labels
+    X_train = [X_train[i] for i in valid_indices]
+    
+    # Convert to numpy arrays
+    y_train_indices = np.array(y_train_indices)
     
     # Tokenize inputs
     inputs = tokenizer(
@@ -277,10 +282,10 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         return_tensors="tf"
     )
     
-    # Create dataset
+    # Create dataset with matching dimensions
     dataset = tf.data.Dataset.from_tensor_slices((
         dict(inputs),
-        tf.constant(y_train_indices)
+        y_train_indices
     )).shuffle(100).batch(4)
     
     # Configure optimizer and metrics
@@ -318,7 +323,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                 print(f"Step {steps}, Loss: {total_loss/steps}")
         
         # Calculate epoch metrics
-        epoch_loss = total_loss / steps
+        epoch_loss = total_loss / steps if steps > 0 else float('inf')
         epoch_accuracy = train_acc_metric.result().numpy()
         
         # Update best metrics
