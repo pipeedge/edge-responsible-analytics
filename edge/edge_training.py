@@ -72,7 +72,15 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
         
         # Training steps
         for images, labels in train_generator:
-            loss = train_step(images, labels)
+            # Call train_step with all required arguments
+            loss = train_step(
+                model=model,
+                optimizer=optimizer,
+                inputs=images,
+                targets=labels,
+                loss_fn=loss_fn
+            )
+            
             predictions = model(images, training=False)
             train_acc_metric.update_state(labels, predictions)
             
@@ -116,6 +124,9 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
         train_acc_metric.reset_states()
         val_acc_metric.reset_states()
         gc.collect()
+    
+    # Save the model
+    model.save('mobilenet_model.keras')
     
     return {
         'loss': float(epoch_loss),
