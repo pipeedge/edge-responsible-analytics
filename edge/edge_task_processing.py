@@ -115,13 +115,14 @@ def process_task(task):
         return predictions
     elif task['type'] == 'training':
         try:
-            # Map data_type to appropriate training function and parameters
+            training_metrics = None
+            
             if data_type in ['chest_xray', 'cxr8']:
                 from edge_training import train_mobilenet_edge
                 
                 history = train_mobilenet_edge(
                     data_path=task['data_path'],
-                    epochs=task.get('epochs', 2),
+                    epochs=task.get('epochs', 5),
                     samples_per_class=task.get('samples_per_class', 50)
                 )
                 
@@ -141,35 +142,24 @@ def process_task(task):
                 
                 if model_variant == 't5':
                     from edge_training import train_t5_edge
-                    epochs = task.get('epochs', 1)
-                    max_samples = task.get('max_samples', 100)
-                    
-                    loss = train_t5_edge(
+                    training_metrics = train_t5_edge(
                         data_path=task['data_path'],
-                        epochs=epochs,
-                        max_samples=max_samples
+                        epochs=task.get('epochs', 5),
+                        max_samples=task.get('max_samples', 200)
                     )
-                    training_metrics = {'loss': float(loss)}
                     
                 else:  # tinybert
                     from edge_training import train_bert_edge
-                    epochs = task.get('epochs', 1)
-                    max_samples = task.get('max_samples', 150)
-                    
-                    loss = train_bert_edge(
+                    training_metrics = train_bert_edge(
                         data_path=task['data_path'],
-                        epochs=epochs,
-                        max_samples=max_samples
+                        epochs=task.get('epochs', 5),
+                        max_samples=task.get('max_samples', 300)
                     )
-                    training_metrics = {'loss': float(loss)}
-            
-            # Clean up memory after training
-            gc.collect()
             
             return {
                 'status': 'success',
                 'metrics': training_metrics,
-                'model_type': data_type
+                'model_type': task['model_type']
             }
             
         except Exception as e:

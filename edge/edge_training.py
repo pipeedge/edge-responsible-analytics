@@ -179,6 +179,11 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
     # Configure optimizer with low learning rate
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    
+    # Training metrics
+    best_loss = float('inf')
+    best_accuracy = 0.0
     
     # Training loop with reduced retracing
     for epoch in range(epochs):
@@ -187,18 +192,50 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
         steps = 0
         
         for batch_inputs, batch_targets in dataset:
-            # Use the pre-defined training step
-            loss = train_step(model, optimizer, batch_inputs, batch_targets, loss_fn)
+            loss = train_step(
+                model=model,
+                optimizer=optimizer,
+                inputs=batch_inputs,
+                targets=batch_targets,
+                loss_fn=loss_fn
+            )
+            
+            # Update metrics
+            predictions = model(batch_inputs, training=False)
+            train_acc_metric.update_state(batch_targets, predictions)
+            
             total_loss += loss
             steps += 1
             
             if steps % 10 == 0:
                 print(f"Step {steps}, Loss: {total_loss/steps}")
         
-        # Clear memory after each epoch
-        gc.collect()
+        # Calculate epoch metrics
+        epoch_loss = total_loss / steps
+        epoch_accuracy = train_acc_metric.result().numpy()
         
-    return total_loss / steps
+        # Update best metrics
+        if epoch_accuracy > best_accuracy:
+            best_accuracy = epoch_accuracy
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            
+        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
+        
+        # Reset metrics
+        train_acc_metric.reset_state()
+        gc.collect()
+    
+    # Save the model
+    model.save_pretrained("t5_small")
+    tokenizer.save_pretrained("t5_small")
+    
+    return {
+        'loss': float(epoch_loss),
+        'accuracy': float(epoch_accuracy),
+        'best_accuracy': float(best_accuracy),
+        'best_loss': float(best_loss)
+    }
 
 def train_bert_edge(data_path, epochs=5, max_samples=300):
     print("Starting TinyBERT training on edge device...")
@@ -234,9 +271,14 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         tf.constant(y_train)
     )).shuffle(100).batch(4)
     
-    # Configure optimizer with low learning rate
+    # Configure optimizer and metrics
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    
+    # Training metrics
+    best_loss = float('inf')
+    best_accuracy = 0.0
     
     # Train with manual loop for better memory control
     for epoch in range(epochs):
@@ -244,34 +286,53 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         total_loss = 0
         steps = 0
         
-        for batch in dataset:
-            batch_inputs, batch_labels = batch
+        for batch_inputs, batch_labels in dataset:
+            loss = train_step(
+                model=model,
+                optimizer=optimizer,
+                inputs=batch_inputs,
+                targets=batch_labels,
+                loss_fn=loss_fn
+            )
             
-            with tf.GradientTape() as tape:
-                outputs = model(batch_inputs, training=True)
-                loss = loss_fn(batch_labels, outputs.logits)
+            # Update metrics
+            predictions = model(batch_inputs, training=False)
+            train_acc_metric.update_state(batch_labels, predictions.logits)
             
-            gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-            
-            total_loss += loss.numpy()
+            total_loss += loss
             steps += 1
             
             if steps % 10 == 0:
                 print(f"Step {steps}, Loss: {total_loss/steps}")
+        
+        # Calculate epoch metrics
+        epoch_loss = total_loss / steps
+        epoch_accuracy = train_acc_metric.result().numpy()
+        
+        # Update best metrics
+        if epoch_accuracy > best_accuracy:
+            best_accuracy = epoch_accuracy
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
             
-            # Clear memory
-            gc.collect()
+        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
+        
+        # Reset metrics
+        train_acc_metric.reset_state()
+        gc.collect()
     
     # Save the model
     model.save_pretrained("tinybert_model")
     tokenizer.save_pretrained("tinybert_model")
-    return total_loss/steps
-
-if __name__ == "__main__":
-    # Configure memory settings
-    configure_memory_settings()
     
+    return {
+        'loss': float(epoch_loss),
+        'accuracy': float(epoch_accuracy),
+        'best_accuracy': float(best_accuracy),
+        'best_loss': float(best_loss)
+    }
+
+if __name__ == "__main__":  
     # Train MobileNet
     chest_xray_path = "dataset/chest_xray/train"
     history_mobilenet = train_mobilenet_edge(
