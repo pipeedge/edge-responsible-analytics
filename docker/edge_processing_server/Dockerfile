@@ -22,11 +22,12 @@ COPY docker/edge_processing_server/requirements_edge_processing.txt .
 RUN pip install --upgrade pip && pip install -r requirements_edge_processing.txt
 
 # Copy application code from the 'edge' directory
-COPY edge_processing/aggregator.py \
-     utils/policy_evaluator.py \
-     utils/opa_config.yaml \
-     ./
+# COPY edge_processing/aggregator.py \
+#      utils/policy_evaluator.py \
+#      utils/opa_config.yaml \
+#      ./
 
+COPY edge_processing/ ./edge_processing/
 COPY utils/ ./utils/
 COPY kaggle_credentials/ ./kaggle_credentials/
 COPY opa/policies/ ./opa/policies/
