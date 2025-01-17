@@ -240,114 +240,134 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
 def train_bert_edge(data_path, epochs=5, max_samples=300):
     print("Starting TinyBERT training on edge device...")
     
-    # Load model and tokenizer
-    model, tokenizer = load_bert_model()
-    
-    # Get limited dataset
-    X_train, _, y_train, _, _, _ = process_medical_transcriptions_data(
-        data_path, batch_size=4
-    )
-    
-    # Limit dataset size
-    X_train = X_train[:max_samples]
-    y_train = y_train[:max_samples]
-    
-    # Clean labels and convert to indices
-    y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
-    
-    # Create a clean version of medical_specialties and mapping
-    clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
-    label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
-    
-    # Convert labels to indices, handling unknown labels
-    y_train_indices = []
-    valid_indices = []
-    for idx, label in enumerate(y_train):
-        if label in label_to_id:
-            y_train_indices.append(label_to_id[label])
-            valid_indices.append(idx)
-    
-    # Filter X_train to only include samples with valid labels
-    X_train = [X_train[i] for i in valid_indices]
-    
-    # Convert to numpy arrays
-    y_train_indices = np.array(y_train_indices)
-    
-    # Tokenize inputs
-    inputs = tokenizer(
-        list(X_train),
-        padding=True,
-        truncation=True,
-        max_length=64,
-        return_tensors="tf"
-    )
-    
-    # Create dataset with matching dimensions
-    dataset = tf.data.Dataset.from_tensor_slices((
-        dict(inputs),
-        y_train_indices
-    )).shuffle(100).batch(4)
-    
-    # Configure optimizer and metrics
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
-    
-    # Training metrics
-    best_loss = float('inf')
-    best_accuracy = 0.0
-    
-    # Training loop
-    for epoch in range(epochs):
-        print(f"Epoch {epoch + 1}/{epochs}")
-        total_loss = 0
-        steps = 0
+    try:
+        # Load model and tokenizer
+        model, tokenizer = load_bert_model()
         
-        for batch_inputs, batch_labels in dataset:
-            loss = train_step(
-                model=model,
-                optimizer=optimizer,
-                inputs=batch_inputs,
-                targets=batch_labels,
-                loss_fn=loss_fn
-            )
-            
-            # Update metrics
-            predictions = model(batch_inputs, training=False)
-            train_acc_metric.update_state(batch_labels, predictions.logits)
-            
-            total_loss += loss
-            steps += 1
-            
-            if steps % 10 == 0:
-                print(f"Step {steps}, Loss: {total_loss/steps}")
+        # Get limited dataset
+        X_train, _, y_train, _, _, _ = process_medical_transcriptions_data(
+            data_path, batch_size=4
+        )
         
-        # Calculate epoch metrics
-        epoch_loss = total_loss / steps if steps > 0 else float('inf')
-        epoch_accuracy = train_acc_metric.result().numpy()
+        # Limit dataset size
+        X_train = X_train[:max_samples]
+        y_train = y_train[:max_samples]
         
-        # Update best metrics
-        if epoch_accuracy > best_accuracy:
-            best_accuracy = epoch_accuracy
-        if epoch_loss < best_loss:
-            best_loss = epoch_loss
+        # Clean labels and convert to indices
+        y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
+        
+        # Create a clean version of medical_specialties and mapping
+        clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
+        label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
+        
+        # Convert labels to indices, handling unknown labels
+        y_train_indices = []
+        valid_indices = []
+        for idx, label in enumerate(y_train):
+            if label in label_to_id:
+                y_train_indices.append(label_to_id[label])
+                valid_indices.append(idx)
+        
+        # Check if we have enough valid samples
+        if len(valid_indices) < 4:  # Minimum batch size
+            raise ValueError(f"Not enough valid samples for training. Found only {len(valid_indices)} valid samples.")
+        
+        # Filter X_train to only include samples with valid labels
+        X_train = [X_train[i] for i in valid_indices]
+        
+        # Convert to numpy arrays
+        y_train_indices = np.array(y_train_indices)
+        
+        print(f"Training with {len(X_train)} valid samples")
+        
+        # Tokenize inputs
+        inputs = tokenizer(
+            list(X_train),
+            padding=True,
+            truncation=True,
+            max_length=64,
+            return_tensors="tf"
+        )
+        
+        # Create dataset with matching dimensions
+        dataset = tf.data.Dataset.from_tensor_slices((
+            dict(inputs),
+            y_train_indices
+        )).shuffle(100).batch(4)
+        
+        # Configure optimizer and metrics
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
+        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+        
+        # Training metrics
+        best_loss = float('inf')
+        best_accuracy = 0.0
+        
+        # Training loop
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}/{epochs}")
+            total_loss = 0
+            steps = 0
             
-        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
+            for batch_inputs, batch_labels in dataset:
+                if batch_labels.shape[0] == 0:
+                    continue  # Skip empty batches
+                    
+                loss = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=batch_inputs,
+                    targets=batch_labels,
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                predictions = model(batch_inputs, training=False)
+                train_acc_metric.update_state(batch_labels, predictions.logits)
+                
+                total_loss += loss
+                steps += 1
+                
+                if steps % 10 == 0:
+                    print(f"Step {steps}, Loss: {total_loss/steps}")
+            
+            if steps == 0:
+                raise ValueError("No valid batches found during training")
+                
+            # Calculate epoch metrics
+            epoch_loss = total_loss / steps
+            epoch_accuracy = train_acc_metric.result().numpy()
+            
+            # Update best metrics
+            if epoch_accuracy > best_accuracy:
+                best_accuracy = epoch_accuracy
+            if epoch_loss < best_loss:
+                best_loss = epoch_loss
+                
+            print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
+            
+            # Reset metrics
+            train_acc_metric.reset_state()
+            gc.collect()
         
-        # Reset metrics
-        train_acc_metric.reset_state()
-        gc.collect()
-    
-    # Save the model
-    model.save_pretrained("tinybert_model")
-    tokenizer.save_pretrained("tinybert_model")
-    
-    return {
-        'loss': float(epoch_loss),
-        'accuracy': float(epoch_accuracy),
-        'best_accuracy': float(best_accuracy),
-        'best_loss': float(best_loss)
-    }
+        # Save the model
+        model.save_pretrained("tinybert_model")
+        tokenizer.save_pretrained("tinybert_model")
+        
+        return {
+            'loss': float(epoch_loss),
+            'accuracy': float(epoch_accuracy),
+            'best_accuracy': float(best_accuracy),
+            'best_loss': float(best_loss)
+        }
+        
+    except Exception as e:
+        print(f"Training failed with error: {str(e)}")
+        return {
+            'status': 'failed',
+            'error': str(e)
+        }
 
 if __name__ == "__main__":  
     # Train MobileNet
