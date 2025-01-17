@@ -110,6 +110,36 @@ def process_task(task):
     
     if task['type'] == 'inference':
         predictions = perform_inference(processed_data, data_type)
+        
+        # Create results directory if it doesn't exist
+        results_dir = os.path.join(os.getcwd(), "inference_results")
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Prepare results dictionary
+        results = {
+            'status': 'success',
+            'predictions': predictions.tolist() if isinstance(predictions, np.ndarray) else predictions,
+            'model_type': task.get('model_type'),
+            'data_type': data_type,
+            'timestamp': datetime.now().isoformat(),
+            'device_id': DEVICE_ID,
+            'task_config': {
+                'batch_size': task.get('batch_size', 32)
+            }
+        }
+        
+        # Save results to JSON file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_file = os.path.join(
+            results_dir,
+            f"inference_results_{data_type}_{task['model_type']}_{timestamp}.json"
+        )
+        
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+            
+        logger.info(f"Inference results saved to {results_file}")
+        
         if isinstance(predictions, dict):
             # For CXR8 data that includes sensitive features
             return predictions['predictions']
