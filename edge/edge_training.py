@@ -238,148 +238,124 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
     }
 
 def train_bert_edge(data_path, epochs=5, max_samples=300):
+    """
+    Train TinyBERT model on edge device with memory-efficient processing.
+    Handles both Medical Transcriptions and MIMIC datasets.
+    
+    Args:
+        data_path: Path to the dataset
+        epochs: Number of training epochs
+        max_samples: Maximum number of samples to use for training
+        
+    Returns:
+        Dictionary containing training metrics
+    """
     print("Starting TinyBERT training on edge device...")
     
-    try:
-        # Load model and tokenizer
-        model, tokenizer = load_bert_model()
-        
-        # Get limited dataset
-        X_train, _, y_train, _, _, _ = process_medical_transcriptions_data(
-            data_path, batch_size=4
+    # Load model and tokenizer with memory-efficient settings
+    model, tokenizer = load_bert_model()
+    
+    # Determine dataset type and load appropriate data
+    if "mimic" in data_path.lower():
+        from dataset.mimic_processor import process_mimic_data
+        train_gen, val_gen = process_mimic_data(
+            batch_size=8,  # Small batch size for edge devices
+            max_samples=max_samples
         )
+        is_mimic = True
+    else:
+        from dataset.mt_processor import process_medical_transcriptions_data
+        X_train, _, y_train, _, sf_train, _ = process_medical_transcriptions_data(
+            data_path,
+            batch_size=8  # Small batch size for edge devices
+        )
+        is_mimic = False
         
-        # Limit dataset size
+        # Limit dataset size for edge device
         X_train = X_train[:max_samples]
         y_train = y_train[:max_samples]
+        sf_train = sf_train[:max_samples]
+    
+    # Configure optimizer and loss function
+    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    
+    # Training metrics
+    best_loss = float('inf')
+    best_accuracy = 0.0
+    
+    # Training loop
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
+        total_loss = 0
+        steps = 0
         
-        # Print original labels for debugging
-        print("Original medical specialties:", medical_specialties[:5], "...")
-        print("Sample original labels:", y_train[:5], "...")
-        
-        # Create standardized versions of both medical_specialties and y_train labels
-        def standardize_label(label):
-            # Remove any leading/trailing whitespace
-            label = label.strip()
-            # Take only the first part of compound labels (before any separator)
-            label = label.split('/')[0].split('-')[0].strip()
-            # Replace spaces with underscores
-            label = label.replace(' ', '_')
-            return label
-        
-        # Create mapping for special cases
-        special_cases = {
-            'Cardiovascular / Pulmonary': 'Cardiovascular',
-            'Consult - History and Phy.': 'Consult',
-            'SOAP / Chart / Progress Notes': 'General',
-            'Physical Medicine - Rehab': 'Physical_Medicine',
-            'Obstetrics / Gynecology': 'Obstetrics',
-            'Pediatrics - Neonatal': 'Pediatrics',
-            'ENT - Otolaryngology': 'ENT',
-            'Hematology - Oncology': 'Hematology',
-            'Hospice - Palliative Care': 'Hospice',
-            'IME-QME-Work Comp etc.': 'General',
-            'Emergency Room Reports': 'Emergency',
-            'Discharge Summary': 'General'
-        }
-        
-        # Standardize medical specialties
-        clean_specialties = [standardize_label(spec) for spec in medical_specialties]
-        
-        # Print mappings for debugging
-        print("\nSpecialty mappings (first 5):")
-        for orig, clean in list(zip(medical_specialties, clean_specialties))[:5]:
-            print(f"{orig} -> {clean}")
-        
-        # Clean labels and convert to indices
-        y_train_clean = []
-        for label in y_train:
-            if label in special_cases:
-                y_train_clean.append(special_cases[label])
-            else:
-                y_train_clean.append(standardize_label(label))
-        
-        # Create label to ID mapping
-        unique_labels = sorted(set(clean_specialties))
-        label_to_id = {label: idx for idx, label in enumerate(unique_labels)}
-        
-        print("\nValid labels:", unique_labels)
-        
-        # Convert labels to indices, handling unknown labels
-        y_train_indices = []
-        valid_indices = []
-        skipped_labels = set()
-        
-        for idx, (orig_label, clean_label) in enumerate(zip(y_train, y_train_clean)):
-            if clean_label in label_to_id:
-                y_train_indices.append(label_to_id[clean_label])
-                valid_indices.append(idx)
-            else:
-                skipped_labels.add(orig_label)
-        
-        # Print summary of skipped labels
-        if skipped_labels:
-            print("\nUnique skipped labels:")
-            for label in sorted(skipped_labels):
-                print(f"- {label}")
-        
-        # Check if we have enough valid samples
-        if len(valid_indices) < 4:  # Minimum batch size
-            raise ValueError(f"Not enough valid samples for training. Found only {len(valid_indices)} valid samples out of {len(y_train)}.")
-        
-        # Filter X_train to only include samples with valid labels
-        X_train = [X_train[i] for i in valid_indices]
-        
-        # Convert to numpy arrays
-        y_train_indices = np.array(y_train_indices)
-        
-        print(f"\nTraining with {len(X_train)} valid samples out of {len(y_train)} total samples")
-        print(f"Number of unique valid labels: {len(set(y_train_indices))}")
-        
-        # Tokenize inputs
-        inputs = tokenizer(
-            list(X_train),
-            padding=True,
-            truncation=True,
-            max_length=64,
-            return_tensors="tf"
-        )
-        
-        # Create dataset with matching dimensions
-        dataset = tf.data.Dataset.from_tensor_slices((
-            dict(inputs),
-            y_train_indices
-        )).shuffle(100).batch(4)
-        
-        # Configure optimizer and metrics
-        optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
-        loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-        train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
-        
-        # Training metrics
-        best_loss = float('inf')
-        best_accuracy = 0.0
-        
-        # Training loop
-        for epoch in range(epochs):
-            print(f"\nEpoch {epoch + 1}/{epochs}")
-            total_loss = 0
-            steps = 0
-            
-            for batch_inputs, batch_labels in dataset:
-                if batch_labels.shape[0] == 0:
-                    continue  # Skip empty batches
-                    
+        if is_mimic:
+            # Training on MIMIC data using generator
+            for texts, sensitive_features in train_gen:
+                # Tokenize batch
+                inputs = tokenizer(
+                    texts.tolist(),
+                    padding=True,
+                    truncation=True,
+                    return_tensors="tf",
+                    max_length=64
+                )
+                
+                # Get predictions and calculate loss
                 loss = train_step(
                     model=model,
                     optimizer=optimizer,
-                    inputs=batch_inputs,
+                    inputs=inputs,
+                    targets=sensitive_features['gender'].map({'male': 0, 'female': 1}),
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                predictions = model(inputs, training=False)
+                train_acc_metric.update_state(
+                    sensitive_features['gender'].map({'male': 0, 'female': 1}),
+                    predictions.logits
+                )
+                
+                total_loss += loss
+                steps += 1
+                
+                if steps % 10 == 0:
+                    print(f"Step {steps}, Loss: {total_loss/steps}")
+                
+                # Force garbage collection
+                gc.collect()
+                
+        else:
+            # Training on Medical Transcriptions data
+            # Process in smaller batches
+            batch_size = 8
+            for i in range(0, len(X_train), batch_size):
+                batch_texts = X_train[i:i + batch_size]
+                batch_labels = y_train[i:i + batch_size]
+                
+                # Tokenize batch
+                inputs = tokenizer(
+                    batch_texts.tolist(),
+                    padding=True,
+                    truncation=True,
+                    return_tensors="tf",
+                    max_length=64
+                )
+                
+                # Get predictions and calculate loss
+                loss = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=inputs,
                     targets=batch_labels,
                     loss_fn=loss_fn
                 )
                 
                 # Update metrics
-                predictions = model(batch_inputs, training=False)
+                predictions = model(inputs, training=False)
                 train_acc_metric.update_state(batch_labels, predictions.logits)
                 
                 total_loss += loss
@@ -387,46 +363,36 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                 
                 if steps % 10 == 0:
                     print(f"Step {steps}, Loss: {total_loss/steps}")
-            
-            if steps == 0:
-                raise ValueError("No valid batches found during training")
                 
-            # Calculate epoch metrics
-            epoch_loss = total_loss / steps
-            epoch_accuracy = train_acc_metric.result().numpy()
-            
-            # Update best metrics
-            if epoch_accuracy > best_accuracy:
-                best_accuracy = epoch_accuracy
-            if epoch_loss < best_loss:
-                best_loss = epoch_loss
-                
-            print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
-            
-            # Reset metrics
-            train_acc_metric.reset_state()
-            gc.collect()
+                # Force garbage collection
+                gc.collect()
         
-        # Save the model
-        model.save_pretrained("tinybert_model")
-        tokenizer.save_pretrained("tinybert_model")
+        # Calculate epoch metrics
+        epoch_loss = total_loss / steps
+        epoch_accuracy = train_acc_metric.result().numpy()
         
-        return {
-            'status': 'success',
-            'model_type': 'tinybert',
-            'loss': float(epoch_loss),
-            'accuracy': float(epoch_accuracy),
-            'best_accuracy': float(best_accuracy),
-            'best_loss': float(best_loss)
-        }
+        # Update best metrics
+        if epoch_accuracy > best_accuracy:
+            best_accuracy = epoch_accuracy
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
         
-    except Exception as e:
-        print(f"Training failed with error: {str(e)}")
-        return {
-            'status': 'failed',
-            'model_type': 'tinybert',
-            'error': str(e)
-        }
+        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}")
+        
+        # Reset metrics
+        train_acc_metric.reset_state()
+        gc.collect()
+    
+    # Save the model
+    model.save_pretrained("tinybert_model")
+    tokenizer.save_pretrained("tinybert_model")
+    
+    return {
+        'loss': float(epoch_loss),
+        'accuracy': float(epoch_accuracy),
+        'best_accuracy': float(best_accuracy),
+        'best_loss': float(best_loss)
+    }
 
 if __name__ == "__main__":  
     # Train MobileNet
