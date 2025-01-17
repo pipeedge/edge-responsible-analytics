@@ -64,4 +64,4 @@ ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 # Expose necessary ports
 EXPOSE 8000 5002 8181
 
-CMD ["python3", "aggregator.py"]
+CMD ["python3", "edge_processing/aggregator.py"]

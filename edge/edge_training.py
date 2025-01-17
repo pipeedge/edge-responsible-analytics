@@ -263,7 +263,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     y_train_indices = []
     for label in y_train:
         if label not in label_to_id:
-            logger.warning(f"Unknown label encountered: {label}")
+            print(f"Unknown label encountered: {label}")
             # Use a default label or skip the sample
             continue
         y_train_indices.append(label_to_id[label])
