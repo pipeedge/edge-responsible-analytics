@@ -109,84 +109,11 @@ def process_task(task):
         raise ValueError(f"Unsupported data type: {data_type}")
     
     if task['type'] == 'inference':
-        try:
-            predictions = perform_inference(processed_data, data_type)
-            
-            # Create inference results dictionary
-            inference_results = {
-                'status': 'success',
-                'model_type': task.get('model_type', 'unknown'),
-                'data_type': data_type,
-                'timestamp': datetime.now().isoformat(),
-                'device_id': DEVICE_ID,
-                'inference_config': {
-                    'batch_size': task.get('batch_size', 32),
-                    'model_variant': task.get('model_variant', 'tinybert')
-                }
-            }
-            
-            # Handle different types of prediction outputs
-            if isinstance(predictions, dict):
-                # For CXR8 data that includes sensitive features
-                if isinstance(predictions['predictions'], pd.DataFrame):
-                    inference_results['predictions'] = predictions['predictions'].to_dict(orient='records')
-                else:
-                    inference_results['predictions'] = predictions['predictions'].tolist() if isinstance(predictions['predictions'], np.ndarray) else predictions['predictions']
-                inference_results['sensitive_features'] = predictions.get('sensitive_features', {})
-            else:
-                if isinstance(predictions, pd.DataFrame):
-                    inference_results['predictions'] = predictions.to_dict(orient='records')
-                else:
-                    inference_results['predictions'] = predictions.tolist() if isinstance(predictions, np.ndarray) else predictions
-            
-            # Create results directory if it doesn't exist
-            results_dir = os.path.join(os.getcwd(), "inference_results")
-            os.makedirs(results_dir, exist_ok=True)
-            
-            # Save results to JSON file with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            results_file = os.path.join(
-                results_dir,
-                f"inference_results_{data_type}_{task.get('model_type', 'unknown')}_{timestamp}.json"
-            )
-            
-            with open(results_file, 'w') as f:
-                json.dump(inference_results, f, indent=2)
-            
-            logger.info(f"Inference results saved to {results_file}")
-            
-            if isinstance(predictions, dict):
-                return predictions['predictions']
-            return predictions
-            
-        except Exception as e:
-            error_result = {
-                'status': 'failed',
-                'error': str(e),
-                'timestamp': datetime.now().isoformat(),
-                'device_id': DEVICE_ID,
-                'data_type': data_type,
-                'model_type': task.get('model_type', 'unknown'),
-                'inference_config': {
-                    'batch_size': task.get('batch_size', 32),
-                    'model_variant': task.get('model_variant', 'tinybert')
-                }
-            }
-            
-            # Save error results
-            results_dir = os.path.join(os.getcwd(), "inference_results")
-            os.makedirs(results_dir, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            error_file = os.path.join(
-                results_dir,
-                f"inference_error_{data_type}_{task.get('model_type', 'unknown')}_{timestamp}.json"
-            )
-            
-            with open(error_file, 'w') as f:
-                json.dump(error_result, f, indent=2)
-            
-            logger.error(f"Inference error saved to {error_file}")
-            raise
+        predictions = perform_inference(processed_data, data_type)
+        if isinstance(predictions, dict):
+            # For CXR8 data that includes sensitive features
+            return predictions['predictions']
+        return predictions
             
     elif task['type'] == 'training':
         try:
