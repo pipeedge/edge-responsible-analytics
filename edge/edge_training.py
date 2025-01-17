@@ -253,9 +253,20 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     y_train = y_train[:max_samples]
     
     # Clean labels and convert to indices
-    y_train = [label.strip() for label in y_train]  # Remove leading/trailing whitespace
-    label_to_id = {label: idx for idx, label in enumerate(sorted(set(medical_specialties)))}
-    y_train = [label_to_id[label] for label in y_train]
+    y_train = [label.strip().replace(' / ', '_').replace('/', '_') for label in y_train]
+    
+    # Create a clean version of medical_specialties
+    clean_specialties = [spec.strip().replace(' / ', '_').replace('/', '_') for spec in medical_specialties]
+    label_to_id = {label: idx for idx, label in enumerate(sorted(set(clean_specialties)))}
+    
+    # Convert labels to indices, with error handling
+    y_train_indices = []
+    for label in y_train:
+        if label not in label_to_id:
+            logger.warning(f"Unknown label encountered: {label}")
+            # Use a default label or skip the sample
+            continue
+        y_train_indices.append(label_to_id[label])
     
     # Tokenize inputs
     inputs = tokenizer(
@@ -269,7 +280,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     # Create dataset
     dataset = tf.data.Dataset.from_tensor_slices((
         dict(inputs),
-        tf.constant(y_train)
+        tf.constant(y_train_indices)
     )).shuffle(100).batch(4)
     
     # Configure optimizer and metrics
