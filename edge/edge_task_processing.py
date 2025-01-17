@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-
+import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -53,7 +53,6 @@ from edge_infer import perform_inference, process_inference_results
 from edge_training import train_model
 from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
-import logging
 import pandas as pd
 import numpy as np
 
