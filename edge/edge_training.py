@@ -280,13 +280,34 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         y_train = y_train[:max_samples]
         sf_train = sf_train[:max_samples]
         
+        # Clean labels by stripping whitespace and standardizing format
+        y_train = [label.strip() for label in y_train]
+        clean_specialties = [specialty.strip() for specialty in medical_specialties]
+        
         # Create label encoder for medical specialties
         from sklearn.preprocessing import LabelEncoder
         label_encoder = LabelEncoder()
-        # Fit encoder on all possible medical specialties to ensure consistent mapping
-        label_encoder.fit(medical_specialties)
-        # Transform the labels
-        y_train_encoded = label_encoder.transform(y_train)
+        # Fit encoder on cleaned specialties to ensure consistent mapping
+        label_encoder.fit(clean_specialties)
+        
+        try:
+            # Transform the labels, handling any unknown labels
+            y_train_encoded = []
+            for label in y_train:
+                try:
+                    idx = clean_specialties.index(label)
+                    y_train_encoded.append(idx)
+                except ValueError:
+                    print(f"Warning: Unknown specialty '{label}', mapping to 'General Medicine'")
+                    idx = clean_specialties.index('General Medicine')
+                    y_train_encoded.append(idx)
+            y_train_encoded = np.array(y_train_encoded)
+            
+        except Exception as e:
+            print(f"Error encoding labels: {e}")
+            print("Available specialties:", clean_specialties)
+            print("Sample of actual labels:", y_train[:10])
+            raise
     
     # Configure optimizer and loss function
     optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
@@ -406,7 +427,7 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     # Save label encoder mapping if using MT dataset
     if not is_mimic:
         import json
-        label_mapping = {label: idx for idx, label in enumerate(label_encoder.classes_)}
+        label_mapping = {label: idx for idx, label in enumerate(clean_specialties)}
         with open("tinybert_model/label_mapping.json", "w") as f:
             json.dump(label_mapping, f)
     
