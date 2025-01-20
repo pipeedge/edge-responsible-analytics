@@ -58,8 +58,8 @@ from datetime import datetime
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
-# MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
-MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
+# MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
@@ -143,7 +143,7 @@ def process_task(task):
             json.dump(results, f, indent=2)
             
         logger.info(f"Inference results saved to {results_file}")
-        
+
         return predictions
             
     elif task['type'] == 'training':
