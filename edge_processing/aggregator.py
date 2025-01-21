@@ -45,8 +45,8 @@ mlflow.set_experiment("Model_Evaluation")
 mlflow_client = MlflowClient()
 
 # MQTT Configuration
-# MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
-MQTT_BROKER = os.getenv('MQTT_BROKER', '10.42.1.12')
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
+# MQTT_BROKER = os.getenv('MQTT_BROKER', '10.42.1.12')
 # MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')

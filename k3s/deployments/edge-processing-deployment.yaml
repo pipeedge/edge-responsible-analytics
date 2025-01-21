@@ -43,7 +43,7 @@ spec:
         - containerPort: 1883  # MQTT broker
         env:
           - name: MQTT_BROKER
-            value: "10.42.1.12"
+            value: "mosquitto-service"
           - name: MQTT_PORT
             value: "1883"
           - name: MQTT_TOPIC_UPLOAD

@@ -124,6 +124,7 @@ k3s
 sudo k3s kubectl get nodes
 sudo k3s kubectl get pods -A
 
+==================== configmaps ====================
 sudo k3s kubectl apply -f k3s/configmaps/cloud-config.yaml
 sudo k3s kubectl apply -f k3s/configmaps/edge-device-config.yaml
 sudo k3s kubectl apply -f k3s/configmaps/mqtt-config.yaml
@@ -133,6 +134,7 @@ sudo k3s kubectl apply -f k3s/configmaps/opa-explainability-policies.yaml
 sudo k3s kubectl apply -f k3s/configmaps/opa-privacy-policies.yaml
 sudo k3s kubectl apply -f k3s/configmaps/opa-aggregator-thresholds.yaml
 
+==================== services ====================
 sudo k3s kubectl apply -f k3s/services/cloud_service.yaml
 sudo k3s kubectl apply -f k3s/services/edge_processing_service.yaml
 sudo k3s kubectl apply -f k3s/services/edge_device_service.yaml
@@ -140,8 +142,7 @@ sudo k3s kubectl apply -f k3s/services/mlflow_service.yaml
 sudo k3s kubectl apply -f k3s/services/mqtt_service.yaml
 sudo k3s kubectl apply -f k3s/services/opa_service.yaml
 
-sudo k3s kubectl delete -f k3s/services/cloud_service.yaml
-
+==================== deployments ====================
 sudo k3s kubectl apply -f k3s/deployments/cloud-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/edge-device-deployment.yaml
@@ -149,12 +150,15 @@ sudo k3s kubectl apply -f k3s/deployments/mlflow-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/mqtt-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/opa-deployment.yaml
 
+
++++++++++++++++ delete +++++++++++++++
 sudo k3s kubectl delete -f k3s/deployments/cloud-deployment.yaml
 sudo k3s kubectl delete -f k3s/deployments/edge-device-deployment.yaml
 sudo k3s kubectl delete -f k3s/deployments/edge-processing-deployment.yaml
 sudo k3s kubectl delete -f k3s/deployments/mlflow-deployment.yaml
 sudo k3s kubectl delete -f k3s/deployments/mqtt-deployment.yaml
 sudo k3s kubectl delete -f k3s/deployments/opa-deployment.yaml
+sudo k3s kubectl delete -f k3s/services/cloud_service.yaml
 
 
 sudo k3s kubectl apply -f k3s/storage/cloud-pv.yaml
