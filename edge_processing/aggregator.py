@@ -58,8 +58,9 @@ Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
 # Initialize MQTT Client
 client = mqtt.Client(client_id=Agg_ID, protocol=mqtt.MQTTv5)
 
-# Dictionary to store received models
+# Dictionary to store received models and chunks
 received_models = {}
+model_chunks = {}
 lock = threading.Lock()
 
 # Load thresholds
@@ -92,7 +93,44 @@ MODEL_PATHS = {
 }
 
 CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-service:8080')
-SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
+SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 5))
+
+def on_connect(client, userdata, flags, rc, properties=None):
+    logger.info(f"[Aggregator] Connected to MQTT broker with result code: {rc}")
+    if rc == 0:
+        # Successful connection, subscribe to topics
+        client.subscribe(MQTT_TOPIC_UPLOAD)
+        logger.info(f"[Aggregator] Successfully subscribed to {MQTT_TOPIC_UPLOAD}")
+    else:
+        logger.error(f"[Aggregator] Failed to connect, return code: {rc}")
+
+def on_disconnect(client, userdata, rc):
+    logger.warning(f"[Aggregator] Disconnected with result code: {rc}")
+    if rc != 0:
+        logger.info("[Aggregator] Unexpected disconnection. Attempting to reconnect...")
+        try:
+            client.reconnect()
+        except Exception as e:
+            logger.exception("[Aggregator] Failed to reconnect")
+
+def process_complete_model(device_id, model_type, data_type, model_data):
+    """Process a complete model after receiving all chunks"""
+    with lock:
+        if device_id not in received_models:
+            logger.info(f"Received complete {model_type} model from {device_id}")
+            received_models[device_id] = {
+                'model_type': model_type,
+                'model_data': model_data,
+                'data_type': data_type
+            }
+            # Clean up chunks
+            if device_id in model_chunks:
+                del model_chunks[device_id]
+        else:
+            logger.warning(f"Model from {device_id} already received.")
+
+        # After receiving, evaluate and aggregate
+        evaluate_and_aggregate()
 
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -101,31 +139,63 @@ def on_message(client, userdata, msg):
             payload = json.loads(msg.payload.decode('utf-8'))
             device_id = payload.get('device_id')
             model_type = payload.get('model_type')
-            model_b64 = payload.get('model_data')
+            chunk_data = payload.get('model_data')
             data_type = payload.get('data_type')
+            chunk_index = payload.get('chunk_index')
+            total_chunks = payload.get('total_chunks')
 
-            if device_id and model_type and model_b64:
-                with lock:
-                    if device_id not in received_models:
-                        logger.info(f"Received {model_type} model from {device_id}")
-                        received_models[device_id] = {
-                            'model_type': model_type,
-                            'model_data': model_b64,
-                            'data_type': data_type
-                        }
-                    else:
-                        logger.warning(f"Model from {device_id} already received.")
+            if not all([device_id, model_type, chunk_data, chunk_index is not None, total_chunks]):
+                logger.error("Received message with missing fields")
+                return
 
-                # After receiving, evaluate fairness
-                evaluate_and_aggregate()
+            with lock:
+                # Initialize chunk storage for this device if needed
+                if device_id not in model_chunks:
+                    model_chunks[device_id] = {
+                        'chunks': [''] * total_chunks,
+                        'model_type': model_type,
+                        'data_type': data_type,
+                        'total_chunks': total_chunks
+                    }
 
-            else:
-                logger.error("Received message with missing fields.")
+                # Store this chunk
+                model_chunks[device_id]['chunks'][chunk_index] = chunk_data
+                received_count = sum(1 for chunk in model_chunks[device_id]['chunks'] if chunk)
+                logger.info(f"Received chunk {chunk_index + 1}/{total_chunks} from {device_id}")
+
+                # Check if we have all chunks
+                if received_count == total_chunks:
+                    logger.info(f"Received all chunks from {device_id}, assembling model")
+                    complete_model = ''.join(model_chunks[device_id]['chunks'])
+                    process_complete_model(device_id, model_type, data_type, complete_model)
 
         except json.JSONDecodeError:
-            logger.exception("Failed to decode JSON payload.")
+            logger.exception("Failed to decode JSON payload")
         except Exception as e:
             logger.exception(f"Unexpected error in on_message: {e}")
+
+# Set up MQTT callbacks
+client.on_message = on_message
+client.on_connect = on_connect
+client.on_disconnect = on_disconnect
+
+def connect_mqtt():
+    """
+    Connect to the MQTT broker and subscribe to relevant topics.
+    """
+    try:
+        logger.info(f"Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
+        # Enable automatic reconnection
+        client.reconnect_delay_set(min_delay=1, max_delay=30)
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        
+        # Start MQTT loop in a separate thread
+        mqtt_thread = threading.Thread(target=lambda: client.loop_forever(), daemon=True)
+        mqtt_thread.start()
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to connect to MQTT broker: {e}")
+        return False
 
 def evaluate_and_aggregate():
     with lock:
@@ -684,66 +754,6 @@ def notify_policy_failure(failed_policies):
     logger.warning(f"Policies failed: {failed_policies}")
     # Implement additional notification mechanisms as needed (e.g., email, alerts)
 
-def connect_mqtt():
-    """
-    Connect to the MQTT broker and subscribe to relevant topics.
-    """
-    client.on_message = on_message
-    
-    def mqtt_loop():
-        try:
-            logger.info(f"Starting MQTT loop for broker {MQTT_BROKER}:{MQTT_PORT}")
-            client.loop_forever()
-        except Exception as e:
-            logger.exception("MQTT loop encountered an error")
-    
-    try:
-        logger.info(f"Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_UPLOAD)
-        logger.info(f"Successfully subscribed to {MQTT_TOPIC_UPLOAD}")
-        
-        # Start MQTT loop in a separate thread
-        mqtt_thread = threading.Thread(target=mqtt_loop, daemon=True)
-        mqtt_thread.start()
-        return True
-    except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
-        return False
-
-def send_to_opa(input_data, policy_type):
-    """
-    Sends evaluation data to OPA for policy decision.
-    
-    Args:
-        input_data (dict): Data containing metrics and thresholds.
-        policy_type (str): Type of policy (e.g., 'fairness', 'reliability', 'explainability').
-    
-    Returns:
-        bool: Whether the policy is allowed.
-        list: List of failed policies.
-    """
-    failed_policies = []
-    try:
-        policy_url = OPA_SERVER_URL + POLICIES.get(policy_type)
-        if not policy_url:
-            logger.error(f"No policy URL found for policy type: {policy_type}")
-            return False, [f"{policy_type}_policy_not_found"]
-
-        response = requests.post(policy_url, json={"input": input_data})
-        if response.status_code == 200:
-            result = response.json()
-            allowed = result.get('result', False)
-            if not allowed:
-                failed_policies.append(policy_type)
-            return allowed, failed_policies
-        else:
-            logger.error(f"OPA request failed with status code {response.status_code}: {response.text}")
-            return False, [f"{policy_type}_opa_request_failed"]
-    except Exception as e:
-        logger.exception(f"Error sending data to OPA: {e}")
-        return False, [f"{policy_type}_opa_exception"]
-
 def sync_with_cloud():
     """
     Sync aggregated models with the cloud layer periodically.
@@ -847,7 +857,7 @@ def schedule_cloud_sync():
     
     while True:
         schedule.run_pending()
-        time.sleep(30)  # Check every minute
+        time.sleep(5)  # Check every minute
 
 def main():
     # Start parent MLflow run

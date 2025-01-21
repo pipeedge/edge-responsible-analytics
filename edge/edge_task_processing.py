@@ -81,6 +81,48 @@ model = None
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
 
+# Add connection monitoring callbacks
+def on_connect(client, userdata, flags, rc, properties=None):
+    logger.info(f"[{DEVICE_ID}] Connected to MQTT broker with result code: {rc}")
+    if rc == 0:
+        # Successful connection, subscribe to topics
+        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        logger.info(f"[{DEVICE_ID}] Successfully subscribed to {MQTT_TOPIC_AGGREGATED}")
+    else:
+        logger.error(f"[{DEVICE_ID}] Failed to connect, return code: {rc}")
+
+def on_disconnect(client, userdata, rc):
+    logger.warning(f"[{DEVICE_ID}] Disconnected with result code: {rc}")
+    if rc != 0:
+        logger.info(f"[{DEVICE_ID}] Unexpected disconnection. Attempting to reconnect...")
+        try:
+            client.reconnect()
+        except Exception as e:
+            logger.exception(f"[{DEVICE_ID}] Failed to reconnect")
+
+# Set up MQTT callbacks
+client.on_message = on_message
+client.on_connect = on_connect
+client.on_disconnect = on_disconnect
+
+# Connect to MQTT Broker
+def connect_mqtt():
+    try:
+        logger.info(f"[{DEVICE_ID}] Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
+        # Enable automatic reconnection
+        client.reconnect_delay_set(min_delay=1, max_delay=30)
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker")
+
+# Start MQTT loop in a separate thread
+def mqtt_loop():
+    try:
+        logger.info(f"[{DEVICE_ID}] Starting MQTT loop")
+        client.loop_forever()
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] MQTT loop encountered an error")
+
 def process_task(task):
     """
     Process a single task based on its type and data.
@@ -270,18 +312,39 @@ def send_trained_model(model_path, model_type, data_tpye):
                 os.unlink(tmp.name)  # Clean up temp file
                 logger.info(f"[{DEVICE_ID}] Successfully read TinyBERT model, size: {len(model_bytes)} bytes")
         
-        # Send the model
-        payload = json.dumps({
-            'device_id': DEVICE_ID,
-            'model_type': model_type,
-            'model_data': model_b64,
-            'data_type': data_tpye
-        })
-        result = client.publish(MQTT_TOPIC_UPLOAD, payload)
-        if result.rc == mqtt.MQTT_ERR_SUCCESS:
-            logger.info(f"[{DEVICE_ID}] Successfully published model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
-        else:
-            logger.error(f"[{DEVICE_ID}] Failed to publish model: {mqtt.error_string(result.rc)}")
+        # Split large models into chunks if needed (MQTT typically has a message size limit)
+        chunk_size = 100000  # 100KB chunks
+        model_chunks = [model_b64[i:i+chunk_size] for i in range(0, len(model_b64), chunk_size)]
+        total_chunks = len(model_chunks)
+        
+        logger.info(f"[{DEVICE_ID}] Splitting model into {total_chunks} chunks for transmission")
+        
+        for i, chunk in enumerate(model_chunks):
+            payload = json.dumps({
+                'device_id': DEVICE_ID,
+                'model_type': model_type,
+                'model_data': chunk,
+                'chunk_index': i,
+                'total_chunks': total_chunks,
+                'data_type': data_tpye
+            })
+            
+            # Publish with QoS 1 to ensure delivery
+            result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                logger.info(f"[{DEVICE_ID}] Successfully published chunk {i+1}/{total_chunks}")
+            else:
+                logger.error(f"[{DEVICE_ID}] Failed to publish chunk {i+1}/{total_chunks}: {mqtt.error_string(result.rc)}")
+                # Wait and retry once on failure
+                time.sleep(1)
+                retry_result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
+                if retry_result.rc != mqtt.MQTT_ERR_SUCCESS:
+                    raise Exception(f"Failed to publish chunk after retry: {mqtt.error_string(retry_result.rc)}")
+            
+            # Small delay between chunks to prevent overwhelming the broker
+            time.sleep(0.1)
+            
+        logger.info(f"[{DEVICE_ID}] Completed sending all {total_chunks} chunks of the model")
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to send trained model")
 
@@ -335,27 +398,6 @@ def on_message(client, userdata, msg):
                 
             except Exception as e:
                 logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
-
-# Set up MQTT callbacks
-client.on_message = on_message
-
-# Connect to MQTT Broker
-def connect_mqtt():
-    try:
-        logger.info(f"[{DEVICE_ID}] Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_AGGREGATED)
-        logger.info(f"[{DEVICE_ID}] Successfully connected and subscribed to {MQTT_TOPIC_AGGREGATED}")
-    except Exception as e:
-        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker")
-
-# Start MQTT loop in a separate thread
-def mqtt_loop():
-    try:
-        logger.info(f"[{DEVICE_ID}] Starting MQTT loop")
-        client.loop_forever()
-    except Exception as e:
-        logger.exception(f"[{DEVICE_ID}] MQTT loop encountered an error")
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
