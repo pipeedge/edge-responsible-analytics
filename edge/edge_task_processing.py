@@ -253,11 +253,13 @@ def process_task(task):
 # Function to send the trained model
 def send_trained_model(model_path, model_type, data_tpye):
     try:
+        logger.info(f"[{DEVICE_ID}] Starting to send trained model of type {model_type}")
         if model_type == 'MobileNet':
             # Handle single file model
             with open(model_path, 'rb') as f:
                 model_bytes = f.read()
             model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+            logger.info(f"[{DEVICE_ID}] Successfully read MobileNet model, size: {len(model_bytes)} bytes")
         else:  # TinyBERT
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
@@ -266,6 +268,7 @@ def send_trained_model(model_path, model_type, data_tpye):
                     model_bytes = f.read()
                 model_b64 = base64.b64encode(model_bytes).decode('utf-8')
                 os.unlink(tmp.name)  # Clean up temp file
+                logger.info(f"[{DEVICE_ID}] Successfully read TinyBERT model, size: {len(model_bytes)} bytes")
         
         # Send the model
         payload = json.dumps({
@@ -274,10 +277,13 @@ def send_trained_model(model_path, model_type, data_tpye):
             'model_data': model_b64,
             'data_type': data_tpye
         })
-        client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+        result = client.publish(MQTT_TOPIC_UPLOAD, payload)
+        if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            logger.info(f"[{DEVICE_ID}] Successfully published model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+        else:
+            logger.error(f"[{DEVICE_ID}] Failed to publish model: {mqtt.error_string(result.rc)}")
     except Exception as e:
-        print(f"[{DEVICE_ID}] Failed to send trained model: {e}")
+        logger.exception(f"[{DEVICE_ID}] Failed to send trained model")
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
@@ -336,16 +342,20 @@ client.on_message = on_message
 # Connect to MQTT Broker
 def connect_mqtt():
     try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        logger.info(f"[{DEVICE_ID}] Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
         client.subscribe(MQTT_TOPIC_AGGREGATED)
-        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+        logger.info(f"[{DEVICE_ID}] Successfully connected and subscribed to {MQTT_TOPIC_AGGREGATED}")
     except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
+        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker")
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
-    client.loop_forever()
+    try:
+        logger.info(f"[{DEVICE_ID}] Starting MQTT loop")
+        client.loop_forever()
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] MQTT loop encountered an error")
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):

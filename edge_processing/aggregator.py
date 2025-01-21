@@ -54,8 +54,9 @@ MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 # Number of end devices expected
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
+Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
 # Initialize MQTT Client
-client = mqtt.Client(client_id='aggregator', protocol=mqtt.MQTTv5)
+client = mqtt.Client(client_id=Agg_ID, protocol=mqtt.MQTTv5)
 
 # Dictionary to store received models
 received_models = {}
@@ -688,12 +689,23 @@ def connect_mqtt():
     Connect to the MQTT broker and subscribe to relevant topics.
     """
     client.on_message = on_message
+    
+    def mqtt_loop():
+        try:
+            logger.info(f"Starting MQTT loop for broker {MQTT_BROKER}:{MQTT_PORT}")
+            client.loop_forever()
+        except Exception as e:
+            logger.exception("MQTT loop encountered an error")
+    
     try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        logger.info(f"Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
         client.subscribe(MQTT_TOPIC_UPLOAD)
-        client.loop_start()
-        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+        logger.info(f"Successfully subscribed to {MQTT_TOPIC_UPLOAD}")
+        
+        # Start MQTT loop in a separate thread
+        mqtt_thread = threading.Thread(target=mqtt_loop, daemon=True)
+        mqtt_thread.start()
         return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
@@ -852,11 +864,11 @@ def main():
         logger.info("Started cloud synchronization thread")
 
         try:
+            # Keep the main thread alive and handle cloud sync
             while True:
-                time.sleep(1)  # Keep the main thread alive
+                time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Shutting down aggregator.")
-            client.loop_stop()
             client.disconnect()
             mlflow.end_run()
 
