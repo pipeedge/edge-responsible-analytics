@@ -96,6 +96,7 @@ CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-service:8080')
 SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 5))
 
 def on_connect(client, userdata, flags, rc, properties=None):
+    """MQTTv5 on_connect callback"""
     logger.info(f"[Aggregator] Connected to MQTT broker with result code: {rc}")
     if rc == 0:
         # Successful connection, subscribe to topics
@@ -104,7 +105,8 @@ def on_connect(client, userdata, flags, rc, properties=None):
     else:
         logger.error(f"[Aggregator] Failed to connect, return code: {rc}")
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, rc, properties=None):
+    """MQTTv5 on_disconnect callback"""
     logger.warning(f"[Aggregator] Disconnected with result code: {rc}")
     if rc != 0:
         logger.info("[Aggregator] Unexpected disconnection. Attempting to reconnect...")
@@ -133,6 +135,7 @@ def process_complete_model(device_id, model_type, data_type, model_data):
         evaluate_and_aggregate()
 
 def on_message(client, userdata, msg):
+    """MQTTv5 on_message callback"""
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
     if msg.topic == MQTT_TOPIC_UPLOAD:
         try:
