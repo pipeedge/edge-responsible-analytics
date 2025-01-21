@@ -69,6 +69,7 @@ DEVICE_ID = os.getenv('DEVICE_ID', 'device')
 
 # Initialize MQTT Client
 client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv5)
+client.enable_logger(logger)  # Enable MQTT internal logging
 
 # Event to signal when a new aggregated model is received
 model_update_event = threading.Event()
@@ -152,11 +153,24 @@ client.on_disconnect = on_disconnect
 def connect_mqtt():
     try:
         logger.info(f"[{DEVICE_ID}] Connecting to MQTT broker {MQTT_BROKER}:{MQTT_PORT}")
-        # Enable automatic reconnection
-        client.reconnect_delay_set(min_delay=1, max_delay=30)
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        # Enable automatic reconnection with shorter intervals
+        client.reconnect_delay_set(min_delay=1, max_delay=10)
+        
+        # Set MQTT protocol options
+        client.max_inflight_messages_set(20)  # Reduce in-flight messages
+        client.max_queued_messages_set(100)   # Increase queue size
+        
+        # Connect with longer keepalive
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=120)
+        
+        # Start MQTT loop in a separate thread
+        mqtt_thread = threading.Thread(target=mqtt_loop, daemon=True)
+        mqtt_thread.start()
+        
+        return True
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker")
+        return False
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
@@ -355,12 +369,16 @@ def send_trained_model(model_path, model_type, data_tpye):
                 os.unlink(tmp.name)  # Clean up temp file
                 logger.info(f"[{DEVICE_ID}] Successfully read TinyBERT model, size: {len(model_bytes)} bytes")
         
-        # Split large models into chunks if needed (MQTT typically has a message size limit)
-        chunk_size = 100000  # 100KB chunks
+        # Split large models into chunks with smaller size
+        chunk_size = 50000  # 50KB chunks
         model_chunks = [model_b64[i:i+chunk_size] for i in range(0, len(model_b64), chunk_size)]
         total_chunks = len(model_chunks)
         
         logger.info(f"[{DEVICE_ID}] Splitting model into {total_chunks} chunks for transmission")
+        
+        # Set up message properties for QoS 1 and longer message expiry
+        properties = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
+        properties.MessageExpiryInterval = 3600  # 1 hour expiry
         
         for i, chunk in enumerate(model_chunks):
             payload = json.dumps({
@@ -372,20 +390,29 @@ def send_trained_model(model_path, model_type, data_tpye):
                 'data_type': data_tpye
             })
             
-            # Publish with QoS 1 to ensure delivery
-            result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
+            # Publish with QoS 1 and properties
+            result = client.publish(
+                MQTT_TOPIC_UPLOAD,
+                payload,
+                qos=1,
+                properties=properties
+            )
+            
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
                 logger.info(f"[{DEVICE_ID}] Successfully published chunk {i+1}/{total_chunks}")
+                # Wait for message to be delivered
+                result.wait_for_publish()
             else:
                 logger.error(f"[{DEVICE_ID}] Failed to publish chunk {i+1}/{total_chunks}: {mqtt.error_string(result.rc)}")
                 # Wait and retry once on failure
                 time.sleep(1)
-                retry_result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
+                retry_result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1, properties=properties)
                 if retry_result.rc != mqtt.MQTT_ERR_SUCCESS:
                     raise Exception(f"Failed to publish chunk after retry: {mqtt.error_string(retry_result.rc)}")
+                retry_result.wait_for_publish()
             
             # Small delay between chunks to prevent overwhelming the broker
-            time.sleep(0.1)
+            time.sleep(0.2)
             
         logger.info(f"[{DEVICE_ID}] Completed sending all {total_chunks} chunks of the model")
     except Exception as e:
