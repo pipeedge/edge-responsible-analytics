@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mosquitto
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: mosquitto
@@ -23,7 +23,7 @@ spec:
                 operator: In
                 values:
                 - liang-local-server-1
-                - liang-local-server-2
+                # - liang-local-server-2
       initContainers:
         - name: init-permissions
           image: busybox
