@@ -252,7 +252,7 @@ def process_task(task):
         return "Unknown task type"
 
 # Function to send the trained model
-def send_trained_model(model_path, model_type, data_tpye):
+def send_trained_model(model_path, model_type, data_type):
     try:
         if model_type == 'MobileNet':
             # Handle single file model
@@ -273,7 +273,7 @@ def send_trained_model(model_path, model_type, data_tpye):
             'device_id': DEVICE_ID,
             'model_type': model_type,
             'model_data': model_b64,
-            'data_type': data_tpye
+            'data_type': data_type
         })
         client.publish(MQTT_TOPIC_UPLOAD, payload)
         print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
@@ -341,13 +341,13 @@ def connect_mqtt():
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
         client.subscribe(MQTT_TOPIC_AGGREGATED)
         print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
-        payload = json.dumps({
-            'device_id': DEVICE_ID,
-            'model_type': 'model_type',
-            'model_data': 'model_b64',
-            'data_type': 'data_tpye'
-        })
-        client.publish(MQTT_TOPIC_UPLOAD, payload)
+        # payload = json.dumps({
+        #     'device_id': DEVICE_ID,
+        #     'model_type': 'model_type',
+        #     'model_data': 'model_b64',
+        #     'data_type': 'data_type'
+        # })
+        # client.publish(MQTT_TOPIC_UPLOAD, payload)
         print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
