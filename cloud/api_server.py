@@ -11,13 +11,46 @@ import os
 import tempfile
 import shutil
 import tarfile
+from datetime import datetime
 
-app = FastAPI()
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+app = FastAPI()
+
+MLFLOW_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-service:5002')
+PROMETHEUS_PORT = int(os.getenv('PROMETHEUS_PORT', 8000))
+MODEL_STORAGE_PATH = os.getenv('MODEL_STORAGE_PATH', '/app/models')
+
+# Ensure model storage directory exists
+os.makedirs(MODEL_STORAGE_PATH, exist_ok=True)
+
 # Initialize services
-aggregator = FederatedModelAggregator(mlflow_uri="http://mlflow:5000")
-monitor = ModelMonitoringService(prometheus_port=8000)
+aggregator = FederatedModelAggregator(mlflow_uri=MLFLOW_URI)
+monitor = ModelMonitoringService(prometheus_port=PROMETHEUS_PORT)
+
+@app.get("/")
+async def root():
+    return {"message": "Cloud Layer API"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for k8s probes"""
+    try:
+        # Check MLflow connection
+        mlflow_status = "healthy" if aggregator.check_mlflow_connection() else "unhealthy"
+        return {
+            "status": "healthy",
+            "mlflow": mlflow_status,
+            "timestamp": str(datetime.now())
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ModelUpdate(BaseModel):
     edge_server_id: str
@@ -93,4 +126,16 @@ async def receive_edge_update(update: ModelUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080) 
+    # Add error handling for the server startup
+    try:
+        logger.info(f"Starting cloud server with MLflow URI: {MLFLOW_URI}")
+        uvicorn.run(
+            app, 
+            host="0.0.0.0", 
+            port=8080,
+            log_level="info",
+            access_log=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        raise 

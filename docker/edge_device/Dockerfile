@@ -21,14 +21,12 @@ COPY docker/edge_device/requirements_edge_device.txt .
 RUN pip install --upgrade pip && pip install -r requirements_edge_device.txt
 
 # Copy application code from the 'edge' directory
-COPY edge/edge_task_processing.py \
-     edge/edge_infer.py \
-     edge/edge_training.py \
-     edge/load_models.py \
-     ./
-
+COPY edge/ ./edge/
 # Copy the 'datasets' directory into the Docker image
-COPY datasets/ ./datasets/
+COPY dataset/ ./dataset/
+COPY kaggle_credentials/ ./kaggle_credentials/
+COPY utils/ ./utils/
+
 # Copy kaggle.json into the Docker image
 COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
 # Set permissions for kaggle.json
@@ -39,5 +37,6 @@ ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 # Expose necessary ports
 EXPOSE 8001
 
-# Command to run the edge device script
-CMD ["python3", "edge_task_processing.py"]
+# Change the CMD to ENTRYPOINT and CMD
+ENTRYPOINT ["python3", "edge/edge_task_processing.py"]
+CMD ["--model_type", "MobileNet", "--data_type", "chest_xray"]

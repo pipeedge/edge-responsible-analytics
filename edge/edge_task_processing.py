@@ -1,6 +1,39 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("edge_device.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
+
+import tensorflow as tf
+def configure_memory_settings():
+    """Configure TensorFlow for memory-efficient training on edge devices"""
+    try:
+        # Limit TensorFlow memory growth for GPUs if available
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        
+        # Limit CPU memory usage through thread settings
+        tf.config.threading.set_inter_op_parallelism_threads(2)
+        tf.config.threading.set_intra_op_parallelism_threads(2)
+        
+        # Remove the unsupported CPU memory limit configuration
+        # Instead, use soft device placement
+        tf.config.set_soft_device_placement(True)
+        
+        logger.info("Memory settings configured successfully")
+    except Exception as e:
+        logger.warning(f"Error configuring memory settings: {e}")
+
+configure_memory_settings()
 
 import paho.mqtt.client as mqtt
 import json
@@ -17,18 +50,17 @@ import tarfile  # Add tarfile for tar operations
 #import mlflow
 import tensorflow as tf
 from edge_infer import perform_inference, process_inference_results
-from edge_training import train_model
 from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
-import logging
 import pandas as pd
-import numpy as np 
-from utils.model_transfer import ModelTransfer
+import numpy as np
+from datetime import datetime
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
 # MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
-MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
+MQTT_BROKER = os.getenv('MQTT_BROKER', '10.42.1.12')
+# MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
@@ -49,15 +81,6 @@ model = None
 # Set up MLflow tracking
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler("edge_device.log"),
-                        logging.StreamHandler()
-                    ])
-logger = logging.getLogger(__name__)
 
 def process_task(task):
     """
@@ -88,41 +111,143 @@ def process_task(task):
     
     if task['type'] == 'inference':
         predictions = perform_inference(processed_data, data_type)
+        
+        # Create results directory if it doesn't exist
+        results_dir = os.path.join(os.getcwd(), "inference_results")
+        os.makedirs(results_dir, exist_ok=True)
+        
         if isinstance(predictions, dict):
             # For CXR8 data that includes sensitive features
             return predictions['predictions']
+        
+        # Prepare results dictionary
+        results = {
+            'status': 'success',
+            'predictions': np.mean(predictions),
+            'model_type': task.get('model_type'),
+            'data_type': data_type,
+            'timestamp': datetime.now().isoformat(),
+            'device_id': DEVICE_ID,
+            'task_config': {
+                'batch_size': task.get('batch_size', 32)
+            }
+        }
+        
+        # Save results to JSON file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_file = os.path.join(
+            results_dir,
+            f"inference_results_{data_type}_{task['model_type']}_{timestamp}.json"
+        )
+        
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+            
+        logger.info(f"Inference results saved to {results_file}")
+
         return predictions
+            
     elif task['type'] == 'training':
         try:
-            # Map data_type to model_type
-            model_type = 'MobileNet' if data_type in ['chest_xray', 'cxr8'] else 'tinybert'
+            training_metrics = None
             
-            # Get training configuration from task
-            batch_size = task.get('batch_size', 16)  # Default to 16 for IoT devices
-            epochs = 10
+            if data_type in ['chest_xray', 'cxr8']:
+                from edge_training import train_mobilenet_edge
+                
+                history = train_mobilenet_edge(
+                    data_path=task['data_path'],
+                    epochs=task.get('epochs', 5),
+                    samples_per_class=task.get('samples_per_class', 50)
+                )
+                
+                # History now contains all metrics directly
+                training_metrics = {
+                    'loss': history['loss'],
+                    'accuracy': history['accuracy'],
+                    'val_loss': history['val_loss'],
+                    'val_accuracy': history['val_accuracy'],
+                    'best_accuracy': history['best_accuracy'],
+                    'best_loss': history['best_loss']
+                }
+                
+            elif data_type == 'mt':
+                # Determine if using T5 or TinyBERT based on task configuration
+                model_variant = task.get('model_variant', 'tinybert')
+                
+                if model_variant == 't5':
+                    from edge_training import train_t5_edge
+                    training_metrics = train_t5_edge(
+                        data_path=task['data_path'],
+                        epochs=task.get('epochs', 5),
+                        max_samples=task.get('max_samples', 200)
+                    )
+                    
+                else:  # tinybert
+                    from edge_training import train_bert_edge
+                    training_metrics = train_bert_edge(
+                        data_path=task['data_path'],
+                        epochs=task.get('epochs', 5),
+                        max_samples=task.get('max_samples', 300)
+                    )
             
-            # Call updated train_model function
-            training_metrics, validation_data = train_model(
-                data_path=task['data_path'],
-                model_type=model_type,
-                batch_size=batch_size,
-                epochs=epochs
-            )
-            
-            # Return combined results
-            return {
+            # Save training results to JSON
+            results = {
                 'status': 'success',
                 'metrics': training_metrics,
-                'validation_data': validation_data,
-                'model_type': model_type
+                'model_type': task['model_type'],
+                'data_type': data_type,
+                'timestamp': datetime.now().isoformat(),
+                'device_id': DEVICE_ID,
+                'task_config': {
+                    'epochs': task.get('epochs', 5),
+                    'max_samples': task.get('max_samples'),
+                    'samples_per_class': task.get('samples_per_class'),
+                    'model_variant': task.get('model_variant', 'tinybert')
+                }
             }
             
+            # Create results directory if it doesn't exist
+            results_dir = os.path.join(os.getcwd(), "training_results")
+            os.makedirs(results_dir, exist_ok=True)
+            
+            # Save results to JSON file with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            results_file = os.path.join(
+                results_dir, 
+                f"training_results_{data_type}_{task['model_type']}_{timestamp}.json"
+            )
+            
+            with open(results_file, 'w') as f:
+                json.dump(results, f, indent=2)
+            
+            logger.info(f"Training results saved to {results_file}")
+            
+            return results
+            
         except Exception as e:
-            logger.error(f"Training failed: {str(e)}")
-            return {
+            error_result = {
                 'status': 'failed',
-                'error': str(e)
+                'error': str(e),
+                'timestamp': datetime.now().isoformat(),
+                'device_id': DEVICE_ID,
+                'data_type': data_type,
+                'model_type': task['model_type']
             }
+            
+            # Save error results
+            results_dir = os.path.join(os.getcwd(), "training_results")
+            os.makedirs(results_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            error_file = os.path.join(
+                results_dir,
+                f"training_error_{data_type}_{task['model_type']}_{timestamp}.json"
+            )
+            
+            with open(error_file, 'w') as f:
+                json.dump(error_result, f, indent=2)
+                
+            logger.error(f"Training error saved to {error_file}")
+            return error_result
     else:
         return "Unknown task type"
 
@@ -211,10 +336,13 @@ client.on_message = on_message
 
 # Connect to MQTT Broker
 def connect_mqtt():
-    print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-    client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-    client.subscribe(MQTT_TOPIC_AGGREGATED)
-    print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+    try:
+        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+    except Exception as e:
+        logger.exception(f"Failed to connect to MQTT broker: {e}")
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
@@ -223,39 +351,15 @@ def mqtt_loop():
 # Task processing function
 def task_processing(task_type, model_type, data_type):
     global model
-    
-    # Configure TensorFlow memory growth
-    try:
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-                # Limit GPU memory
-                tf.config.experimental.set_virtual_device_configuration(
-                    gpu,
-                    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)]
-                )
-    except:
-        logger.info("No GPU available or couldn't configure GPU memory growth")
-    
-    # Limit TensorFlow memory allocation
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        except RuntimeError as e:
-            logger.warning(f"GPU memory growth setting failed: {e}")
-    
-    # Map model_type to data_type and data paths
+    # Map model_type to data paths
     if model_type == 'MobileNet':
         if data_type == 'chest_xray':
             train_data_path = 'dataset/chest_xray/train'
             inference_data_path = 'dataset/chest_xray/val'
-        elif data_type == 'cxr8':  # cxr8
+        elif data_type == 'cxr8':
             train_data_path = 'dataset/cxr8'
             inference_data_path = 'dataset/cxr8'
-    elif model_type == 'tinybert':
+    elif model_type in ['tinybert', 't5']:
         data_type = 'mt'
         train_data_path = 'dataset/mt'
         inference_data_path = 'dataset/mt'
@@ -263,28 +367,24 @@ def task_processing(task_type, model_type, data_type):
         logger.error(f"Unsupported model_type: {model_type}")
         return
 
-    # Load the initial model based on model_type
-    if model_type == 'MobileNet':
-        from load_models import load_mobilenet_model
-        with model_lock:
-            model = load_mobilenet_model()
-    elif model_type == 'tinybert':
-        from load_models import load_bert_model
-        with model_lock:
-            model, tokenizer = load_bert_model()
-
-    # Define tasks with batch processing
+    # Define tasks with optimized batch sizes for edge devices
     inference_task = {
         'type': 'inference',
         'data_type': data_type,
+        'model_type': model_type,
         'data_path': inference_data_path,
-        'batch_size': 16  # Small batch size for memory efficiency
+        'batch_size': 8  # Reduced batch size for edge devices
     }
+    
     training_task = {
         'type': 'training',
         'data_type': data_type,
         'data_path': train_data_path,
-        'batch_size': 16
+        'model_type': model_type,
+        'epochs': 5,  # Reduced epochs for edge devices
+        'model_variant': model_type.lower(),  # For MT tasks to choose between t5/tinybert
+        'samples_per_class': 50 if model_type == 'MobileNet' else None,  # For MobileNet
+        'max_samples': 100 if model_type == 't5' else 150  # For transformer models
     }
 
     if task_type == 'inference':
@@ -294,24 +394,21 @@ def task_processing(task_type, model_type, data_type):
         print(f"[{DEVICE_ID}] Inference Result: {np.mean(inference_result)}")
 
     if task_type == 'training':
-        # Perform Training
-        print(f"[{DEVICE_ID}] Starting training task.")
+        # Perform Training with edge optimizations
+        print(f"[{DEVICE_ID}] Starting edge-optimized training task.")
         training_result = process_task(training_task)
         print(f"[{DEVICE_ID}] Training Result: {training_result}")
+        
+        # Clean up memory after training
+        gc.collect()
 
-    # Save the trained model
+    # Model path based on type
     if model_type == 'MobileNet':
         model_path = 'mobilenet_model.keras'
-        with model_lock:
-            model.save(model_path, save_format='keras')
-    elif model_type == 'tinybert':
+    elif model_type == 't5':
+        model_path = 't5_small'
+    else:  # tinybert
         model_path = 'tinybert_model'
-        with model_lock:
-            if os.path.exists(model_path):
-                shutil.rmtree(model_path)  # Clear existing directory
-            model.save_pretrained(model_path)
-            tokenizer.save_pretrained(model_path)  # Save tokenizer along with model
-    print(f"[{DEVICE_ID}] Trained model saved to {model_path}")
 
     # Upload the trained model in a separate thread
     upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type, data_type))

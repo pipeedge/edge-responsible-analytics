@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-processing-deployment
+  labels:
+    app: edge-processing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-processing
+  template:
+    metadata:
+      labels:
+        app: edge-processing
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                # - liang-local-server-2
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - edge-processing
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: edge-processing
+        image: edgemlops/edge-processing-server:latest
+        ports:
+        - containerPort: 8000
+        - containerPort: 5002  # MLflow server
+        - containerPort: 8181  # OPA server
+        env:
+          - name: MQTT_BROKER
+            value: "10.42.1.12"
+          - name: MQTT_PORT
+            value: "1883"
+          - name: MQTT_TOPIC_UPLOAD
+            value: "models/upload"
+          - name: MQTT_TOPIC_AGGREGATED
+            value: "models/aggregated"
+          - name: EXPECTED_DEVICES
+            value: "2"
+          - name: EDGE_SERVER_ID
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: CLOUD_API_URL
+            value: "http://cloud-layer-service:8080"
+          - name: PYTHONPATH
+            value: "/app"
+          - name: PYTHONUNBUFFERED
+            value: "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"

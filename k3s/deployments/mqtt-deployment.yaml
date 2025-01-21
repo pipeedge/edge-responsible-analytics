@@ -5,7 +5,7 @@ metadata:
   labels:
     app: mosquitto
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: mosquitto
@@ -14,21 +14,20 @@ spec:
       labels:
         app: mosquitto
     spec:
-      tolerations:
-        - key: "node-role.kubernetes.io/control-plane"
-          operator: "Exists"
-          effect: "NoSchedule"
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-              - matchExpressions:
-                  - key: "node-role.kubernetes.io/control-plane"
-                    operator: "Exists"
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                - liang-local-server-2
       initContainers:
         - name: init-permissions
           image: busybox
-          command: ['sh', '-c', 'mkdir -p /mosquitto/config && cp /config/mosquitto.conf /mosquitto/config/mosquitto.conf && addgroup -S mosquitto && adduser -S mosquitto -G mosquitto && chown mosquitto:mosquitto /mosquitto/config/mosquitto.conf']
+          command: ['sh', '-c', 'mkdir -p /mosquitto/config && cp /config/mosquitto.conf /mosquitto/config/mosquitto.conf && chown -R 1883:1883 /mosquitto']
           volumeMounts:
             - name: mosquitto-config
               mountPath: /config
@@ -37,7 +36,6 @@ spec:
       containers:
         - name: mosquitto
           image: eclipse-mosquitto:latest
-          command: ["mosquitto", "-c", "/mosquitto/config/mosquitto.conf", "-v"]
           ports:
             - containerPort: 1883
           volumeMounts:

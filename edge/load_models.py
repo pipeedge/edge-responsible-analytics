@@ -123,7 +123,7 @@ def load_t5_model():
         raise
 
 def load_bert_model():
-    model_dir = os.path.abspath("../bert_model")
+    model_dir = os.path.abspath("../tinybert_model")
     os.makedirs(model_dir, exist_ok=True)
     
     # Configure TensorFlow for memory efficiency

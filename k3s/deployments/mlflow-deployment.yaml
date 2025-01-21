@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - liang-local-server-1
+                - liang-local-server-2
+                - liang-cloud-server
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - mlflow
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: mlflow
+        image: ghcr.io/mlflow/mlflow:v2.19.0
+        command: ["mlflow", "server"]
+        args: [
+          "--host", "0.0.0.0",
+          "--port", "5002",
+          "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
+          "--default-artifact-root", "/mlflow/artifacts",
+          "--workers", "4"
+        ]
+        ports:
+        - containerPort: 5002
+        volumeMounts:
+        - name: mlflow-storage
+          mountPath: /mlflow
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: mlflow-storage
+        hostPath:
+          path: /mnt/mlflow-data
+          type: DirectoryOrCreate
