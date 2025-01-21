@@ -138,9 +138,11 @@ def evaluate_and_aggregate():
         for model_type in model_types:
             # Ensure any existing run is ended before starting a new one
             try:
-                mlflow.end_run()
+                active_run = mlflow.active_run()
+                if active_run:
+                    mlflow.end_run()
             except Exception as e:
-                logger.warning(f"No active MLflow run to end: {e}")
+                logger.debug(f"No active MLflow run to end: {e}")
 
             models_of_type = {device_id:info for device_id, info in received_models.items() 
                             if info['model_type'] == model_type}
@@ -840,26 +842,33 @@ def schedule_cloud_sync():
         time.sleep(30)  # Check every minute
 
 def main():
-    # Start parent MLflow run
-    with mlflow.start_run(run_name="Model_Aggregation_Parent"):
-        # Connect to MQTT for edge device communication
-        if not connect_mqtt():
-            logger.error("Failed to connect to MQTT broker. Exiting.")
-            sys.exit(1)
-            
-        # Start cloud sync in a separate thread
-        sync_thread = threading.Thread(target=schedule_cloud_sync)
-        sync_thread.daemon = True
-        sync_thread.start()
-        logger.info("Started cloud synchronization thread")
+    try:
+        # Start parent MLflow run
+        with mlflow.start_run(run_name="Model_Aggregation_Parent"):
+            # Connect to MQTT for edge device communication
+            if not connect_mqtt():
+                logger.error("Failed to connect to MQTT broker. Exiting.")
+                sys.exit(1)
+                
+            # Start cloud sync in a separate thread
+            sync_thread = threading.Thread(target=schedule_cloud_sync)
+            sync_thread.daemon = True
+            sync_thread.start()
+            logger.info("Started cloud synchronization thread")
 
-        try:
-            while True:
-                time.sleep(1)  # Keep the main thread alive
-        except KeyboardInterrupt:
-            logger.info("Shutting down aggregator.")
-            client.loop_stop()
-            client.disconnect()
+            try:
+                while True:
+                    time.sleep(1)  # Keep the main thread alive
+            except KeyboardInterrupt:
+                logger.info("Shutting down aggregator.")
+                client.loop_stop()
+                client.disconnect()
+    except Exception as e:
+        logger.exception("Error in main loop")
+    finally:
+        # Ensure MLflow run is ended
+        active_run = mlflow.active_run()
+        if active_run:
             mlflow.end_run()
 
 if __name__ == "__main__":
