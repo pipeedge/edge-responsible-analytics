@@ -40,6 +40,7 @@ spec:
         - containerPort: 8000
         - containerPort: 5002  # MLflow server
         - containerPort: 8181  # OPA server
+        - containerPort: 1883  # MQTT broker
         env:
           - name: MQTT_BROKER
             value: "10.42.1.12"
