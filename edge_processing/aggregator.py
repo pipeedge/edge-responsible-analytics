@@ -59,8 +59,9 @@ Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
 # Initialize MQTT Client
 client = mqtt.Client(client_id=Agg_ID, protocol=mqtt.MQTTv5)
 
-# Dictionary to store received models
+# Dictionary to store received models and their chunks
 received_models = {}
+model_chunks = {}
 lock = threading.Lock()
 
 # Load thresholds
@@ -102,26 +103,60 @@ def on_message(client, userdata, msg):
             payload = json.loads(msg.payload.decode('utf-8'))
             device_id = payload.get('device_id')
             model_type = payload.get('model_type')
-            model_b64 = payload.get('model_data')
+            chunk_data = payload.get('model_data')
             data_type = payload.get('data_type')
+            chunk_info = payload.get('chunk_info')
 
-            if device_id and model_type and model_b64:
-                with lock:
+            if not all([device_id, model_type, chunk_data, chunk_info]):
+                logger.error("Received message with missing fields.")
+                return
+
+            with lock:
+                # Initialize chunk storage for this device if not exists
+                if device_id not in model_chunks:
+                    model_chunks[device_id] = {
+                        'chunks': {},
+                        'model_type': model_type,
+                        'data_type': data_type,
+                        'total_chunks': chunk_info['total_chunks']
+                    }
+
+                # Store the chunk
+                chunk_index = chunk_info['chunk_index']
+                model_chunks[device_id]['chunks'][chunk_index] = chunk_data
+                
+                logger.info(f"Received chunk {chunk_index + 1}/{chunk_info['total_chunks']} from {device_id}")
+
+                # Check if we have all chunks for this device
+                if len(model_chunks[device_id]['chunks']) == model_chunks[device_id]['total_chunks']:
+                    logger.info(f"All chunks received for {device_id}, reconstructing model...")
+                    
+                    # Reconstruct the complete model data
+                    chunks = []
+                    for i in range(model_chunks[device_id]['total_chunks']):
+                        if i not in model_chunks[device_id]['chunks']:
+                            logger.error(f"Missing chunk {i} for {device_id}")
+                            return
+                        chunks.append(model_chunks[device_id]['chunks'][i])
+                    
+                    complete_model_data = ''.join(chunks)
+                    
+                    # Store the complete model
                     if device_id not in received_models:
-                        logger.info(f"Received {model_type} model from {device_id}")
                         received_models[device_id] = {
                             'model_type': model_type,
-                            'model_data': model_b64,
+                            'model_data': complete_model_data,
                             'data_type': data_type
                         }
+                        logger.info(f"Successfully reconstructed and stored model from {device_id}")
+                        
+                        # Clean up chunks
+                        del model_chunks[device_id]
+                        
+                        # After receiving complete model, evaluate fairness
+                        evaluate_and_aggregate()
                     else:
                         logger.warning(f"Model from {device_id} already received.")
-
-                # After receiving, evaluate fairness
-                evaluate_and_aggregate()
-
-            else:
-                logger.error("Received message with missing fields.")
 
         except json.JSONDecodeError:
             logger.exception("Failed to decode JSON payload.")

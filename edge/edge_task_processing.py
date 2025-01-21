@@ -254,31 +254,78 @@ def process_task(task):
 # Function to send the trained model
 def send_trained_model(model_path, model_type, data_type):
     try:
+        logger.info(f"[{DEVICE_ID}] Attempting to send model from path: {model_path}")
+        
+        if not os.path.exists(model_path):
+            logger.error(f"[{DEVICE_ID}] Model path does not exist: {model_path}")
+            return
+            
         if model_type == 'MobileNet':
             # Handle single file model
+            if not os.path.isfile(model_path):
+                logger.error(f"[{DEVICE_ID}] Expected file for MobileNet but got directory: {model_path}")
+                return
+                
             with open(model_path, 'rb') as f:
                 model_bytes = f.read()
-            model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-        else:  # TinyBERT
+                logger.info(f"[{DEVICE_ID}] Read {len(model_bytes)} bytes from MobileNet model file")
+        else:  # TinyBERT or T5
             # Create a temporary tar file
+            if not os.path.isdir(model_path):
+                logger.error(f"[{DEVICE_ID}] Expected directory for {model_type} but got file: {model_path}")
+                return
+                
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                logger.info(f"[{DEVICE_ID}] Creating tar archive for {model_type} model")
+                archive_path = tmp.name[:-7]  # Remove .tar.gz
+                shutil.make_archive(archive_path, 'gztar', model_path)
+                
                 with open(tmp.name, 'rb') as f:
                     model_bytes = f.read()
-                model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+                    logger.info(f"[{DEVICE_ID}] Read {len(model_bytes)} bytes from {model_type} model archive")
                 os.unlink(tmp.name)  # Clean up temp file
         
-        # Send the model
-        payload = json.dumps({
-            'device_id': DEVICE_ID,
-            'model_type': model_type,
-            'model_data': model_b64,
-            'data_type': data_type
-        })
-        client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        logger.info(f"[{DEVICE_ID}] Base64 encoded model size: {len(model_b64)} characters")
+        
+        # Send the model in chunks if it's large
+        chunk_size = 10000  # 10KB chunks
+        total_chunks = (len(model_b64) + chunk_size - 1) // chunk_size
+        
+        for i in range(total_chunks):
+            start_idx = i * chunk_size
+            end_idx = min((i + 1) * chunk_size, len(model_b64))
+            chunk = model_b64[start_idx:end_idx]
+            
+            payload = json.dumps({
+                'device_id': DEVICE_ID,
+                'model_type': model_type,
+                'model_data': chunk,
+                'data_type': data_type,
+                'chunk_info': {
+                    'chunk_index': i,
+                    'total_chunks': total_chunks,
+                    'is_last_chunk': i == total_chunks - 1
+                }
+            })
+            
+            # Ensure MQTT client is connected
+            if not client.is_connected():
+                logger.error(f"[{DEVICE_ID}] MQTT client is not connected. Attempting to reconnect...")
+                client.reconnect()
+                
+            result = client.publish(MQTT_TOPIC_UPLOAD, payload)
+            if result.rc != 0:
+                logger.error(f"[{DEVICE_ID}] Failed to publish chunk {i+1}/{total_chunks}: {result.rc}")
+                return
+                
+            logger.info(f"[{DEVICE_ID}] Successfully sent chunk {i+1}/{total_chunks}")
+            time.sleep(0.5)  # Small delay between chunks
+            
+        logger.info(f"[{DEVICE_ID}] Successfully sent complete model to {MQTT_TOPIC_UPLOAD}")
+        
     except Exception as e:
-        print(f"[{DEVICE_ID}] Failed to send trained model: {e}")
+        logger.exception(f"[{DEVICE_ID}] Failed to send trained model: {e}")
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
@@ -348,7 +395,7 @@ def connect_mqtt():
         #     'data_type': 'data_type'
         # })
         # client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
+        # print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
 
