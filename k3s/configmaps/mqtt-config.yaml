@@ -6,12 +6,16 @@ metadata:
     app: mosquitto
 data:
   mosquitto.conf: |
+    listener 1883
+    allow_anonymous true
     persistence true
     persistence_location /mosquitto/data/
     log_dest file /mosquitto/log/mosquitto.log
     log_dest stdout
-    listener 1883
-    allow_anonymous true
+    connection_messages true
+    max_queued_messages 1000
+    max_packet_size 0
+    message_size_limit 0
     # Uncomment the following lines to enable WebSockets
     # listener 9001
     # protocol websockets
