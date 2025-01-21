@@ -45,6 +45,12 @@ spec:
             value: "mosquitto-service"
           - name: MQTT_PORT
             value: "1883"
+          - name: MQTT_KEEP_ALIVE
+            value: "60"
+          - name: MQTT_RECONNECT_DELAY
+            value: "5"
+          - name: MQTT_QOS
+            value: "2"
           - name: MQTT_TOPIC_UPLOAD
             value: "models/upload"
           - name: MQTT_TOPIC_AGGREGATED

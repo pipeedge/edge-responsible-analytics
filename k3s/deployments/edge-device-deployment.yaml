@@ -48,12 +48,16 @@ spec:
               memory: "1Gi"
               cpu: "500m"
           env:              
-            - name: NETWORK_INTERFACE
-              value: "wlan0"
             - name: MQTT_BROKER
               value: "mosquitto-service"
             - name: MQTT_PORT
               value: "1883"
+            - name: MQTT_KEEP_ALIVE
+              value: "60"
+            - name: MQTT_RECONNECT_DELAY
+              value: "5"
+            - name: MQTT_QOS
+              value: "2"
             - name: MQTT_TOPIC_UPLOAD
               value: "models/upload"
             - name: MQTT_TOPIC_AGGREGATED
