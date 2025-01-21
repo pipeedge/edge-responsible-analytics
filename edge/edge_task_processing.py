@@ -418,16 +418,7 @@ def task_processing(task_type, model_type, data_type):
     else:  # tinybert
         model_path = 'tinybert_model'
 
-    # Upload the trained model in a separate thread
-    upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type, data_type))
-    upload_thread.start()
-
-    try:
-        while True:
-            time.sleep(1)  # Keep the thread alive
-    except KeyboardInterrupt:
-        print(f"[{DEVICE_ID}] Shutting down.")
-        client.disconnect()
+    return model_path, model_type, data_type
 
 def log_memory_usage():
     """
@@ -476,23 +467,29 @@ def main():
 
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
 
-    # Connect to MQTT
-    connect_mqtt()
-    # Start MQTT loop in background
-    thread = threading.Thread(target=mqtt_loop)
-    thread.daemon = True
-    thread.start()
-
     # Start memory monitoring thread
     monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
     monitor_thread.start()
 
-    # Start task processing in the main thread
-    task_processing(task_type, model_type, data_type)
-    
     try:
+        # First run task processing
+        model_path, model_type, data_type = task_processing(task_type, model_type, data_type)
+        
+        # After task is complete, connect to MQTT
+        connect_mqtt()
+        
+        # Start MQTT loop in background
+        thread = threading.Thread(target=mqtt_loop)
+        thread.daemon = True
+        thread.start()
+        
+        # Send the model
+        send_trained_model(model_path, model_type, data_type)
+        
+        # Keep the main thread alive to allow MQTT to send the model
         while True:
-            time.sleep(1)  # Keep the thread alive
+            time.sleep(1)
+            
     except KeyboardInterrupt:
         print(f"[{DEVICE_ID}] Shutting down.")
         client.disconnect()
