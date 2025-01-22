@@ -274,7 +274,7 @@ def send_trained_model(model_path, model_type, data_tpye):
         payload = json.dumps({
             'device_id': DEVICE_ID,
             'model_type': model_type,
-            'model_data': "***Just a testing data***",
+            'model_data': model_b64[:128],
             'data_type': data_tpye
         })
         client.publish(MQTT_TOPIC_UPLOAD, payload)
