@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM arm64v8/python:3.8-slim as builder
+FROM python:3.8-slim as builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -25,7 +25,7 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
-FROM arm64v8/python:3.8-slim
+FROM python:3.8-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
