@@ -90,7 +90,13 @@ SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 @app.route('/upload_model', methods=['POST'])
 def upload_model():
     try:
+        logger.info("Received upload_model request")
+        logger.info(f"Request content type: {request.content_type}")
+        logger.info(f"Request form data: {request.form}")
+        logger.info(f"Request files: {request.files}")
+        
         if 'model' not in request.files:
+            logger.error("No model file in request.files")
             return jsonify({'error': 'No model file provided'}), 400
             
         device_id = request.form.get('device_id')
@@ -98,11 +104,19 @@ def upload_model():
         data_type = request.form.get('data_type')
         callback_url = request.form.get('callback_url')
         
+        logger.info(f"Received request from device_id: {device_id}")
+        logger.info(f"Model type: {model_type}")
+        logger.info(f"Data type: {data_type}")
+        logger.info(f"Callback URL: {callback_url}")
+        
         if not all([device_id, model_type, data_type, callback_url]):
+            logger.error(f"Missing required fields. Got: device_id={device_id}, model_type={model_type}, data_type={data_type}, callback_url={callback_url}")
             return jsonify({'error': 'Missing required fields'}), 400
             
         model_file = request.files['model']
+        logger.info(f"Reading model file: {model_file.filename}")
         model_bytes = model_file.read()
+        logger.info(f"Read {len(model_bytes)} bytes from model file")
         model_b64 = base64.b64encode(model_bytes).decode('utf-8')
         
         logger.info(f"Received model from {device_id}, size: {len(model_bytes)} bytes")
@@ -118,9 +132,12 @@ def upload_model():
                 logger.info(f"Stored model from {device_id}")
                 
                 # After receiving model, evaluate and aggregate
+                logger.info("Starting evaluation and aggregation")
                 result = evaluate_and_aggregate()
+                logger.info("Completed evaluation and aggregation")
                 return jsonify({'status': 'success', 'message': 'Model received and processing started'}), 200
             else:
+                logger.warning(f"Model already received from device {device_id}")
                 return jsonify({'error': 'Model already received from this device'}), 409
                 
     except Exception as e:

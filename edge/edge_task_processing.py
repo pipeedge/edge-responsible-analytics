@@ -69,6 +69,7 @@ MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 # Unique identifier for the end device (can be MAC address or any unique ID)
 DEVICE_ID = os.getenv('DEVICE_ID', 'edge')
 EDGE_DEVICE_PORT = int(os.getenv('EDGE_DEVICE_PORT', 5001))
+POD_IP = os.getenv('POD_IP', '127.0.0.1')  # Get pod IP from environment
 
 # Event to signal when a new aggregated model is received
 model_update_event = threading.Event()
@@ -316,13 +317,15 @@ def send_trained_model(model_path, model_type, data_type):
             return False
             
         # Prepare the files and data
+        logger.info(f"[{DEVICE_ID}] Preparing files and data for upload")
         files = {}
         data = {
             'device_id': DEVICE_ID,
             'model_type': model_type,
             'data_type': data_type,
-            'callback_url': f'http://{DEVICE_ID}:{EDGE_DEVICE_PORT}/receive_aggregated_model'
+            'callback_url': f'http://{POD_IP}:{EDGE_DEVICE_PORT}/receive_aggregated_model'
         }
+        logger.info(f"[{DEVICE_ID}] Callback URL set to: {data['callback_url']}")
         
         if model_type == 'MobileNet':
             # Handle single file model
@@ -330,7 +333,9 @@ def send_trained_model(model_path, model_type, data_type):
                 logger.error(f"[{DEVICE_ID}] Expected file for MobileNet but got directory: {model_path}")
                 return False
                 
+            logger.info(f"[{DEVICE_ID}] Reading MobileNet model file: {model_path}")
             files['model'] = ('model.keras', open(model_path, 'rb'), 'application/octet-stream')
+            logger.info(f"[{DEVICE_ID}] Model file prepared for upload")
             
         else:  # TinyBERT or T5
             # Create a temporary tar file
@@ -344,14 +349,25 @@ def send_trained_model(model_path, model_type, data_type):
                 files['model'] = ('model.tar.gz', open(tmp.name, 'rb'), 'application/gzip')
                 
         # Send the model to edge processing
-        logger.info(f"[{DEVICE_ID}] Sending model to edge processing server")
-        response = requests.post(
-            f"{EDGE_PROCESSING_URL}/upload_model",
-            files=files,
-            data=data
-        )
+        logger.info(f"[{DEVICE_ID}] Sending model to edge processing server at {EDGE_PROCESSING_URL}")
+        try:
+            response = requests.post(
+                f"{EDGE_PROCESSING_URL}/upload_model",
+                files=files,
+                data=data,
+                timeout=60  # Add timeout
+            )
+            logger.info(f"[{DEVICE_ID}] Request completed with status code: {response.status_code}")
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"[{DEVICE_ID}] Request timed out after 60 seconds")
+            return False
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"[{DEVICE_ID}] Connection error: {e}")
+            return False
         
         # Clean up the files
+        logger.info(f"[{DEVICE_ID}] Cleaning up temporary files")
         for file_obj in files.values():
             file_obj[1].close()
         if model_type != 'MobileNet':
