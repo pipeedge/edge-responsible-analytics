@@ -39,7 +39,8 @@ RUN apt-get update && \
 # Copy wheels from builder
 COPY --from=builder /build/wheels /wheels
 COPY docker/edge_device/requirements_edge_device.txt .
-RUN pip install --no-cache /wheels/*
+RUN pip install --no-cache-dir -r requirements_edge_device.txt --no-index --find-links /wheels && \
+    rm -rf /wheels
 
 # Copy application code from the 'edge' directory
 COPY edge/ ./edge/
