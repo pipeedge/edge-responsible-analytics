@@ -355,12 +355,13 @@ def send_trained_model(model_path, model_type, data_type):
                 f"{EDGE_PROCESSING_URL}/upload_model",
                 files=files,
                 data=data,
-                timeout=60  # Add timeout
+                timeout=300,
+                stream=True
             )
             logger.info(f"[{DEVICE_ID}] Request completed with status code: {response.status_code}")
             
         except requests.exceptions.Timeout:
-            logger.error(f"[{DEVICE_ID}] Request timed out after 60 seconds")
+            logger.error(f"[{DEVICE_ID}] Request timed out after 300 seconds")
             return False
         except requests.exceptions.ConnectionError as e:
             logger.error(f"[{DEVICE_ID}] Connection error: {e}")
