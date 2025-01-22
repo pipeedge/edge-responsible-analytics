@@ -34,8 +34,8 @@ def configure_memory_settings():
         logger.warning(f"Error configuring memory settings: {e}")
 
 configure_memory_settings()
-
-import paho.mqtt.client as mqtt
+from flask import Flask, request, jsonify
+import requests
 import json
 import threading
 import base64
@@ -58,18 +58,17 @@ from datetime import datetime
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
+EDGE_PROCESSING_URL = os.getenv('EDGE_PROCESSING_URL', 'http://edge-processing-service:8000')
 # MQTT_BROKER = os.getenv('MQTT_BROKER', '10.42.1.12')
 # MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
+# MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
 
 # Unique identifier for the end device (can be MAC address or any unique ID)
-DEVICE_ID = os.getenv('DEVICE_ID', 'device')
-
-# Initialize MQTT Client
-client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv5)
+DEVICE_ID = os.getenv('DEVICE_ID', 'edge')
+EDGE_DEVICE_PORT = int(os.getenv('EDGE_DEVICE_PORT', 5001))
 
 # Event to signal when a new aggregated model is received
 model_update_event = threading.Event()
@@ -81,6 +80,63 @@ model = None
 # Set up MLflow tracking
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
+
+# Flask app configuration
+app = Flask(__name__)
+
+@app.route('/receive_aggregated_model', methods=['POST'])
+def receive_aggregated_model():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data received'}), 400
+            
+        model_type = data.get('model_type')
+        model_b64 = data.get('model_data')
+        
+        if not all([model_type, model_b64]):
+            return jsonify({'error': 'Missing required fields'}), 400
+            
+        model_bytes = base64.b64decode(model_b64)
+        
+        if model_type == 'MobileNet':
+            # Handle single file model
+            model_path = 'mobilenet_model.keras'
+            with open(model_path, 'wb') as f:
+                f.write(model_bytes)
+        else:  # TinyBERT or T5
+            # Handle directory-based model
+            model_dir = 'tinybert_model' if model_type == 'tinybert' else 't5_small'
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                tmp.write(model_bytes)
+                tmp.flush()
+                
+                # Clear existing model directory if it exists
+                if os.path.exists(model_dir):
+                    shutil.rmtree(model_dir)
+                
+                # Extract the new model
+                with tarfile.open(tmp.name, 'r:gz') as tar:
+                    tar.extractall(path=os.path.dirname(model_dir))
+                
+                os.unlink(tmp.name)  # Clean up temp file
+        
+        # Load the new model
+        with model_lock:
+            global model
+            if model_type == 'MobileNet':
+                model = tf.keras.models.load_model(model_path, compile=False)
+                model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+            else:  # TinyBERT or T5
+                from load_models import load_bert_model
+                model, _ = load_bert_model()  # Reload with saved weights
+        
+        logger.info(f"[{DEVICE_ID}] Successfully received and loaded aggregated model")
+        return jsonify({'status': 'success', 'message': 'Model received and loaded'}), 200
+        
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] Error processing received model: {e}")
+        return jsonify({'error': str(e)}), 500
 
 def process_task(task):
     """
@@ -251,160 +307,108 @@ def process_task(task):
     else:
         return "Unknown task type"
 
-# Function to send the trained model
 def send_trained_model(model_path, model_type, data_type):
     try:
         logger.info(f"[{DEVICE_ID}] Attempting to send model from path: {model_path}")
         
         if not os.path.exists(model_path):
             logger.error(f"[{DEVICE_ID}] Model path does not exist: {model_path}")
-            return
+            return False
             
+        # Prepare the files and data
+        files = {}
+        data = {
+            'device_id': DEVICE_ID,
+            'model_type': model_type,
+            'data_type': data_type,
+            'callback_url': f'http://{DEVICE_ID}:{EDGE_DEVICE_PORT}/receive_aggregated_model'
+        }
+        
         if model_type == 'MobileNet':
             # Handle single file model
             if not os.path.isfile(model_path):
                 logger.error(f"[{DEVICE_ID}] Expected file for MobileNet but got directory: {model_path}")
-                return
+                return False
                 
-            with open(model_path, 'rb') as f:
-                model_bytes = f.read()
-                logger.info(f"[{DEVICE_ID}] Read {len(model_bytes)} bytes from MobileNet model file")
+            files['model'] = ('model.keras', open(model_path, 'rb'), 'application/octet-stream')
+            
         else:  # TinyBERT or T5
             # Create a temporary tar file
             if not os.path.isdir(model_path):
                 logger.error(f"[{DEVICE_ID}] Expected directory for {model_type} but got file: {model_path}")
-                return
+                return False
                 
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                 logger.info(f"[{DEVICE_ID}] Creating tar archive for {model_type} model")
-                archive_path = tmp.name[:-7]  # Remove .tar.gz
-                shutil.make_archive(archive_path, 'gztar', model_path)
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                files['model'] = ('model.tar.gz', open(tmp.name, 'rb'), 'application/gzip')
                 
-                with open(tmp.name, 'rb') as f:
-                    model_bytes = f.read()
-                    logger.info(f"[{DEVICE_ID}] Read {len(model_bytes)} bytes from {model_type} model archive")
-                os.unlink(tmp.name)  # Clean up temp file
+        # Send the model to edge processing
+        logger.info(f"[{DEVICE_ID}] Sending model to edge processing server")
+        response = requests.post(
+            f"{EDGE_PROCESSING_URL}/upload_model",
+            files=files,
+            data=data
+        )
         
-        # Encode the model bytes to base64
-        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-        logger.info(f"[{DEVICE_ID}] Base64 encoded model size: {len(model_b64)} characters")
-        
-        # Send the model in chunks
-        chunk_size = 100000  # 100KB chunks
-        total_chunks = (len(model_b64) + chunk_size - 1) // chunk_size
-        
-        logger.info(f"[{DEVICE_ID}] Splitting model into {total_chunks} chunks of {chunk_size} bytes each")
-        
-        for i in range(total_chunks):
-            start_idx = i * chunk_size
-            end_idx = min((i + 1) * chunk_size, len(model_b64))
-            chunk = model_b64[start_idx:end_idx]
+        # Clean up the files
+        for file_obj in files.values():
+            file_obj[1].close()
+        if model_type != 'MobileNet':
+            os.unlink(tmp.name)
             
-            payload = json.dumps({
-                'device_id': DEVICE_ID,
-                'model_type': model_type,
-                'model_data': chunk,
-                'data_type': data_type,
-                'chunk_info': {
-                    'chunk_index': i,
-                    'total_chunks': total_chunks,
-                    'is_last_chunk': i == total_chunks - 1
-                }
-            })
+        if response.status_code == 200:
+            logger.info(f"[{DEVICE_ID}] Successfully sent model to edge processing")
+            return True
+        else:
+            logger.error(f"[{DEVICE_ID}] Failed to send model: {response.status_code} - {response.text}")
+            return False
             
-            # Publish with QoS 1 and wait for confirmation
-            result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
-            result.wait_for_publish()
-            
-            if result.rc != 0:
-                logger.error(f"[{DEVICE_ID}] Failed to publish chunk {i+1}/{total_chunks}: {result.rc}")
-                return
-                
-            logger.info(f"[{DEVICE_ID}] Successfully sent chunk {i+1}/{total_chunks}")
-            time.sleep(0.1)
-            
-        logger.info(f"[{DEVICE_ID}] Successfully sent complete model to {MQTT_TOPIC_UPLOAD}")
-        
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to send trained model: {e}")
-
-# Callback when a message is received
-def on_message(client, userdata, msg):
-    if msg.topic == MQTT_TOPIC_AGGREGATED:
-        payload = json.loads(msg.payload.decode('utf-8'))
-        aggregated_model_b64 = payload.get('model_data')
-        model_type = payload.get('model_type')
-        
-        if aggregated_model_b64:
-            try:
-                model_bytes = base64.b64decode(aggregated_model_b64)
-                
-                if model_type == 'MobileNet':
-                    # Handle single file model
-                    model_path = 'mobilenet_model.keras'
-                    with open(model_path, 'wb') as f:
-                        f.write(model_bytes)
-                else:  # TinyBERT
-                    # Handle directory-based model
-                    model_dir = 'tinybert_model'
-                    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                        tmp.write(model_bytes)
-                        tmp.flush()
-                        
-                        # Clear existing model directory if it exists
-                        if os.path.exists(model_dir):
-                            shutil.rmtree(model_dir)
-                        
-                        # Extract the new model
-                        with tarfile.open(tmp.name, 'r:gz') as tar:
-                            tar.extractall(path=os.path.dirname(model_dir))
-                        
-                        os.unlink(tmp.name)  # Clean up temp file
-                
-                logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
-                
-                # Load the new model
-                with model_lock:
-                    global model
-                    if model_type == 'MobileNet':
-                        model = tf.keras.models.load_model(model_path, compile=False)
-                        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-                    else:  # TinyBERT
-                        from load_models import load_bert_model
-                        model, _ = load_bert_model()  # Reload with saved weights
-                
-                logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
-                model_update_event.set()
-                
-            except Exception as e:
-                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
-
-# Set up MQTT callbacks
-client.on_message = on_message
-
-# Connect to MQTT Broker
-def connect_mqtt():
-    try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_AGGREGATED)
-        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
-        # payload = json.dumps({
-        #     'device_id': DEVICE_ID,
-        #     'model_type': 'model_type',
-        #     'model_data': 'model_b64',
-        #     'data_type': 'data_type'
-        # })
-        # client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
-        return True
-    except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
         return False
 
-# Start MQTT loop in a separate thread
-def mqtt_loop():
-    client.loop_forever()
+def get_aggregated_model(model_type):
+    try:
+        logger.info(f"[{DEVICE_ID}] Requesting aggregated model of type {model_type}")
+        response = requests.get(f"{EDGE_PROCESSING_URL}/get_aggregated_model/{model_type}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            model_b64 = data['model_data']
+            model_bytes = base64.b64decode(model_b64)
+            
+            if model_type == 'MobileNet':
+                # Handle single file model
+                model_path = 'mobilenet_model.keras'
+                with open(model_path, 'wb') as f:
+                    f.write(model_bytes)
+            else:  # TinyBERT
+                # Handle directory-based model
+                model_dir = 'tinybert_model'
+                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                    tmp.write(model_bytes)
+                    tmp.flush()
+                    
+                    # Clear existing model directory if it exists
+                    if os.path.exists(model_dir):
+                        shutil.rmtree(model_dir)
+                    
+                    # Extract the new model
+                    with tarfile.open(tmp.name, 'r:gz') as tar:
+                        tar.extractall(path=os.path.dirname(model_dir))
+                    
+                    os.unlink(tmp.name)  # Clean up temp file
+            
+            logger.info(f"[{DEVICE_ID}] Successfully received and saved aggregated model")
+            return True
+        else:
+            logger.error(f"[{DEVICE_ID}] Failed to get aggregated model: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] Failed to get aggregated model: {e}")
+        return False
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
@@ -522,17 +526,12 @@ def main():
     monitor_thread.start()
 
     try:
-        # First connect to MQTT
-        if not connect_mqtt():
-            logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker. Exiting.")
-            return
-
-        # Start MQTT loop in background
-        mqtt_thread = threading.Thread(target=mqtt_loop)
-        mqtt_thread.daemon = True
-        mqtt_thread.start()
+        # Start Flask server in a separate thread
+        flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=EDGE_DEVICE_PORT))
+        flask_thread.daemon = True
+        flask_thread.start()
         
-        # Wait for MQTT connection to stabilize
+        # Wait for Flask server to start
         time.sleep(2)
         
         # Run task processing
@@ -542,17 +541,14 @@ def main():
             # Send the model
             send_trained_model(model_path, model_type, data_type)
             
-            # Keep the main thread alive to allow MQTT to send the model
-            # Wait longer to ensure all chunks are sent
-            time.sleep(10)
+            # Keep the main thread alive
+            while True:
+                time.sleep(1)
             
     except KeyboardInterrupt:
         logger.info(f"[{DEVICE_ID}] Shutting down.")
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Error in main loop: {e}")
-    finally:
-        client.disconnect()
-        client.loop_stop()
 
 if __name__ == "__main__":
     main()

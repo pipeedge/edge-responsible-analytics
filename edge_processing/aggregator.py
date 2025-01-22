@@ -10,13 +10,13 @@ import threading
 import sys
 import logging
 import requests
+from flask import Flask, request, jsonify
 import mlflow
 import mlflow.tensorflow
 from mlflow.tracking import MlflowClient
 from mlflow.models import infer_signature
 from typing import Dict
 
-import paho.mqtt.client as mqtt
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -44,24 +44,15 @@ mlflow.set_experiment("Model_Evaluation")
 # Initialize MLflow client
 mlflow_client = MlflowClient()
 
-# MQTT Configuration
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
-# MQTT_BROKER = os.getenv('MQTT_BROKER', '10.42.1.12')
-# MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
-MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
-MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
-MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
+# Flask app configuration
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Number of end devices expected
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
-Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
-# Initialize MQTT Client
-client = mqtt.Client(client_id=Agg_ID, protocol=mqtt.MQTTv5)
-
-# Dictionary to store received models and their chunks
+# Dictionary to store received models
 received_models = {}
-model_chunks = {}
 lock = threading.Lock()
 
 # Load thresholds
@@ -96,72 +87,77 @@ MODEL_PATHS = {
 CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-service:8080')
 SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 
-def on_message(client, userdata, msg):
-    logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
-    if msg.topic == MQTT_TOPIC_UPLOAD:
-        try:
-            payload = json.loads(msg.payload.decode('utf-8'))
-            device_id = payload.get('device_id')
-            model_type = payload.get('model_type')
-            chunk_data = payload.get('model_data')
-            data_type = payload.get('data_type')
-            chunk_info = payload.get('chunk_info')
-
-            if not all([device_id, model_type, chunk_data, chunk_info]):
-                logger.error("Received message with missing fields.")
-                return
-
-            with lock:
-                # Initialize chunk storage for this device if not exists
-                if device_id not in model_chunks:
-                    model_chunks[device_id] = {
-                        'chunks': {},
-                        'model_type': model_type,
-                        'data_type': data_type,
-                        'total_chunks': chunk_info['total_chunks']
-                    }
-
-                # Store the chunk
-                chunk_index = chunk_info['chunk_index']
-                model_chunks[device_id]['chunks'][chunk_index] = chunk_data
+@app.route('/upload_model', methods=['POST'])
+def upload_model():
+    try:
+        if 'model' not in request.files:
+            return jsonify({'error': 'No model file provided'}), 400
+            
+        device_id = request.form.get('device_id')
+        model_type = request.form.get('model_type')
+        data_type = request.form.get('data_type')
+        callback_url = request.form.get('callback_url')
+        
+        if not all([device_id, model_type, data_type, callback_url]):
+            return jsonify({'error': 'Missing required fields'}), 400
+            
+        model_file = request.files['model']
+        model_bytes = model_file.read()
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        
+        logger.info(f"Received model from {device_id}, size: {len(model_bytes)} bytes")
+        
+        with lock:
+            if device_id not in received_models:
+                received_models[device_id] = {
+                    'model_type': model_type,
+                    'model_data': model_b64,
+                    'data_type': data_type,
+                    'callback_url': callback_url
+                }
+                logger.info(f"Stored model from {device_id}")
                 
-                logger.info(f"Received chunk {chunk_index + 1}/{chunk_info['total_chunks']} from {device_id}")
+                # After receiving model, evaluate and aggregate
+                result = evaluate_and_aggregate()
+                return jsonify({'status': 'success', 'message': 'Model received and processing started'}), 200
+            else:
+                return jsonify({'error': 'Model already received from this device'}), 409
+                
+    except Exception as e:
+        logger.exception(f"Error processing model upload: {e}")
+        return jsonify({'error': str(e)}), 500
 
-                # Check if we have all chunks for this device
-                if len(model_chunks[device_id]['chunks']) == model_chunks[device_id]['total_chunks']:
-                    logger.info(f"All chunks received for {device_id}, reconstructing model...")
-                    
-                    # Reconstruct the complete model data
-                    chunks = []
-                    for i in range(model_chunks[device_id]['total_chunks']):
-                        if i not in model_chunks[device_id]['chunks']:
-                            logger.error(f"Missing chunk {i} for {device_id}")
-                            return
-                        chunks.append(model_chunks[device_id]['chunks'][i])
-                    
-                    complete_model_data = ''.join(chunks)
-                    
-                    # Store the complete model
-                    if device_id not in received_models:
-                        received_models[device_id] = {
-                            'model_type': model_type,
-                            'model_data': complete_model_data,
-                            'data_type': data_type
-                        }
-                        logger.info(f"Successfully reconstructed and stored model from {device_id}")
-                        
-                        # Clean up chunks
-                        del model_chunks[device_id]
-                        
-                        # After receiving complete model, evaluate fairness
-                        evaluate_and_aggregate()
-                    else:
-                        logger.warning(f"Model from {device_id} already received.")
-
-        except json.JSONDecodeError:
-            logger.exception("Failed to decode JSON payload.")
-        except Exception as e:
-            logger.exception(f"Unexpected error in on_message: {e}")
+@app.route('/get_aggregated_model/<model_type>', methods=['GET'])
+def get_aggregated_model(model_type):
+    try:
+        if model_type == 'MobileNet':
+            model_path = MODEL_PATHS[model_type]['current']
+            if not os.path.exists(model_path):
+                return jsonify({'error': 'No aggregated model available'}), 404
+                
+            with open(model_path, 'rb') as f:
+                model_bytes = f.read()
+        else:  # TinyBERT or T5
+            model_dir = MODEL_PATHS[model_type]['current']
+            if not os.path.exists(model_dir):
+                return jsonify({'error': 'No aggregated model available'}), 404
+                
+            # Create temporary tar file
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_dir)
+                with open(tmp.name, 'rb') as f:
+                    model_bytes = f.read()
+                os.unlink(tmp.name)
+        
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        return jsonify({
+            'model_data': model_b64,
+            'model_type': model_type
+        }), 200
+        
+    except Exception as e:
+        logger.exception(f"Error serving aggregated model: {e}")
+        return jsonify({'error': str(e)}), 500
 
 def evaluate_and_aggregate():
     with lock:
@@ -209,6 +205,10 @@ def evaluate_and_aggregate():
                 try:
                     aggregate_models(models_of_type, model_type, current_path)
                     logger.info(f"Aggregated {model_type} model saved to {current_path}")
+                    
+                    # After successful aggregation, send to edge devices
+                    publish_aggregated_model(model_type, current_path)
+                    
                 except Exception as e:
                     logger.exception(f"Failed to aggregate {model_type} models: {e}")
                     continue
@@ -689,31 +689,56 @@ def aggregate_models(models_of_type, model_type, save_path):
 
 def publish_aggregated_model(model_type, model_path):
     """
-    Publish the aggregated model to the MQTT broker.
+    Send the aggregated model back to the edge devices.
     """
     try:
+        # Read the model file
         if model_type == 'MobileNet':
-            # Handle single file model
             with open(model_path, 'rb') as f:
-                aggregated_model_bytes = f.read()
-        else:  # Directory-based models (T5, TinyBERT)
-            # Create a temporary tar file
+                model_bytes = f.read()
+        else:  # TinyBERT or T5
+            # Create temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                # Create tar archive of the model directory
                 shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
                 with open(tmp.name, 'rb') as f:
-                    aggregated_model_bytes = f.read()
-                os.unlink(tmp.name)  # Clean up temp file
-
-        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-        payload = json.dumps({
-            'model_data': aggregated_model_b64,
-            'model_type': model_type
-        })
-        client.publish(MQTT_TOPIC_AGGREGATED, payload)
-        logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+                    model_bytes = f.read()
+                os.unlink(tmp.name)
+        
+        # Encode model to base64
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        
+        # Prepare payload
+        payload = {
+            'model_type': model_type,
+            'model_data': model_b64
+        }
+        
+        # Send to each edge device that contributed
+        with lock:
+            for device_id, info in received_models.items():
+                if info['model_type'] == model_type:
+                    callback_url = info['callback_url']
+                    try:
+                        logger.info(f"Sending aggregated model to device {device_id} at {callback_url}")
+                        response = requests.post(
+                            callback_url,
+                            json=payload,
+                            headers={'Content-Type': 'application/json'}
+                        )
+                        
+                        if response.status_code == 200:
+                            logger.info(f"Successfully sent aggregated model to device {device_id}")
+                        else:
+                            logger.error(f"Failed to send aggregated model to device {device_id}: {response.status_code} - {response.text}")
+                            
+                    except Exception as e:
+                        logger.exception(f"Error sending aggregated model to device {device_id}: {e}")
+            
+            # Clear received models of this type after sending
+            received_models.clear()
+            
     except Exception as e:
-        logger.error(f"Failed to publish aggregated model: {e}")
+        logger.exception(f"Error in publish_aggregated_model: {e}")
 
 def notify_policy_failure(failed_policies):
     """
@@ -721,22 +746,6 @@ def notify_policy_failure(failed_policies):
     """
     logger.warning(f"Policies failed: {failed_policies}")
     # Implement additional notification mechanisms as needed (e.g., email, alerts)
-
-def connect_mqtt():
-    """
-    Connect to the MQTT broker and subscribe to relevant topics.
-    """
-    client.on_message = on_message
-    try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_UPLOAD)
-        client.loop_start()
-        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
-        return True
-    except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
-        return False
 
 def send_to_opa(input_data, policy_type):
     """
@@ -856,7 +865,7 @@ def sync_with_cloud():
                     
                     logger.info(f"Updated local {model_type} model with global model")
                     
-                    # Distribute updated model to edge devices via MQTT
+                    # Distribute updated model to edge devices
                     publish_aggregated_model(model_type, current_path)
                 else:
                     logger.warning(f"Cloud sync failed for {model_type}: {result.get('message')}")
@@ -880,24 +889,16 @@ def main():
     try:
         # Start parent MLflow run
         with mlflow.start_run(run_name="Model_Aggregation_Parent"):
-            # Connect to MQTT for edge device communication
-            if not connect_mqtt():
-                logger.error("Failed to connect to MQTT broker. Exiting.")
-                sys.exit(1)
-                
             # Start cloud sync in a separate thread
             sync_thread = threading.Thread(target=schedule_cloud_sync)
             sync_thread.daemon = True
             sync_thread.start()
             logger.info("Started cloud synchronization thread")
-
-            try:
-                while True:
-                    time.sleep(1)  # Keep the main thread alive
-            except KeyboardInterrupt:
-                logger.info("Shutting down aggregator.")
-                client.loop_stop()
-                client.disconnect()
+            
+            # Start Flask server
+            logger.info("Starting Flask server to receive models...")
+            app.run(host='0.0.0.0', port=8000, threaded=True)
+            
     except Exception as e:
         logger.exception("Error in main loop")
     finally:
@@ -907,6 +908,4 @@ def main():
             mlflow.end_run()
 
 if __name__ == "__main__":
-    # Define expected number of devices
-    # EXPECTED_DEVICES = 1  # Adjust as needed
     main()
