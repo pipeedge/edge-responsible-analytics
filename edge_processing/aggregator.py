@@ -27,6 +27,7 @@ import tempfile
 from utils.policy_evaluator import *
 import schedule
 from datetime import datetime
+from utils.mqtt_transfer import ChunkedMQTTTransfer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -95,38 +96,46 @@ MODEL_PATHS = {
 CLOUD_API_URL = os.getenv('CLOUD_API_URL', 'http://cloud-service:8080')
 SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 
+# Initialize chunked transfer handler
+chunked_transfer = ChunkedMQTTTransfer(client, Agg_ID)
+
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
-    if msg.topic == MQTT_TOPIC_UPLOAD:
+    
+    # Handle chunked transfers
+    if msg.topic.startswith(MQTT_TOPIC_UPLOAD):
         try:
-            payload = json.loads(msg.payload.decode('utf-8'))
-            device_id = payload.get('device_id')
-            model_type = payload.get('model_type')
-            model_b64 = payload.get('model_data')
-            data_type = payload.get('data_type')
-
-            if device_id and model_type and model_b64:
-                with lock:
-                    if device_id not in received_models:
-                        logger.info(f"Received {model_type} model from {device_id}")
-                        received_models[device_id] = {
-                            'model_type': model_type,
-                            'model_data': model_b64,
-                            'data_type': data_type
-                        }
-                    else:
-                        logger.warning(f"Model from {device_id} already received.")
-
-                # After receiving, evaluate fairness
-                evaluate_and_aggregate()
-
-            else:
-                logger.error("Received message with missing fields.")
-
-        except json.JSONDecodeError:
-            logger.exception("Failed to decode JSON payload.")
+            # Process chunk message
+            result = chunked_transfer.handle_chunk_message(msg)
+            
+            # If we have a complete model
+            if result is not None:
+                device_id = result['device_id']
+                model_bytes = result['data']
+                metadata = result['metadata']
+                
+                model_type = metadata.get('model_type')
+                data_type = metadata.get('data_type')
+                
+                if device_id and model_type:
+                    with lock:
+                        if device_id not in received_models:
+                            logger.info(f"Received complete {model_type} model from {device_id}")
+                            received_models[device_id] = {
+                                'model_type': model_type,
+                                'model_data': base64.b64encode(model_bytes).decode('utf-8'),
+                                'data_type': data_type
+                            }
+                        else:
+                            logger.warning(f"Model from {device_id} already received.")
+                    
+                    # After receiving, evaluate fairness
+                    evaluate_and_aggregate()
+                else:
+                    logger.error("Received message with missing fields.")
+                    
         except Exception as e:
-            logger.exception(f"Unexpected error in on_message: {e}")
+            logger.exception(f"Error processing chunked message: {e}")
 
 def evaluate_and_aggregate():
     with lock:
@@ -652,29 +661,40 @@ def aggregate_models(models_of_type, model_type, save_path):
 
 def publish_aggregated_model(model_type, model_path):
     """
-    Publish the aggregated model to the MQTT broker.
+    Publish the aggregated model to the MQTT broker using chunked transfer.
     """
     try:
         if model_type == 'MobileNet':
             # Handle single file model
             with open(model_path, 'rb') as f:
-                aggregated_model_bytes = f.read()
+                model_bytes = f.read()
         else:  # Directory-based models (T5, TinyBERT)
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                 # Create tar archive of the model directory
                 shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
                 with open(tmp.name, 'rb') as f:
-                    aggregated_model_bytes = f.read()
+                    model_bytes = f.read()
                 os.unlink(tmp.name)  # Clean up temp file
 
-        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
-        payload = json.dumps({
-            'model_data': aggregated_model_b64,
-            'model_type': model_type
-        })
-        client.publish(MQTT_TOPIC_AGGREGATED, payload)
-        logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+        # Prepare metadata
+        metadata = {
+            'model_type': model_type,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Send the aggregated model using chunked transfer
+        success = chunked_transfer.send_file_in_chunks(
+            model_bytes,
+            MQTT_TOPIC_AGGREGATED,
+            metadata=metadata
+        )
+        
+        if success:
+            logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+        else:
+            logger.error(f"Failed to publish aggregated {model_type} model")
+            
     except Exception as e:
         logger.error(f"Failed to publish aggregated model: {e}")
 

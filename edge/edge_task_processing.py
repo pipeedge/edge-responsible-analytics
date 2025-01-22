@@ -55,6 +55,7 @@ from dataset.mt_processor import process_medical_transcriptions_data
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from utils.mqtt_transfer import ChunkedMQTTTransfer
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -81,6 +82,9 @@ model = None
 # Set up MLflow tracking
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 #mlflow.set_experiment("Edge_Responsible_Analytics")
+
+# Initialize chunked transfer handler
+chunked_transfer = ChunkedMQTTTransfer(client, DEVICE_ID)
 
 def process_task(task):
     """
@@ -252,85 +256,94 @@ def process_task(task):
         return "Unknown task type"
 
 # Function to send the trained model
-def send_trained_model(model_path, model_type, data_tpye):
+def send_trained_model(model_path, model_type, data_type):
     try:
+        # Read the model file(s)
         if model_type == 'MobileNet':
             # Handle single file model
             with open(model_path, 'rb') as f:
                 model_bytes = f.read()
-            model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-        else:  # TinyBERT
+        else:  # TinyBERT or other directory-based models
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                 shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
                 with open(tmp.name, 'rb') as f:
                     model_bytes = f.read()
-                model_b64 = base64.b64encode(model_bytes).decode('utf-8')
                 os.unlink(tmp.name)  # Clean up temp file
         
-        print(f"Fist 16 bytes of model: {model_b64[:16]}")
-        print(f"Type of model_b64: {type(model_b64)}")
-        # Send the model
-        len_model_b64 = len(model_b64)
-        payload = json.dumps({
-            'device_id': DEVICE_ID,
+        # Prepare metadata
+        metadata = {
             'model_type': model_type,
-            'model_data': model_b64[len_model_b64//2:],
-            'data_type': data_tpye
-        })
-        client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+            'data_type': data_type,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Send the model using chunked transfer
+        success = chunked_transfer.send_file_in_chunks(
+            model_bytes,
+            MQTT_TOPIC_UPLOAD,
+            metadata=metadata
+        )
+        
+        if success:
+            logger.info(f"[{DEVICE_ID}] Successfully sent trained model to {MQTT_TOPIC_UPLOAD}")
+        else:
+            logger.error(f"[{DEVICE_ID}] Failed to send trained model")
+            
     except Exception as e:
-        print(f"[{DEVICE_ID}] Failed to send trained model: {e}")
+        logger.error(f"[{DEVICE_ID}] Failed to send trained model: {e}")
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
-    if msg.topic == MQTT_TOPIC_AGGREGATED:
-        payload = json.loads(msg.payload.decode('utf-8'))
-        aggregated_model_b64 = payload.get('model_data')
-        model_type = payload.get('model_type')
+    if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
+        # Process chunk message
+        result = chunked_transfer.handle_chunk_message(msg)
         
-        if aggregated_model_b64:
+        # If we have a complete model
+        if result is not None:
             try:
-                model_bytes = base64.b64decode(aggregated_model_b64)
+                model_bytes = result['data']
+                metadata = result['metadata']
+                model_type = metadata.get('model_type')
                 
-                if model_type == 'MobileNet':
-                    # Handle single file model
-                    model_path = 'mobilenet_model.keras'
-                    with open(model_path, 'wb') as f:
-                        f.write(model_bytes)
-                else:  # TinyBERT
-                    # Handle directory-based model
-                    model_dir = 'tinybert_model'
-                    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                        tmp.write(model_bytes)
-                        tmp.flush()
-                        
-                        # Clear existing model directory if it exists
-                        if os.path.exists(model_dir):
-                            shutil.rmtree(model_dir)
-                        
-                        # Extract the new model
-                        with tarfile.open(tmp.name, 'r:gz') as tar:
-                            tar.extractall(path=os.path.dirname(model_dir))
-                        
-                        os.unlink(tmp.name)  # Clean up temp file
-                
-                logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
-                
-                # Load the new model
-                with model_lock:
-                    global model
+                if model_type:
                     if model_type == 'MobileNet':
-                        model = tf.keras.models.load_model(model_path, compile=False)
-                        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-                    else:  # TinyBERT
-                        from load_models import load_bert_model
-                        model, _ = load_bert_model()  # Reload with saved weights
-                
-                logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
-                model_update_event.set()
-                
+                        # Handle single file model
+                        model_path = 'mobilenet_model.keras'
+                        with open(model_path, 'wb') as f:
+                            f.write(model_bytes)
+                    else:  # TinyBERT or other directory-based models
+                        # Handle directory-based model
+                        model_dir = 'tinybert_model'
+                        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                            tmp.write(model_bytes)
+                            tmp.flush()
+                            
+                            # Clear existing model directory if it exists
+                            if os.path.exists(model_dir):
+                                shutil.rmtree(model_dir)
+                            
+                            # Extract the new model
+                            with tarfile.open(tmp.name, 'r:gz') as tar:
+                                tar.extractall(path=os.path.dirname(model_dir))
+                            
+                            os.unlink(tmp.name)  # Clean up temp file
+                    
+                    logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+                    
+                    # Load the new model
+                    with model_lock:
+                        global model
+                        if model_type == 'MobileNet':
+                            model = tf.keras.models.load_model(model_path, compile=False)
+                            model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                        else:  # TinyBERT
+                            from load_models import load_bert_model
+                            model, _ = load_bert_model()  # Reload with saved weights
+                    
+                    logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
+                    model_update_event.set()
+                    
             except Exception as e:
                 logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
 
