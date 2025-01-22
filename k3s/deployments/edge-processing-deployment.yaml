@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: edge-processing-deployment
+  name: edge-processing
   labels:
     app: edge-processing
 spec:
+  serviceName: "edge-processing"
   replicas: 1
   selector:
     matchLabels:
@@ -55,7 +56,7 @@ spec:
           - name: EDGE_SERVER_ID
             valueFrom:
               fieldRef:
-                fieldPath: spec.nodeName
+                fieldPath: metadata.name
           - name: CLOUD_API_URL
             value: "http://cloud-layer-service:8080"
           - name: PYTHONPATH

@@ -280,7 +280,7 @@ def send_trained_model(model_path, model_type, data_type):
         
         # Send the model using chunked transfer
         success = chunked_transfer.send_file_in_chunks(
-            model_bytes,
+            model_bytes[:64],
             MQTT_TOPIC_UPLOAD,
             metadata=metadata
         )

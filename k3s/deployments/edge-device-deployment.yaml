@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: edge-device-deployment
+  name: edge-device
   labels:
     app: edge-device
 spec:
+  serviceName: "edge-device"
   replicas: 1
   selector:
     matchLabels:
@@ -59,7 +60,7 @@ spec:
             - name: DEVICE_ID
               valueFrom:
                 fieldRef:
-                  fieldPath: spec.nodeName
+                  fieldPath: metadata.name
             - name: EDGE_SERVER_ID
               valueFrom:
                 fieldRef:

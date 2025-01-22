@@ -5,19 +5,19 @@ metadata:
   labels:
     app: edge-processing
 spec:
+  clusterIP: None  # Headless service
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: api-port
+  - port: 5002
+    targetPort: 5002
+    name: mlflow-port
+  - port: 8181
+    targetPort: 8181
+    name: opa-port
+  - port: 1883
+    targetPort: 1883
+    name: mqtt-port
   selector:
     app: edge-processing
-  ports:
-    - name: http
-      protocol: TCP
-      port: 8000
-      targetPort: 8000
-    - name: mlflow
-      protocol: TCP
-      port: 5002
-      targetPort: 5002
-    - name: opa
-      protocol: TCP
-      port: 8181
-      targetPort: 8181
-  type: ClusterIP

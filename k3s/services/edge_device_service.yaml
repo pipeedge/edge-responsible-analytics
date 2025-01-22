@@ -5,10 +5,10 @@ metadata:
   labels:
     app: edge-device
 spec:
+  clusterIP: None  # Headless service
+  ports:
+  - port: 8001
+    targetPort: 8001
+    name: edge-device-port
   selector:
     app: edge-device
-  ports:
-    - protocol: TCP
-      port: 8001
-      targetPort: 8001
-  type: ClusterIP
