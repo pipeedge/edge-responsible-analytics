@@ -252,7 +252,7 @@ def process_task(task):
         return "Unknown task type"
 
 # Function to send the trained model
-def send_trained_model(model_path, model_type, data_tpye):
+def send_trained_model(model_path, model_type, data_type):
     try:
         logger.info(f"[{DEVICE_ID}] Attempting to send model from path: {model_path}")
         
@@ -285,15 +285,46 @@ def send_trained_model(model_path, model_type, data_tpye):
                     logger.info(f"[{DEVICE_ID}] Read {len(model_bytes)} bytes from {model_type} model archive")
                 os.unlink(tmp.name)  # Clean up temp file
         
-        # Send the model
-        payload = json.dumps({
-            'device_id': DEVICE_ID,
-            'model_type': model_type,
-            'model_data': model_b64,
-            'data_type': data_type
-        })
-        client.publish(MQTT_TOPIC_UPLOAD, payload)
-        print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
+        # Encode the model bytes to base64
+        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
+        logger.info(f"[{DEVICE_ID}] Base64 encoded model size: {len(model_b64)} characters")
+        
+        # Send the model in chunks
+        chunk_size = 100000  # 100KB chunks
+        total_chunks = (len(model_b64) + chunk_size - 1) // chunk_size
+        
+        logger.info(f"[{DEVICE_ID}] Splitting model into {total_chunks} chunks of {chunk_size} bytes each")
+        
+        for i in range(total_chunks):
+            start_idx = i * chunk_size
+            end_idx = min((i + 1) * chunk_size, len(model_b64))
+            chunk = model_b64[start_idx:end_idx]
+            
+            payload = json.dumps({
+                'device_id': DEVICE_ID,
+                'model_type': model_type,
+                'model_data': chunk,
+                'data_type': data_type,
+                'chunk_info': {
+                    'chunk_index': i,
+                    'total_chunks': total_chunks,
+                    'is_last_chunk': i == total_chunks - 1
+                }
+            })
+            
+            # Publish with QoS 1 and wait for confirmation
+            result = client.publish(MQTT_TOPIC_UPLOAD, payload, qos=1)
+            result.wait_for_publish()
+            
+            if result.rc != 0:
+                logger.error(f"[{DEVICE_ID}] Failed to publish chunk {i+1}/{total_chunks}: {result.rc}")
+                return
+                
+            logger.info(f"[{DEVICE_ID}] Successfully sent chunk {i+1}/{total_chunks}")
+            time.sleep(0.1)
+            
+        logger.info(f"[{DEVICE_ID}] Successfully sent complete model to {MQTT_TOPIC_UPLOAD}")
+        
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to send trained model: {e}")
 
@@ -366,8 +397,10 @@ def connect_mqtt():
         # })
         # client.publish(MQTT_TOPIC_UPLOAD, payload)
         print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
+        return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
+        return False
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
@@ -484,32 +517,42 @@ def main():
 
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
 
-    try:
-        # First run task processing
-        model_path, model_type, data_type = task_processing(task_type, model_type, data_type)
-        
-        # After task is complete, connect to MQTT
-        connect_mqtt()
-        
-        # Start MQTT loop in background
-        thread = threading.Thread(target=mqtt_loop)
-        thread.daemon = True
-        thread.start()
-        
-        # Send the model
-        send_trained_model(model_path, model_type, data_type)
-        
-        # Keep the main thread alive to allow MQTT to send the model
-        while True:
-            time.sleep(1)
-            
-    except KeyboardInterrupt:
-        print(f"[{DEVICE_ID}] Shutting down.")
-        client.disconnect()
-
     # Start memory monitoring thread
     monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
     monitor_thread.start()
+
+    try:
+        # First connect to MQTT
+        if not connect_mqtt():
+            logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker. Exiting.")
+            return
+
+        # Start MQTT loop in background
+        mqtt_thread = threading.Thread(target=mqtt_loop)
+        mqtt_thread.daemon = True
+        mqtt_thread.start()
+        
+        # Wait for MQTT connection to stabilize
+        time.sleep(2)
+        
+        # Run task processing
+        model_path, model_type, data_type = task_processing(task_type, model_type, data_type)
+        
+        if model_path:
+            # Send the model
+            send_trained_model(model_path, model_type, data_type)
+            
+            # Keep the main thread alive to allow MQTT to send the model
+            # Wait longer to ensure all chunks are sent
+            time.sleep(10)
+            
+    except KeyboardInterrupt:
+        logger.info(f"[{DEVICE_ID}] Shutting down.")
+    except Exception as e:
+        logger.exception(f"[{DEVICE_ID}] Error in main loop: {e}")
+    finally:
+        client.disconnect()
+        client.loop_stop()
 
 if __name__ == "__main__":
     main()
