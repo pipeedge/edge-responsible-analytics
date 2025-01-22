@@ -355,39 +355,31 @@ def send_trained_model(model_path, model_type, data_type, max_retries=3):
                 
                 # Configure session for efficient upload
                 session.headers.update({
-                    'Content-Type': 'multipart/form-data',
                     'Connection': 'keep-alive'
                 })
                 
-                # Use a generator to read the file in chunks
-                def file_reader():
-                    with open(model_path, 'rb') as f:
-                        while True:
-                            chunk = f.read(8192)  # 8KB chunks
-                            if not chunk:
-                                break
-                            yield chunk
-                
-                files = {
-                    'model': ('model.keras', file_reader(), 'application/octet-stream')
-                }
-                
-                logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
-                
-                response = session.post(
-                    f"{EDGE_PROCESSING_URL}/upload_model",
-                    files=files,
-                    data=data,
-                    timeout=(120, 1800),
-                    verify=False  # Disable SSL verification for internal communication
-                )
-                
-                if response.status_code == 200:
-                    logger.info(f"[{DEVICE_ID}] Successfully sent model")
-                    return True
-                else:
-                    logger.error(f"[{DEVICE_ID}] Failed to send model: {response.status_code} - {response.text}")
-                    return False
+                # Open file directly for upload
+                with open(model_path, 'rb') as f:
+                    files = {
+                        'model': ('model.keras', f, 'application/octet-stream')
+                    }
+                    
+                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
+                    
+                    response = session.post(
+                        f"{EDGE_PROCESSING_URL}/upload_model",
+                        files=files,
+                        data=data,
+                        timeout=(120, 1800),  # 2 min connect, 30 min read
+                        verify=False  # Disable SSL verification for internal communication
+                    )
+                    
+                    if response.status_code == 200:
+                        logger.info(f"[{DEVICE_ID}] Successfully sent model")
+                        return True
+                    else:
+                        logger.error(f"[{DEVICE_ID}] Failed to send model: {response.status_code} - {response.text}")
+                        return False
             
             else:  # TinyBERT or T5
                 # Create a temporary tar file

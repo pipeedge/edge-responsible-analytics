@@ -93,7 +93,6 @@ SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 def upload_model():
     try:
         logger.info("Received upload_model request")
-        logger.info(f"Request content type: {request}")
         logger.info(f"Request content type: {request.content_type}")
         logger.info(f"Request form data: {request.form}")
         logger.info(f"Request files: {request.files}")
@@ -940,7 +939,7 @@ def main():
         options = {
             'bind': '0.0.0.0:8000',
             'workers': 3,
-            'timeout': 300,  # 30 minutes timeout
+            'timeout': 300,
             'worker_class': 'gthread',  # Use threaded worker
             'worker_connections': 1000,
             'threads': 3,
