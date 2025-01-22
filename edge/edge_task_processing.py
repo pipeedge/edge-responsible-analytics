@@ -289,7 +289,7 @@ def send_trained_model(model_path, model_type, data_type):
         logger.info(f"[{DEVICE_ID}] Base64 encoded model size: {len(model_b64)} characters")
         
         # Send the model in chunks if it's large
-        chunk_size = 10000  # 10KB chunks
+        chunk_size = 100000  # 100KB chunks
         total_chunks = (len(model_b64) + chunk_size - 1) // chunk_size
         
         for i in range(total_chunks):
@@ -320,7 +320,7 @@ def send_trained_model(model_path, model_type, data_type):
                 return
                 
             logger.info(f"[{DEVICE_ID}] Successfully sent chunk {i+1}/{total_chunks}")
-            time.sleep(0.5)  # Small delay between chunks
+            time.sleep(0.1)  # Small delay between chunks
             
         logger.info(f"[{DEVICE_ID}] Successfully sent complete model to {MQTT_TOPIC_UPLOAD}")
         
@@ -482,7 +482,7 @@ def clean_up():
     gc.collect()
     logger.info("Performed garbage collection.")
 
-def memory_monitor(interval=60):
+def memory_monitor(interval=120):
     """
     Thread function to monitor memory usage at specified intervals.
     
@@ -514,10 +514,6 @@ def main():
 
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
 
-    # Start memory monitoring thread
-    monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
-    monitor_thread.start()
-
     try:
         # First run task processing
         model_path, model_type, data_type = task_processing(task_type, model_type, data_type)
@@ -540,6 +536,10 @@ def main():
     except KeyboardInterrupt:
         print(f"[{DEVICE_ID}] Shutting down.")
         client.disconnect()
+
+    # Start memory monitoring thread
+    monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
+    monitor_thread.start()
 
 if __name__ == "__main__":
     main()
