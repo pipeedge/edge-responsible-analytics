@@ -353,43 +353,27 @@ def send_trained_model(model_path, model_type, data_type, max_retries=3):
                 file_size = os.path.getsize(model_path)
                 logger.info(f"[{DEVICE_ID}] Model file size: {file_size/1024/1024:.2f} MB")
                 
-                # Use chunked upload for large files
-                CHUNK_SIZE = 1024 * 1024  # 1MB chunks
-                
                 with open(model_path, 'rb') as f:
-                    # Create a generator for chunked upload
-                    def file_chunks():
-                        while True:
-                            chunk = f.read(CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            yield chunk
-                    
                     files = {
-                        'model': ('model.keras', file_chunks(), 'application/octet-stream')
+                        'model': ('model.keras', f, 'application/octet-stream')
                     }
                     
-                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL} in chunks")
-                    headers = {
-                        'Transfer-Encoding': 'chunked'
-                    }
+                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
                     
                     response = session.post(
                         f"{EDGE_PROCESSING_URL}/upload_model",
                         files=files,
                         data=data,
-                        headers=headers,
                         timeout=(30, 1800),  # 30s connect, 30min read
                         stream=True
                     )
                     
-                    # Monitor upload progress
-                    bytes_sent = 0
+                    # Monitor response streaming
+                    total_received = 0
                     for chunk in response.iter_content(chunk_size=8192):
-                        bytes_sent += len(chunk)
-                        progress = (bytes_sent / file_size) * 100
-                        if progress % 10 == 0:  # Log every 10%
-                            logger.info(f"[{DEVICE_ID}] Upload progress: {progress:.1f}%")
+                        if chunk:
+                            total_received += len(chunk)
+                            logger.info(f"[{DEVICE_ID}] Response progress: {total_received} bytes received")
             
             else:  # TinyBERT or T5
                 # Create a temporary tar file
