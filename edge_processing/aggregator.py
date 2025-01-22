@@ -940,10 +940,13 @@ def main():
         options = {
             'bind': '0.0.0.0:8000',
             'workers': 3,
-            'timeout': 300,  # 5 minutes timeout
-            'worker_class': 'sync',
+            'timeout': 300,  # 30 minutes timeout
+            'worker_class': 'gthread',  # Use threaded worker
+            'worker_connections': 1000,
+            'threads': 3,
             'keepalive': 5,
-            'threads': 3
+            'max_requests': 0,  # Disable max requests
+            'max_requests_jitter': 0
         }
 
         logger.info("Starting gunicorn server to receive models...")
