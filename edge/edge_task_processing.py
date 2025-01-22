@@ -350,23 +350,47 @@ def send_trained_model(model_path, model_type, data_type, max_retries=3):
                     return False
                     
                 logger.info(f"[{DEVICE_ID}] Reading MobileNet model file: {model_path}")
-                # Get file size
                 file_size = os.path.getsize(model_path)
                 logger.info(f"[{DEVICE_ID}] Model file size: {file_size/1024/1024:.2f} MB")
                 
+                # Use chunked upload for large files
+                CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+                
                 with open(model_path, 'rb') as f:
+                    # Create a generator for chunked upload
+                    def file_chunks():
+                        while True:
+                            chunk = f.read(CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            yield chunk
+                    
                     files = {
-                        'model': ('model.keras', f, 'application/octet-stream')
+                        'model': ('model.keras', file_chunks(), 'application/octet-stream')
                     }
-                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
+                    
+                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL} in chunks")
+                    headers = {
+                        'Transfer-Encoding': 'chunked'
+                    }
+                    
                     response = session.post(
                         f"{EDGE_PROCESSING_URL}/upload_model",
                         files=files,
                         data=data,
-                        timeout=(60, 600),  # (connect timeout, read timeout) - 30s connect, 10min read
-                        stream=True  # Enable streaming for large files
+                        headers=headers,
+                        timeout=(30, 1800),  # 30s connect, 30min read
+                        stream=True
                     )
                     
+                    # Monitor upload progress
+                    bytes_sent = 0
+                    for chunk in response.iter_content(chunk_size=8192):
+                        bytes_sent += len(chunk)
+                        progress = (bytes_sent / file_size) * 100
+                        if progress % 10 == 0:  # Log every 10%
+                            logger.info(f"[{DEVICE_ID}] Upload progress: {progress:.1f}%")
+            
             else:  # TinyBERT or T5
                 # Create a temporary tar file
                 if not os.path.isdir(model_path):
