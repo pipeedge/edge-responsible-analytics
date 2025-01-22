@@ -350,6 +350,10 @@ def send_trained_model(model_path, model_type, data_type, max_retries=3):
                     return False
                     
                 logger.info(f"[{DEVICE_ID}] Reading MobileNet model file: {model_path}")
+                # Get file size
+                file_size = os.path.getsize(model_path)
+                logger.info(f"[{DEVICE_ID}] Model file size: {file_size/1024/1024:.2f} MB")
+                
                 with open(model_path, 'rb') as f:
                     files = {
                         'model': ('model.keras', f, 'application/octet-stream')
@@ -359,7 +363,8 @@ def send_trained_model(model_path, model_type, data_type, max_retries=3):
                         f"{EDGE_PROCESSING_URL}/upload_model",
                         files=files,
                         data=data,
-                        timeout=(5, 300),  # (connect timeout, read timeout)
+                        timeout=(60, 600),  # (connect timeout, read timeout) - 30s connect, 10min read
+                        stream=True  # Enable streaming for large files
                     )
                     
             else:  # TinyBERT or T5
