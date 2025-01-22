@@ -308,7 +308,7 @@ def process_task(task):
     else:
         return "Unknown task type"
 
-def send_trained_model(model_path, model_type, data_type):
+def send_trained_model(model_path, model_type, data_type, max_retries=3):
     try:
         logger.info(f"[{DEVICE_ID}] Attempting to send model from path: {model_path}")
         
@@ -318,7 +318,6 @@ def send_trained_model(model_path, model_type, data_type):
             
         # Prepare the files and data
         logger.info(f"[{DEVICE_ID}] Preparing files and data for upload")
-        files = {}
         data = {
             'device_id': DEVICE_ID,
             'model_type': model_type,
@@ -327,59 +326,81 @@ def send_trained_model(model_path, model_type, data_type):
         }
         logger.info(f"[{DEVICE_ID}] Callback URL set to: {data['callback_url']}")
         
-        if model_type == 'MobileNet':
-            # Handle single file model
-            if not os.path.isfile(model_path):
-                logger.error(f"[{DEVICE_ID}] Expected file for MobileNet but got directory: {model_path}")
-                return False
-                
-            logger.info(f"[{DEVICE_ID}] Reading MobileNet model file: {model_path}")
-            files['model'] = ('model.keras', open(model_path, 'rb'), 'application/octet-stream')
-            logger.info(f"[{DEVICE_ID}] Model file prepared for upload")
-            
-        else:  # TinyBERT or T5
-            # Create a temporary tar file
-            if not os.path.isdir(model_path):
-                logger.error(f"[{DEVICE_ID}] Expected directory for {model_type} but got file: {model_path}")
-                return False
-                
-            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                logger.info(f"[{DEVICE_ID}] Creating tar archive for {model_type} model")
-                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
-                files['model'] = ('model.tar.gz', open(tmp.name, 'rb'), 'application/gzip')
-                
-        # Send the model to edge processing
-        logger.info(f"[{DEVICE_ID}] Sending model to edge processing server at {EDGE_PROCESSING_URL}")
+        # Create a session for better connection handling
+        session = requests.Session()
+        session.trust_env = False  # Don't use environment proxies
+        
+        # Configure retry strategy
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=1,
+            status_forcelist=[408, 429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
         try:
-            response = requests.post(
-                f"{EDGE_PROCESSING_URL}/upload_model",
-                files=files,
-                data=data,
-                timeout=300,
-                stream=True
-            )
+            if model_type == 'MobileNet':
+                # Handle single file model
+                if not os.path.isfile(model_path):
+                    logger.error(f"[{DEVICE_ID}] Expected file for MobileNet but got directory: {model_path}")
+                    return False
+                    
+                logger.info(f"[{DEVICE_ID}] Reading MobileNet model file: {model_path}")
+                with open(model_path, 'rb') as f:
+                    files = {
+                        'model': ('model.keras', f, 'application/octet-stream')
+                    }
+                    logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
+                    response = session.post(
+                        f"{EDGE_PROCESSING_URL}/upload_model",
+                        files=files,
+                        data=data,
+                        timeout=(5, 300),  # (connect timeout, read timeout)
+                    )
+                    
+            else:  # TinyBERT or T5
+                # Create a temporary tar file
+                if not os.path.isdir(model_path):
+                    logger.error(f"[{DEVICE_ID}] Expected directory for {model_type} but got file: {model_path}")
+                    return False
+                    
+                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                    logger.info(f"[{DEVICE_ID}] Creating tar archive for {model_type} model")
+                    shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                    with open(tmp.name, 'rb') as f:
+                        files = {
+                            'model': ('model.tar.gz', f, 'application/gzip')
+                        }
+                        logger.info(f"[{DEVICE_ID}] Sending model to {EDGE_PROCESSING_URL}")
+                        response = session.post(
+                            f"{EDGE_PROCESSING_URL}/upload_model",
+                            files=files,
+                            data=data,
+                            timeout=(5, 300),  # (connect timeout, read timeout)
+                        )
+                    os.unlink(tmp.name)
+            
             logger.info(f"[{DEVICE_ID}] Request completed with status code: {response.status_code}")
             
+            if response.status_code == 200:
+                logger.info(f"[{DEVICE_ID}] Successfully sent model to edge processing")
+                return True
+            else:
+                logger.error(f"[{DEVICE_ID}] Failed to send model: {response.status_code} - {response.text}")
+                return False
+                
         except requests.exceptions.Timeout:
-            logger.error(f"[{DEVICE_ID}] Request timed out after 300 seconds")
+            logger.error(f"[{DEVICE_ID}] Request timed out")
             return False
         except requests.exceptions.ConnectionError as e:
             logger.error(f"[{DEVICE_ID}] Connection error: {e}")
             return False
-        
-        # Clean up the files
-        logger.info(f"[{DEVICE_ID}] Cleaning up temporary files")
-        for file_obj in files.values():
-            file_obj[1].close()
-        if model_type != 'MobileNet':
-            os.unlink(tmp.name)
-            
-        if response.status_code == 200:
-            logger.info(f"[{DEVICE_ID}] Successfully sent model to edge processing")
-            return True
-        else:
-            logger.error(f"[{DEVICE_ID}] Failed to send model: {response.status_code} - {response.text}")
-            return False
+        finally:
+            session.close()
             
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to send trained model: {e}")

@@ -47,6 +47,8 @@ mlflow_client = MlflowClient()
 # Flask app configuration
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'  # Temporary folder for uploads
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Number of end devices expected
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
@@ -133,7 +135,7 @@ def upload_model():
                 
                 # After receiving model, evaluate and aggregate
                 logger.info("Starting evaluation and aggregation")
-                result = evaluate_and_aggregate()
+                evaluate_and_aggregate()
                 logger.info("Completed evaluation and aggregation")
                 return jsonify({'status': 'success', 'message': 'Model received and processing started'}), 200
             else:
@@ -902,19 +904,49 @@ def schedule_cloud_sync():
         schedule.run_pending()
         time.sleep(30)  # Check every minute
 
+def create_app():
+    """Create and configure the Flask app for gunicorn"""
+    # Start cloud sync in a separate thread
+    sync_thread = threading.Thread(target=schedule_cloud_sync)
+    sync_thread.daemon = True
+    sync_thread.start()
+    logger.info("Started cloud synchronization thread")
+    
+    # Start MLflow run
+    mlflow.start_run(run_name="Model_Aggregation_Parent")
+    
+    return app
+
 def main():
     try:
-        # Start parent MLflow run
-        with mlflow.start_run(run_name="Model_Aggregation_Parent"):
-            # Start cloud sync in a separate thread
-            sync_thread = threading.Thread(target=schedule_cloud_sync)
-            sync_thread.daemon = True
-            sync_thread.start()
-            logger.info("Started cloud synchronization thread")
-            
-            # Start Flask server
-            logger.info("Starting Flask server to receive models...")
-            app.run(host='0.0.0.0', port=8000, threaded=True)
+        # Import gunicorn's workers
+        from gunicorn.app.base import BaseApplication
+
+        class StandaloneApplication(BaseApplication):
+            def __init__(self, app, options=None):
+                self.options = options or {}
+                self.application = app
+                super().__init__()
+
+            def load_config(self):
+                for key, value in self.options.items():
+                    if key in self.cfg.settings and value is not None:
+                        self.cfg.set(key.lower(), value)
+
+            def load(self):
+                return self.application
+
+        options = {
+            'bind': '0.0.0.0:8000',
+            'workers': 3,
+            'timeout': 300,  # 5 minutes timeout
+            'worker_class': 'sync',
+            'keepalive': 5,
+            'threads': 3
+        }
+
+        logger.info("Starting gunicorn server to receive models...")
+        StandaloneApplication(create_app(), options).run()
             
     except Exception as e:
         logger.exception("Error in main loop")
