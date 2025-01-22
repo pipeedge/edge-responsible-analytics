@@ -51,7 +51,7 @@ spec:
           - name: MQTT_TOPIC_AGGREGATED
             value: "models/aggregated"
           - name: EXPECTED_DEVICES
-            value: "2"
+            value: "1"
           - name: EDGE_SERVER_ID
             valueFrom:
               fieldRef:

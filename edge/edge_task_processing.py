@@ -271,10 +271,11 @@ def send_trained_model(model_path, model_type, data_tpye):
         print(f"Fist 16 bytes of model: {model_b64[:16]}")
         print(f"Type of model_b64: {type(model_b64)}")
         # Send the model
+        len_model_b64 = len(model_b64)
         payload = json.dumps({
             'device_id': DEVICE_ID,
             'model_type': model_type,
-            'model_data': model_b64[:128],
+            'model_data': model_b64[len_model_b64//2:],
             'data_type': data_tpye
         })
         client.publish(MQTT_TOPIC_UPLOAD, payload)
