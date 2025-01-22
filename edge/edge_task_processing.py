@@ -275,8 +275,6 @@ def send_trained_model(model_path, model_type, data_tpye):
             'model_data': model_b64,
             'data_type': data_tpye
         })
-        client.publish(MQTT_TOPIC_UPLOAD, 'testing message')
-        print(f"[{DEVICE_ID}] Sent testing message to {MQTT_TOPIC_UPLOAD}")
         client.publish(MQTT_TOPIC_UPLOAD, payload)
         print(f"[{DEVICE_ID}] Sent trained model to {MQTT_TOPIC_UPLOAD}, model size {len(model_b64)}")
     except Exception as e:
