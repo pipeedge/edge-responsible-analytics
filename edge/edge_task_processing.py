@@ -268,11 +268,13 @@ def send_trained_model(model_path, model_type, data_tpye):
                 model_b64 = base64.b64encode(model_bytes).decode('utf-8')
                 os.unlink(tmp.name)  # Clean up temp file
         
+        print(f"Fist 16 bytes of model: {model_b64[:16]}")
+        print(f"Type of model_b64: {type(model_b64)}")
         # Send the model
         payload = json.dumps({
             'device_id': DEVICE_ID,
             'model_type': model_type,
-            'model_data': model_b64,
+            'model_data': "***Just a testing data***",
             'data_type': data_tpye
         })
         client.publish(MQTT_TOPIC_UPLOAD, payload)
