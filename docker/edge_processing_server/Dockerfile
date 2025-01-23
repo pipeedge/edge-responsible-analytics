@@ -14,20 +14,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         pkg-config \
         libhdf5-dev \
-        build-essential \
-        python3-dev \
-        python3-pip \
-        python3-setuptools \
-        python3-wheel \
-        python3-numpy \
-        gcc \
-        g++ \
-        gfortran \
-        libhdf5-serial-dev \
-        hdf5-tools \
-        libhdf5-dev \
-        zlib1g-dev \
-        libjpeg-dev && \
+        build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements file
@@ -36,7 +23,6 @@ COPY docker/edge_processing_server/requirements_edge_processing.txt .
 # Create virtual environment and install dependencies
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install wheel numpy && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
@@ -68,7 +54,7 @@ COPY utils/ ./utils/
 COPY opa/ ./opa/
 
 # Create directories for model storage
-RUN mkdir -p /app/models/mobilenet /app/models/tinybert /app/models/t5
+# RUN mkdir -p /app/models/mobilenet /app/models/tinybert /app/models/t5
 
 # Expose necessary ports
 EXPOSE 8002
