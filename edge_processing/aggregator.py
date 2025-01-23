@@ -58,8 +58,10 @@ MQTT_KEEPALIVE = int(os.getenv('MQTT_KEEPALIVE', 60))
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
 Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
-# Initialize MQTT Client with clean session and unique client ID
-client = mqtt.Client(client_id=f"{Agg_ID}_{int(time.time())}", protocol=mqtt.MQTTv5, clean_session=True)
+# Initialize MQTT Client with clean start for MQTT v5.0
+client = mqtt.Client(client_id=f"{Agg_ID}_{int(time.time())}", protocol=mqtt.MQTTv5)
+# Set clean start property for MQTT v5.0
+client.clean_start = True
 
 # Dictionary to store received models
 received_models = {}
