@@ -643,10 +643,21 @@ def aggregate_models(models_of_type, model_type, save_path):
     elif model_type in ['t5_small', 'tinybert']:
         # Aggregate transformer models (T5 or TinyBERT) with adaptive weights
         aggregated_model = models[0]
-        for param_name, param in aggregated_model.trainable_weights:
+        
+        # Get trainable weights with their names
+        if model_type == 't5_small':
+            trainable_vars = aggregated_model.trainable_variables
+        else:  # tinybert
+            trainable_vars = aggregated_model.trainable_weights
+            
+        # Iterate through each trainable weight
+        for i, param in enumerate(trainable_vars):
             weighted_params = []
             for model, weight in zip(models, weights):
-                other_param = next(p for n, p in model.trainable_weights if n == param_name)
+                if model_type == 't5_small':
+                    other_param = model.trainable_variables[i]
+                else:  # tinybert
+                    other_param = model.trainable_weights[i]
                 weighted_params.append(other_param * weight)
             
             # Sum up the weighted parameters
