@@ -52,13 +52,14 @@ MQTT_BROKER = os.getenv('MQTT_BROKER', '10.200.3.159')
 MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC_UPLOAD = os.getenv('MQTT_TOPIC_UPLOAD', 'models/upload')
 MQTT_TOPIC_AGGREGATED = os.getenv('MQTT_TOPIC_AGGREGATED', 'models/aggregated')
+MQTT_KEEPALIVE = int(os.getenv('MQTT_KEEPALIVE', 60))
 
 # Number of end devices expected
 EXPECTED_DEVICES = int(os.getenv('EXPECTED_DEVICES', 1))  # Set accordingly
 
 Agg_ID = os.getenv('EDGE_SERVER_ID', 'aggregator')
-# Initialize MQTT Client
-client = mqtt.Client(client_id=Agg_ID, protocol=mqtt.MQTTv5)
+# Initialize MQTT Client with clean session and unique client ID
+client = mqtt.Client(client_id=f"{Agg_ID}_{int(time.time())}", protocol=mqtt.MQTTv5, clean_session=True)
 
 # Dictionary to store received models
 received_models = {}
@@ -98,6 +99,22 @@ SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 
 # Initialize chunked transfer handler
 chunked_transfer = ChunkedMQTTTransfer(client, Agg_ID)
+
+def on_connect(client, userdata, flags, rc, properties=None):
+    """Callback when client connects to the broker"""
+    if rc == 0:
+        logger.info("Connected to MQTT broker")
+        # Subscribe with QoS 1 for better reliability
+        client.subscribe([(f"{MQTT_TOPIC_UPLOAD}/control", 1), (f"{MQTT_TOPIC_UPLOAD}/chunks", 1)])
+        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD} control and chunks topics with QoS 1")
+    else:
+        logger.error(f"Failed to connect to MQTT broker with result code {rc}")
+
+def on_disconnect(client, userdata, rc):
+    """Callback when client disconnects from the broker"""
+    logger.warning(f"Disconnected from MQTT broker with result code {rc}")
+    if rc != 0:
+        logger.info("Attempting to reconnect...")
 
 def on_message(client, userdata, msg):
     logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -721,13 +738,11 @@ def connect_mqtt():
     """
     Connect to the MQTT broker and subscribe to relevant topics.
     """
-    client.on_message = on_message
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        # Subscribe to both control and chunks topics
-        client.subscribe(f"{MQTT_TOPIC_UPLOAD}/control")
-        client.subscribe(f"{MQTT_TOPIC_UPLOAD}/chunks")
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=MQTT_KEEPALIVE)
         client.loop_start()
         logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD} control and chunks topics")
         return True
