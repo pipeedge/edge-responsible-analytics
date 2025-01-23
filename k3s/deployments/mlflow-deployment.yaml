@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: mlflow
   labels:
     app: mlflow
 spec:
+  serviceName: "mlflow"
   replicas: 3
   selector:
     matchLabels:

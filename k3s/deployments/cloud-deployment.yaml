@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: cloud-layer-deployment
+  name: cloud-layer
   labels:
     app: cloud-layer
 spec:
+  serviceName: "cloud-layer"
   replicas: 1
   selector:
     matchLabels:

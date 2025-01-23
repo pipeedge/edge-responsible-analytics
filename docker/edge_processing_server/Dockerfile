@@ -1,9 +1,10 @@
 # Stage 1: Dependencies
-FROM python:3.8-slim as builder
+FROM python:3.8-slim AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV GIT_PYTHON_REFRESH=quiet
 
 # Set work directory for dependencies
 WORKDIR /deps

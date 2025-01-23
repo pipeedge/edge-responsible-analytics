@@ -1,15 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: opa-service
-  namespace: default
+  name: opa
   labels:
     app: opa
 spec:
+  clusterIP: None  # Headless service
+  ports:
+  - port: 8181
+    targetPort: 8181
+    name: opa-port
   selector:
     app: opa
-  ports:
-    - protocol: TCP
-      port: 8181
-      targetPort: 8181
-  type: ClusterIP

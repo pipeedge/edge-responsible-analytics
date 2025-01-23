@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM arm64v8/python:3.8-slim as builder
+FROM arm64v8/python:3.8-slim AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1

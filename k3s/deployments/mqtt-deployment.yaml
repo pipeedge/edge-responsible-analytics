@@ -1,10 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: mosquitto-deployment
+  name: mosquitto
   labels:
     app: mosquitto
 spec:
+  serviceName: "mosquitto"
   replicas: 2
   selector:
     matchLabels:
