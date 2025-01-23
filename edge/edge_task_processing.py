@@ -258,11 +258,14 @@ def process_task(task):
 # Function to send the trained model
 def send_trained_model(model_path, model_type, data_type):
     try:
+        logger.info(f"[{DEVICE_ID}] Starting to send trained model of type {model_type}")
+        
         # Read the model file(s)
         if model_type == 'MobileNet':
             # Handle single file model
             with open(model_path, 'rb') as f:
                 model_bytes = f.read()
+            logger.info(f"[{DEVICE_ID}] Read MobileNet model file: {len(model_bytes)} bytes")
         else:  # TinyBERT or other directory-based models
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
@@ -270,6 +273,7 @@ def send_trained_model(model_path, model_type, data_type):
                 with open(tmp.name, 'rb') as f:
                     model_bytes = f.read()
                 os.unlink(tmp.name)  # Clean up temp file
+                logger.info(f"[{DEVICE_ID}] Created and read model archive: {len(model_bytes)} bytes")
         
         # Prepare metadata
         metadata = {
@@ -277,10 +281,11 @@ def send_trained_model(model_path, model_type, data_type):
             'data_type': data_type,
             'timestamp': datetime.now().isoformat()
         }
+        logger.info(f"[{DEVICE_ID}] Prepared metadata: {metadata}")
         
         # Send the model using chunked transfer
         success = chunked_transfer.send_file_in_chunks(
-            model_bytes[:64],
+            model_bytes,
             MQTT_TOPIC_UPLOAD,
             metadata=metadata
         )
@@ -292,6 +297,7 @@ def send_trained_model(model_path, model_type, data_type):
             
     except Exception as e:
         logger.error(f"[{DEVICE_ID}] Failed to send trained model: {e}")
+        logger.exception("Detailed error:")
 
 # Callback when a message is received
 def on_message(client, userdata, msg):

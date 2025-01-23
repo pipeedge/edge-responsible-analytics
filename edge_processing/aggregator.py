@@ -112,7 +112,7 @@ def on_message(client, userdata, msg):
             if result is not None:
                 device_id = result['device_id']
                 model_bytes = result['data']
-                metadata = result['metadata']
+                metadata = result.get('metadata', {})
                 
                 model_type = metadata.get('model_type')
                 data_type = metadata.get('data_type')
@@ -126,13 +126,14 @@ def on_message(client, userdata, msg):
                                 'model_data': base64.b64encode(model_bytes).decode('utf-8'),
                                 'data_type': data_type
                             }
+                            logger.info(f"Successfully stored model from {device_id}")
                         else:
                             logger.warning(f"Model from {device_id} already received.")
                     
                     # After receiving, evaluate fairness
                     evaluate_and_aggregate()
                 else:
-                    logger.error("Received message with missing fields.")
+                    logger.error(f"Received message with missing fields. device_id: {device_id}, model_type: {model_type}")
                     
         except Exception as e:
             logger.exception(f"Error processing chunked message: {e}")
@@ -713,9 +714,11 @@ def connect_mqtt():
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_UPLOAD)
+        # Subscribe to both control and chunks topics
+        client.subscribe(f"{MQTT_TOPIC_UPLOAD}/control")
+        client.subscribe(f"{MQTT_TOPIC_UPLOAD}/chunks")
         client.loop_start()
-        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD}")
+        logger.info(f"Subscribed to {MQTT_TOPIC_UPLOAD} control and chunks topics")
         return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
