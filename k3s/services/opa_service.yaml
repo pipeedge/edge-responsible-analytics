@@ -5,7 +5,6 @@ metadata:
   labels:
     app: opa
 spec:
-  clusterIP: None  # Headless service
   ports:
   - port: 8181
     targetPort: 8181

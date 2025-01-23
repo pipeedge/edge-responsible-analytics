@@ -5,7 +5,6 @@ metadata:
   labels:
     app: mlflow
 spec:
-  clusterIP: None  # Headless service
   ports:
   - port: 5002
     targetPort: 5002

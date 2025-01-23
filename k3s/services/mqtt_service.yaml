@@ -5,7 +5,6 @@ metadata:
   labels:
     app: mosquitto
 spec:
-  clusterIP: None  # Headless service
   ports:
   - port: 1883
     targetPort: 1883
