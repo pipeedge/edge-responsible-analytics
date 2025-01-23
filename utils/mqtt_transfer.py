@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 10 * 1024  # 10KB chunks
+CHUNK_SIZE = 1 * 1024  # 10KB chunks
 MQTT_QOS = 1  # Use QoS 1 for reliable delivery
 
 class ChunkedMQTTTransfer:
@@ -87,6 +87,8 @@ class ChunkedMQTTTransfer:
             msg_type = payload.get('type')
             transfer_id = payload.get('transfer_id')
             device_id = payload.get('device_id')
+
+            logger.info(f"Should be receiving {payload.get('total_chunks')} chunks")
             
             if msg_type == 'transfer_start':
                 self.received_chunks[transfer_id] = {}
@@ -108,7 +110,7 @@ class ChunkedMQTTTransfer:
                 # Log progress every 10 chunks
                 if chunk_num % 10 == 0:
                     logger.info(f"Received chunk {chunk_num}/{self.total_chunks[transfer_id]} for transfer {transfer_id}")
-                    
+
                 # Check if we have all chunks
                 if len(self.received_chunks[transfer_id]) == self.total_chunks[transfer_id]:
                     # Reassemble the file
