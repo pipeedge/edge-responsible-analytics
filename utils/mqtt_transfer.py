@@ -15,6 +15,7 @@ class ChunkedMQTTTransfer:
         self.device_id = device_id
         self.received_chunks: Dict[str, Dict[int, str]] = {}
         self.total_chunks: Dict[str, int] = {}
+        self.transfer_metadata: Dict[str, Dict[str, Any]] = {}  # Store metadata for each transfer
         
     def send_file_in_chunks(self, file_data: bytes, topic: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
         """
@@ -30,7 +31,7 @@ class ChunkedMQTTTransfer:
             total_chunks = math.ceil(len(file_data) / CHUNK_SIZE)
             transfer_id = f"{self.device_id}_{hash(file_data)}"
             
-            # Send transfer start message
+            # Send transfer start message with metadata
             start_payload = {
                 'type': 'transfer_start',
                 'transfer_id': transfer_id,
@@ -81,10 +82,14 @@ class ChunkedMQTTTransfer:
             payload = json.loads(msg.payload.decode('utf-8'))
             msg_type = payload.get('type')
             transfer_id = payload.get('transfer_id')
+            device_id = payload.get('device_id')
             
             if msg_type == 'transfer_start':
                 self.received_chunks[transfer_id] = {}
                 self.total_chunks[transfer_id] = payload['total_chunks']
+                # Store metadata from transfer_start message
+                self.transfer_metadata[transfer_id] = payload.get('metadata', {})
+                logger.info(f"Started new transfer {transfer_id} with metadata: {self.transfer_metadata[transfer_id]}")
                 return None
                 
             elif msg_type == 'chunk':
@@ -103,19 +108,33 @@ class ChunkedMQTTTransfer:
                             for i in range(self.total_chunks[transfer_id])]
                     complete_data = b''.join(chunks)
                     
+                    # Get metadata from stored transfer metadata
+                    metadata = self.transfer_metadata.get(transfer_id, {})
+                    
                     # Clean up
-                    metadata = payload.get('metadata', {})
                     del self.received_chunks[transfer_id]
                     del self.total_chunks[transfer_id]
+                    if transfer_id in self.transfer_metadata:
+                        del self.transfer_metadata[transfer_id]
                     
                     return {
                         'data': complete_data,
                         'metadata': metadata,
-                        'device_id': payload['device_id']
+                        'device_id': device_id
                     }
+            
+            elif msg_type == 'transfer_complete':
+                # Clean up if we somehow missed completing the transfer
+                if transfer_id in self.received_chunks:
+                    del self.received_chunks[transfer_id]
+                if transfer_id in self.total_chunks:
+                    del self.total_chunks[transfer_id]
+                if transfer_id in self.transfer_metadata:
+                    del self.transfer_metadata[transfer_id]
                     
             return None
             
         except Exception as e:
             logger.error(f"Error handling chunk message: {e}")
+            logger.exception("Detailed error:")
             return None 
