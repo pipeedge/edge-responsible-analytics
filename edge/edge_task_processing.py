@@ -264,7 +264,12 @@ def send_trained_model(model_path, model_type, data_type):
         # Ensure model_path is absolute and exists
         abs_model_path = os.path.abspath(model_path)
         if not os.path.exists(abs_model_path):
-            raise FileNotFoundError(f"Model path does not exist: {abs_model_path}")
+            # Try to find model in current working directory
+            cwd_model_path = os.path.join(os.getcwd(), os.path.basename(model_path))
+            if os.path.exists(cwd_model_path):
+                abs_model_path = cwd_model_path
+            else:
+                raise FileNotFoundError(f"Model path does not exist: {abs_model_path}")
         
         # Read the model file(s)
         if model_type == 'MobileNet':
