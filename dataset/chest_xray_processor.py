@@ -52,6 +52,7 @@ def process_chest_xray_data(data_path, batch_size=32):
     
     for label in ['NORMAL', 'PNEUMONIA']:
         class_dir = os.path.join(data_path, label)
+        logger.info(f"chest xray data from {class_dir}")
         for image_file in os.listdir(class_dir):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
                 image_path = os.path.join(class_dir, image_file)
