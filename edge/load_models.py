@@ -19,7 +19,7 @@ medical_specialties = [
 ]
 
 def load_mobilenet_model():
-    model_path = "mobilenet_model.keras"
+    model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
     if not os.path.exists(model_path):
         # Build and compile the model with 3-channel input
         base_model = tf.keras.applications.MobileNetV2(
@@ -49,7 +49,7 @@ def load_t5_model():
     Memory-efficient T5 model loading for IoT devices.
     Uses t5-small with minimal memory footprint and batch processing.
     """
-    model_dir = os.path.abspath("../t5_model")
+    model_dir = os.path.join(os.getcwd(), 't5_small')
     os.makedirs(model_dir, exist_ok=True)
     
     # Configure TensorFlow for memory efficiency
