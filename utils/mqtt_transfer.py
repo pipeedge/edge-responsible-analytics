@@ -90,7 +90,7 @@ class ChunkedMQTTTransfer:
             transfer_id = payload.get('transfer_id')
             device_id = payload.get('device_id')
 
-            logger.info(f"Should be receiving {payload.get('total_chunks')} chunks")
+            # logger.info(f"Should be receiving {payload.get('total_chunks')} chunks")
             
             if msg_type == 'transfer_start':
                 self.received_chunks[transfer_id] = {}
@@ -110,7 +110,7 @@ class ChunkedMQTTTransfer:
                 self.received_chunks[transfer_id][chunk_num] = chunk_data
                 
                 # Log progress every 10 chunks
-                if chunk_num % 10 == 0:
+                if chunk_num % 200 == 0:
                     logger.info(f"Received chunk {chunk_num}/{self.total_chunks[transfer_id]} for transfer {transfer_id}")
 
                 # Check if we have all chunks
