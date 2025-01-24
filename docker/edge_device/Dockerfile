@@ -52,8 +52,9 @@ COPY dataset/ ./dataset/
 COPY kaggle_credentials/ ./kaggle_credentials/
 COPY utils/ ./utils/
 
-RUN chmod 600 /app/.kaggle/kaggle.json
-ENV KAGGLE_CONFIG_DIR=/app/.kaggle
+# COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
+RUN chmod 600 /app/kaggle_credentials/kaggle.json
+ENV KAGGLE_CONFIG_DIR=/app/kaggle_credentials
 
 # Expose necessary ports
 EXPOSE 8001
