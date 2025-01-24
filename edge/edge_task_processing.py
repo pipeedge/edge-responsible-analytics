@@ -93,7 +93,7 @@ def process_task(task):
     data_type = task['data_type']
     
     if data_type == "chest_xray":
-        logger.info(f"Processing chest xray data from {task['data_path']}")
+        logger.info(f"[edge_task_processing] Processing chest xray data from {task['data_path']}")
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "cxr8":
         from dataset.cxr8_processor import process_cxr8_data

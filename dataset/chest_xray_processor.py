@@ -41,7 +41,7 @@ def preprocess_chest_xray(image_path):
     return img_array
 
 def process_chest_xray_data(data_path, batch_size=32):
-    logger.info(f"Processing chest xray data from {data_path}")
+    logger.info(f"[chest_xray_processor] Processing chest xray data from {data_path}")
     if not os.path.exists(data_path):
         download_chest_xray_data()
     
