@@ -13,7 +13,7 @@ def preprocess_image(image):
 
 def perform_inference(data, data_type, batch_size=16):
     try:
-        logger.info(f"Starting inference on {data}")
+        logger.info(f"[edge_infer] Starting inference on {data}")
         if data_type in ["chest_xray", "cxr8"]:
             model = load_mobilenet_model()
             # Handle generator input (for CXR8)

@@ -115,7 +115,7 @@ def process_task(task):
         raise ValueError(f"Unsupported data type: {data_type}")
     
     if task['type'] == 'inference':
-        logger.info(f"Performing inference on {data_type} data")
+        logger.info(f"[edge_task_processing] Performing inference on {data_type} data {processed_data}")
         predictions = perform_inference(processed_data, data_type)
         
         # Create results directory if it doesn't exist
