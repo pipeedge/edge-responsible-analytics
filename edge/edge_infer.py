@@ -12,17 +12,7 @@ def preprocess_image(image):
     return tf.keras.applications.mobilenet_v2.preprocess_input(image)
 
 def perform_inference(data, data_type, batch_size=16):
-    """
-    Perform inference using the appropriate model based on data type.
-    
-    Args:
-        data: Input data (can be raw data or generator)
-        data_type: Type of data ('chest_xray', 'cxr8', or 'mt')
-        batch_size: Size of batches for processing
-    
-    Returns:
-        List of predictions or generator of predictions
-    """
+    logger.info(f"Starting inference on {data_type} data")
     try:
         if data_type in ["chest_xray", "cxr8"]:
             model = load_mobilenet_model()

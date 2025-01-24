@@ -93,6 +93,7 @@ def process_task(task):
     data_type = task['data_type']
     
     if data_type == "chest_xray":
+        logger.info(f"Processing chest xray data from {task['data_path']}")
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "cxr8":
         from dataset.cxr8_processor import process_cxr8_data
@@ -103,7 +104,7 @@ def process_task(task):
         else:
             processed_data = train_gen
     elif data_type == "mt":
-        # Process medical transcription data
+        logger.info(f"Processing medical transcription data from {task['data_path']}")
         X_train, X_test, y_train, y_test, sf_train, sf_test = process_medical_transcriptions_data(task['data_path'])
         # For inference, use the test set
         if task['data_type'] == 'inference':
@@ -114,6 +115,7 @@ def process_task(task):
         raise ValueError(f"Unsupported data type: {data_type}")
     
     if task['type'] == 'inference':
+        logger.info(f"Performing inference on {data_type} data")
         predictions = perform_inference(processed_data, data_type)
         
         # Create results directory if it doesn't exist
@@ -152,6 +154,7 @@ def process_task(task):
         return predictions
             
     elif task['type'] == 'training':
+        logger.info(f"Training model with data from {task['data_path']}")
         try:
             training_metrics = None
             
@@ -518,7 +521,7 @@ def main():
     task_type = args.task_type
     data_type = args.data_type
 
-    logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}'.")
+    logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}' with data_type='{data_type}'.")
 
     # Connect to MQTT
     connect_mqtt()
