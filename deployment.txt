@@ -167,10 +167,6 @@ sudo k3s kubectl delete -f k3s/storage/cloud-pvc.yaml
 sudo k3s kubectl delete -f k3s/storage/mlflow-pv.yaml
 sudo k3s kubectl delete -f k3s/storage/mlflow-pvc.yaml
 
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
 sudo k3s kubectl get services
 sudo k3s kubectl get pods --all-namespaces
 
