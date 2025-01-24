@@ -101,7 +101,7 @@ SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 chunked_transfer = ChunkedMQTTTransfer(client, Agg_ID)
 
 def on_message(client, userdata, msg):
-    logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
+    # logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
     
     # Handle chunked transfers
     if msg.topic.startswith(MQTT_TOPIC_UPLOAD):
@@ -140,6 +140,7 @@ def on_message(client, userdata, msg):
             logger.exception(f"Error processing chunked message: {e}")
 
 def evaluate_and_aggregate():
+    logger.info(f"Evaluating and aggregating models")
     with lock:
         # Group received models by model_type
         model_types = set()
