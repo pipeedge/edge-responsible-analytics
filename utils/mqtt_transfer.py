@@ -49,7 +49,7 @@ class ChunkedMQTTTransfer:
                 end_idx = min(start_idx + CHUNK_SIZE, len(file_data))
                 chunk_data = file_data[start_idx:end_idx]
                 
-                logger.info(f"Sending chunk {chunk_num} of {len(base64.b64encode(chunk_data).decode('utf-8'))}")
+                # logger.info(f"Sending chunk {chunk_num} of {len(base64.b64encode(chunk_data).decode('utf-8'))}")
 
                 chunk_payload = {
                     'type': 'chunk',
