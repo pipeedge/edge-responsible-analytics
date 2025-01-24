@@ -456,7 +456,7 @@ def task_processing(task_type, model_type, data_type):
     if task_type == 'training':
         # Perform Training with edge optimizations
         print(f"[{DEVICE_ID}] Starting edge-optimized training task.")
-        training_result = process_task(training_task, None)
+        training_result = process_task(training_task)
         print(f"[{DEVICE_ID}] Training Result: {training_result}")
         
         # Clean up memory after training
