@@ -12,16 +12,17 @@ def preprocess_image(image):
     return tf.keras.applications.mobilenet_v2.preprocess_input(image)
 
 def perform_inference(data, data_type, batch_size=16):
-    logger.info(f"Starting inference on {data_type} data")
     try:
+        logger.info(f"Starting inference on {data_type in ['chest_xray', 'cxr8']} data")
         if data_type in ["chest_xray", "cxr8"]:
             model = load_mobilenet_model()
-            
             # Handle generator input (for CXR8)
             if isinstance(data, Generator):
                 predictions = []
                 sensitive_features = []
-                
+
+                logger.info(f"Starting inference on {data_type} data, model loaded {model}")
+
                 for batch_data in data:
                     if isinstance(batch_data, tuple):
                         X_batch, _, sf_batch = batch_data
