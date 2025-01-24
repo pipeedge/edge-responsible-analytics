@@ -86,7 +86,7 @@ model = None
 # Initialize chunked transfer handler
 chunked_transfer = ChunkedMQTTTransfer(client, DEVICE_ID)
 
-def process_task(task, model):
+def process_task(task):
     """
     Process a single task based on its type and data.
     """
@@ -114,7 +114,7 @@ def process_task(task, model):
         raise ValueError(f"Unsupported data type: {data_type}")
     
     if task['type'] == 'inference':
-        predictions = perform_inference(processed_data, data_type, model)
+        predictions = perform_inference(processed_data, data_type)
         
         # Create results directory if it doesn't exist
         results_dir = os.path.join(os.getcwd(), "inference_results")
@@ -450,7 +450,7 @@ def task_processing(task_type, model_type, data_type):
     if task_type == 'inference':
         # Perform Inference
         print(f"[{DEVICE_ID}] Starting inference task.")
-        inference_result = process_task(inference_task, model)
+        inference_result = process_task(inference_task)
         print(f"[{DEVICE_ID}] Inference Result: {np.mean(inference_result)}")
 
     if task_type == 'training':
