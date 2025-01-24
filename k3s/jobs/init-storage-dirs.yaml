@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: storage-dirs-init
+  labels:
+    app: storage-dirs-init
+spec:
+  selector:
+    matchLabels:
+      app: storage-dirs-init
+  template:
+    metadata:
+      labels:
+        app: storage-dirs-init
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - liang-edge-1
+                  - liang-edge-2
+                  - liang-edge-3
+                  - liang-edge-4
+      tolerations:
+      - operator: Exists
+      containers:
+      - name: init-storage
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+        - mkdir -p /mnt/host/data/edge-device /mnt/host/data/edge-device-venv &&
+          chmod 777 /mnt/host/data/edge-device /mnt/host/data/edge-device-venv &&
+          touch /mnt/host/data/init-complete &&
+          sleep infinity
+        volumeMounts:
+        - name: host-path
+          mountPath: /mnt/host
+      volumes:
+      - name: host-path
+        hostPath:
+          path: / 
