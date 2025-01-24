@@ -41,6 +41,11 @@ spec:
           args: ["--model_type", "$(MODEL_TYPE)", "--data_type", "$(DATA_TYPE)"]
           ports:
             - containerPort: 8001
+          volumeMounts:
+            - name: edge-device-storage
+              mountPath: /app/dataset
+            - name: venv-storage
+              mountPath: /opt/venv
           resources:
             requests:
               memory: "500Mi"
@@ -75,3 +80,10 @@ spec:
                 configMapKeyRef:
                   name: edge-device-config
                   key: data_type
+      volumes:
+        - name: edge-device-storage
+          persistentVolumeClaim:
+            claimName: edge-device-pvc
+        - name: venv-storage
+          persistentVolumeClaim:
+            claimName: edge-device-venv-pvc
