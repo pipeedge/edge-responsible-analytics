@@ -52,6 +52,7 @@ COPY edge_processing/ ./edge_processing/
 COPY dataset/ ./dataset/
 COPY utils/ ./utils/
 COPY opa/ ./opa/
+COPY kaggle_credentials/ ./kaggle_credentials/
 
 # Create directories for model storage
 # RUN mkdir -p /app/models/mobilenet /app/models/tinybert /app/models/t5

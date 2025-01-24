@@ -257,19 +257,27 @@ def process_task(task):
 
 # Function to send the trained model
 def send_trained_model(model_path, model_type, data_type):
+    """Send trained model to the cloud server via MQTT."""
     try:
         logger.info(f"[{DEVICE_ID}] Starting to send trained model of type {model_type}")
+        
+        # Ensure model_path is absolute and exists
+        abs_model_path = os.path.abspath(model_path)
+        if not os.path.exists(abs_model_path):
+            raise FileNotFoundError(f"Model path does not exist: {abs_model_path}")
         
         # Read the model file(s)
         if model_type == 'MobileNet':
             # Handle single file model
-            with open(model_path, 'rb') as f:
+            with open(abs_model_path, 'rb') as f:
                 model_bytes = f.read()
             logger.info(f"[{DEVICE_ID}] Read MobileNet model file: {len(model_bytes)} bytes")
         else:  # TinyBERT or other directory-based models
             # Create a temporary tar file
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                if not os.path.isdir(abs_model_path):
+                    raise NotADirectoryError(f"Expected directory for model type {model_type}: {abs_model_path}")
+                shutil.make_archive(tmp.name[:-7], 'gztar', abs_model_path)
                 with open(tmp.name, 'rb') as f:
                     model_bytes = f.read()
                 os.unlink(tmp.name)  # Clean up temp file
@@ -427,11 +435,16 @@ def task_processing(task_type, model_type, data_type):
 
     # Model path based on type
     if model_type == 'MobileNet':
-        model_path = 'mobilenet_model.keras'
+        model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
     elif model_type == 't5':
-        model_path = 't5_small'
+        model_path = os.path.join(os.getcwd(), 't5_small')
     else:  # tinybert
-        model_path = 'tinybert_model'
+        model_path = os.path.join(os.getcwd(), 'tinybert_model')
+    
+    # Verify model path exists before uploading
+    if not os.path.exists(model_path):
+        logger.error(f"[{DEVICE_ID}] Model path does not exist: {model_path}")
+        return
 
     # Upload the trained model in a separate thread
     upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type, data_type))

@@ -52,8 +52,6 @@ COPY dataset/ ./dataset/
 COPY kaggle_credentials/ ./kaggle_credentials/
 COPY utils/ ./utils/
 
-# Set up Kaggle credentials
-COPY kaggle_credentials/kaggle.json /app/.kaggle/kaggle.json
 RUN chmod 600 /app/.kaggle/kaggle.json
 ENV KAGGLE_CONFIG_DIR=/app/.kaggle
 
