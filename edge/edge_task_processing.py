@@ -418,6 +418,30 @@ def task_processing(task_type, model_type, data_type):
         'max_samples': 100 if model_type == 't5' else 150  # For transformer models
     }
 
+    # Model path based on type
+    if model_type == 'MobileNet':
+        model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
+    elif model_type == 't5':
+        model_path = os.path.join(os.getcwd(), 't5_small')
+    else:  # tinybert
+        model_path = os.path.join(os.getcwd(), 'tinybert_model')
+    
+    # Load or initialize model if it doesn't exist
+    if not os.path.exists(model_path):
+        logger.info(f"[{DEVICE_ID}] Model not found at {model_path}, initializing new model")
+        try:
+            from load_models import load_mobilenet_model, load_t5_model, load_bert_model
+            if model_type == 'MobileNet':
+                model = load_mobilenet_model()
+            elif model_type == 't5':
+                model = load_t5_model()
+            else:  # tinybert
+                model, _ = load_bert_model()
+            logger.info(f"[{DEVICE_ID}] Successfully initialized new {model_type} model")
+        except Exception as e:
+            logger.error(f"[{DEVICE_ID}] Failed to initialize model: {e}")
+            return
+
     if task_type == 'inference':
         # Perform Inference
         print(f"[{DEVICE_ID}] Starting inference task.")
@@ -432,19 +456,6 @@ def task_processing(task_type, model_type, data_type):
         
         # Clean up memory after training
         gc.collect()
-
-    # Model path based on type
-    if model_type == 'MobileNet':
-        model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
-    elif model_type == 't5':
-        model_path = os.path.join(os.getcwd(), 't5_small')
-    else:  # tinybert
-        model_path = os.path.join(os.getcwd(), 'tinybert_model')
-    
-    # Verify model path exists before uploading
-    if not os.path.exists(model_path):
-        logger.error(f"[{DEVICE_ID}] Model path does not exist: {model_path}")
-        return
 
     # Upload the trained model in a separate thread
     upload_thread = threading.Thread(target=send_trained_model, args=(model_path, model_type, data_type))

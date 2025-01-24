@@ -62,7 +62,7 @@ class ChunkedMQTTTransfer:
                 
                 # Publish chunk with QoS 1
                 self.mqtt_client.publish(f"{topic}/chunks", json.dumps(chunk_payload), qos=MQTT_QOS)
-                if chunk_num % 10 == 0:  # Log progress every 10 chunks
+                if chunk_num % 100 == 0:  # Log progress every 10 chunks
                     logger.info(f"Sent chunk {chunk_num}/{total_chunks} for transfer {transfer_id}")
             
             # Send transfer complete message
