@@ -114,7 +114,7 @@ class ChunkedMQTTTransfer:
 
                 # Check if we have all chunks
                 if len(self.received_chunks[transfer_id]) == self.total_chunks[transfer_id]:
-                    logger.info(f"Received all chunks for transfer {transfer_id}")
+                    logger.info(f"Received all chunks from {transfer_id}")
                     # Reassemble the file
                     chunks = [self.received_chunks[transfer_id][i] 
                             for i in range(self.total_chunks[transfer_id])]

@@ -11,10 +11,17 @@ from utils.kaggle_setup import setup_kaggle_credentials
 setup_kaggle_credentials()
 import kaggle
 
+import logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("edge_device.log"),
+                        logging.StreamHandler()
+                    ])
+logger = logging.getLogger(__name__)
+
 def download_chest_xray_data():
-    """
-    Download the dataset from Kaggle using credentials
-    """
+    logger.info(f"Downloading chest xray data")
     try:
         # Download the dataset
         kaggle.api.dataset_download_files(
@@ -34,7 +41,7 @@ def preprocess_chest_xray(image_path):
     return img_array
 
 def process_chest_xray_data(data_path, batch_size=32):
-    # Download the dataset if not already downloaded
+    logger.info(f"Processing chest xray data from {data_path}")
     if not os.path.exists(data_path):
         download_chest_xray_data()
     
