@@ -37,12 +37,13 @@ def perform_inference(data, data_type, batch_size=16):
                                 'age_group': sf_batch[:, 1] if sf_batch.ndim > 1 else None
                             }))
                 
+                logger.info(f"Inference completed for {data_type} data")
                 # Return predictions along with sensitive features for evaluation
                 return {
                     'predictions': np.array(predictions),
                     'sensitive_features': pd.concat(sensitive_features, ignore_index=True) if sensitive_features else None
                 }
-            
+                
             # Handle direct input (for chest_xray)
             else:
                 predictions = model.predict(data)
