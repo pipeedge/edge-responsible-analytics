@@ -435,20 +435,20 @@ def task_processing(task_type, model_type, data_type):
         model_path = os.path.join(os.getcwd(), 'tinybert_model')
     
     # Load or initialize model if it doesn't exist
-    if not os.path.exists(model_path):
-        logger.info(f"[{DEVICE_ID}] Model not found at {model_path}, initializing new model")
-        try:
-            from load_models import load_mobilenet_model, load_t5_model, load_bert_model
-            if model_type == 'MobileNet':
-                model = load_mobilenet_model()
-            elif model_type == 't5':
-                model = load_t5_model()
-            else:  # tinybert
-                model, _ = load_bert_model()
-            logger.info(f"[{DEVICE_ID}] Successfully initialized new {model_type} model")
-        except Exception as e:
-            logger.error(f"[{DEVICE_ID}] Failed to initialize model: {e}")
-            return
+    # if not os.path.exists(model_path):
+    #     logger.info(f"[{DEVICE_ID}] Model not found at {model_path}, initializing new model")
+    #     try:
+    #         from load_models import load_mobilenet_model, load_t5_model, load_bert_model
+    #         if model_type == 'MobileNet':
+    #             model = load_mobilenet_model()
+    #         elif model_type == 't5':
+    #             model = load_t5_model()
+    #         else:  # tinybert
+    #             model, _ = load_bert_model()
+    #         logger.info(f"[{DEVICE_ID}] Successfully initialized new {model_type} model")
+    #     except Exception as e:
+    #         logger.error(f"[{DEVICE_ID}] Failed to initialize model: {e}")
+    #         return
 
     if task_type == 'inference':
         # Perform Inference
