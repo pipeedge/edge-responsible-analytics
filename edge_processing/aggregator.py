@@ -502,6 +502,8 @@ def evaluate_and_aggregate():
                 # Calculate accuracy and loss for the aggregated model
                 if model_type == 'MobileNet':
                     val_predictions = aggregated_model.predict(X_val)
+                    # Flatten predictions to match target shape
+                    val_predictions = val_predictions.flatten()
                     val_loss = tf.keras.losses.binary_crossentropy(y_val, val_predictions).numpy().mean()
                     val_accuracy = tf.keras.metrics.binary_accuracy(y_val, val_predictions).numpy().mean()
                 elif model_type == 'tinybert':
