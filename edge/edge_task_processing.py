@@ -414,9 +414,12 @@ def task_processing(task_type, model_type, data_type):
             train_data_path = None
             inference_data_path = None
     elif model_type in ['tinybert', 't5']:
-        data_type = 'mt'
-        train_data_path = 'dataset/mt'
-        inference_data_path = 'dataset/mt'
+        if data_type == 'mt':
+            train_data_path = 'dataset/mt'
+            inference_data_path = 'dataset/mt'
+        elif data_type == 'mimic': 
+            train_data_path = None
+            inference_data_path = None
     else:
         logger.error(f"Unsupported model_type: {model_type}")
         return
