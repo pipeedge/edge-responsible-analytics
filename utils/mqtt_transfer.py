@@ -54,49 +54,41 @@ class ChunkedMQTTTransfer:
             
             # Send chunks with progress tracking
             for chunk_num in range(total_chunks):
-                try:
-                    start_idx = chunk_num * CHUNK_SIZE
-                    end_idx = min(start_idx + CHUNK_SIZE, len(file_data))
-                    chunk_data = file_data[start_idx:end_idx]
-                    
-                    chunk_payload = {
-                        'type': 'chunk',
-                        'transfer_id': transfer_id,
-                        'chunk_num': chunk_num,
-                        'total_chunks': total_chunks,
-                        'data': base64.b64encode(chunk_data).decode('utf-8'),
-                        'device_id': self.device_id
-                    }
-                    logger.info(f"Sending chunk {chunk_num} of {total_chunks} for transfer {transfer_id}")
-                    # Publish with QoS 1 and timeout
-                    result = self.mqtt_client.publish(f"{topic}/chunks", json.dumps(chunk_payload), qos=MQTT_QOS)
-                    # Wait for publish with a timeout of 10 seconds
-                    if not result.wait_for_publish(timeout=10.0):
-                        logger.error(f"Timeout publishing chunk {chunk_num} for transfer {transfer_id}")
-                        return False
-                    
-                    # Update progress
-                    self.transfer_progress[transfer_id]['sent_chunks'] = chunk_num + 1
-                    
-                    # Log progress every 5% or 30 seconds
-                    current_time = time.time()
-                    last_log_time = self.last_progress_log.get(transfer_id, 0)
-                    if (current_time - last_log_time >= 30) or (chunk_num % max(1, total_chunks // 20) == 0):
-                        progress = (chunk_num + 1) / total_chunks * 100
-                        elapsed = current_time - self.transfer_progress[transfer_id]['start_time']
-                        rate = (chunk_num + 1) / elapsed if elapsed > 0 else 0
-                        logger.info(f"Transfer {transfer_id}: {progress:.1f}% complete ({chunk_num + 1}/{total_chunks} chunks), "
-                                  f"Rate: {rate:.1f} chunks/sec")
-                        self.last_progress_log[transfer_id] = current_time
-                    
-                    # Add small delay only every 10 chunks instead of every 100
-                    if chunk_num % 10 == 0:
-                        time.sleep(0.001)  # Reduced delay to 1ms
-                        
-                except Exception as e:
-                    logger.error(f"Error sending chunk {chunk_num} for transfer {transfer_id}: {e}")
-                    logger.exception("Detailed error:")
-                    return False
+                logger.info(f"Sending chunk {chunk_num} of {total_chunks} for transfer {transfer_id}")
+                start_idx = chunk_num * CHUNK_SIZE
+                end_idx = min(start_idx + CHUNK_SIZE, len(file_data))
+                chunk_data = file_data[start_idx:end_idx]
+                
+                chunk_payload = {
+                    'type': 'chunk',
+                    'transfer_id': transfer_id,
+                    'chunk_num': chunk_num,
+                    'total_chunks': total_chunks,
+                    'data': base64.b64encode(chunk_data).decode('utf-8'),
+                    'device_id': self.device_id
+                }
+                
+                # Publish with QoS 1 and wait for confirmation
+                result = self.mqtt_client.publish(f"{topic}/chunks", json.dumps(chunk_payload), qos=MQTT_QOS)
+                result.wait_for_publish()
+                
+                # Update progress
+                self.transfer_progress[transfer_id]['sent_chunks'] = chunk_num + 1
+                
+                # Log progress every 5% or 30 seconds
+                current_time = time.time()
+                last_log_time = self.last_progress_log.get(transfer_id, 0)
+                if (current_time - last_log_time >= 30) or (chunk_num % max(1, total_chunks // 20) == 0):
+                    progress = (chunk_num + 1) / total_chunks * 100
+                    elapsed = current_time - self.transfer_progress[transfer_id]['start_time']
+                    rate = (chunk_num + 1) / elapsed if elapsed > 0 else 0
+                    logger.info(f"Transfer {transfer_id}: {progress:.1f}% complete ({chunk_num + 1}/{total_chunks} chunks), "
+                              f"Rate: {rate:.1f} chunks/sec")
+                    self.last_progress_log[transfer_id] = current_time
+                
+                # Add small delay to prevent overwhelming the broker
+                if chunk_num % 100 == 0:
+                    time.sleep(0.01)
             
             # Send transfer complete message
             complete_payload = {
