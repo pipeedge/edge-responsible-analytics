@@ -227,7 +227,7 @@ def evaluate_and_aggregate():
 
                 # Get the data type from the first model (assuming all models of same type use same data)
                 data_type = next(iter(models_of_type.values())).get('data_type', 'chest_xray')
-                logger.info(f"Processing models with data_type: {data_type}")
+                logger.info(f"Processing model {model_type} with data_type: {data_type}")
 
                 # Get the appropriate model paths
                 model_paths = MODEL_PATHS.get(model_type)
