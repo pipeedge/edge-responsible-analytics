@@ -22,7 +22,7 @@ spec:
         - containerPort: 8080
         env:
           - name: MLFLOW_TRACKING_URI
-            value: "http://mlflow-service:5002"
+            value: "http://mlflow:5002"
           - name: PROMETHEUS_PORT
             value: "8000"
           - name: MODEL_STORAGE_PATH

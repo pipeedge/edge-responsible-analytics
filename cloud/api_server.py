@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-MLFLOW_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-service:5002')
+MLFLOW_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5002')
 PROMETHEUS_PORT = int(os.getenv('PROMETHEUS_PORT', 8000))
 MODEL_STORAGE_PATH = os.getenv('MODEL_STORAGE_PATH', '/app/models')
 
