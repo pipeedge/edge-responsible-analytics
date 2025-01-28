@@ -58,9 +58,9 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
           - name: CLOUD_API_URL
-            value: "http://cloud-layer-service:8080"
+            value: "http://cloud-layer:8080"
           - name: MLFLOW_TRACKING_URI
-            value: "http://mlflow-service:5002"
+            value: "http://mlflow:5002"
           - name: PYTHONPATH
             value: "/app"
           - name: PYTHONUNBUFFERED
