@@ -387,7 +387,7 @@ client.on_message = on_message
 def connect_mqtt():
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
         client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/control")
         client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/chunks")
         print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")

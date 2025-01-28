@@ -912,7 +912,7 @@ def connect_mqtt():
     client.on_message = on_message
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
         # Subscribe to both control and chunks topics
         client.subscribe(f"{MQTT_TOPIC_UPLOAD}/control")
         client.subscribe(f"{MQTT_TOPIC_UPLOAD}/chunks")
