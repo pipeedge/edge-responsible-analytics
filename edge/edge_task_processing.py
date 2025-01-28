@@ -384,10 +384,10 @@ def connect_mqtt():
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
-        client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/control")
-        client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/chunks")
+        # Subscribe to both control and chunks topics for aggregated model updates
+        client.subscribe([(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)])
         client.loop_start()
-        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+        logger.info(f"[{DEVICE_ID}] Connected to MQTT broker and subscribed to {MQTT_TOPIC_AGGREGATED} topics")
         return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
@@ -397,11 +397,14 @@ def connect_mqtt():
 def mqtt_loop():
     while True:
         try:
-            client.loop_forever()
+            if not client.is_connected():
+                logger.warning("MQTT client disconnected. Attempting to reconnect...")
+                connect_mqtt()
+            time.sleep(5)  # Check connection every 5 seconds
         except Exception as e:
             logger.error(f"[{DEVICE_ID}] MQTT loop error: {e}")
             logger.exception("Detailed error:")
-            time.sleep(5)  # Wait before reconnecting
+            time.sleep(5)  # Wait before retrying
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
@@ -548,11 +551,14 @@ def main():
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}' with data_type='{data_type}'.")
 
     # Connect to MQTT
-    connect_mqtt()
-    # Start MQTT loop in background
-    # thread = threading.Thread(target=mqtt_loop)
-    # thread.daemon = True
-    # thread.start()
+    if not connect_mqtt():
+        logger.error("Failed to connect to MQTT broker. Exiting.")
+        sys.exit(1)
+
+    # Start MQTT monitoring loop in a separate thread
+    mqtt_monitor_thread = threading.Thread(target=mqtt_loop, daemon=True)
+    mqtt_monitor_thread.start()
+    logger.info("Started MQTT monitoring thread")
 
     # Start memory monitoring thread
     monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
