@@ -515,9 +515,13 @@ def evaluate_and_aggregate():
                         batch_texts = X_val[i:min(i + batch_size, len(X_val))]
                         batch_labels = y_val[i:min(i + batch_size, len(X_val))]
                         
-                        # Convert labels to integers if they are strings
+                        # Convert string labels to numeric indices using label encoder
                         if isinstance(batch_labels[0], str):
-                            batch_labels = tf.constant([int(label) for label in batch_labels])
+                            from sklearn.preprocessing import LabelEncoder
+                            label_encoder = LabelEncoder()
+                            # Fit on all labels to ensure consistent encoding across batches
+                            label_encoder.fit(y_val)
+                            batch_labels = tf.constant(label_encoder.transform(batch_labels))
                         
                         inputs = tokenizer(
                             batch_texts.tolist(),
