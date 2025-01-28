@@ -352,51 +352,88 @@ def on_message(client, userdata, msg):
     logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
     logger.debug(f"[{DEVICE_ID}] Message payload size: {len(msg.payload)} bytes")
     logger.debug(f"[{DEVICE_ID}] Message QoS: {msg.qos}")
-        
-    if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
-        # Process chunk message
-        result = chunked_transfer.handle_chunk_message(msg)
+    
+    try:
+        # Debug raw message
+        try:
+            payload_str = msg.payload.decode('utf-8')
+            payload_data = json.loads(payload_str)
+            logger.debug(f"[{DEVICE_ID}] Message payload: {payload_data}")
             
-        # If we have a complete model
-        if result is not None:
+            # Log specific message type
+            msg_type = payload_data.get('type')
+            if msg_type:
+                logger.info(f"[{DEVICE_ID}] Message type: {msg_type}")
+                if msg_type == 'transfer_start':
+                    logger.info(f"[{DEVICE_ID}] Transfer starting with ID: {payload_data.get('transfer_id')}, "
+                              f"total chunks: {payload_data.get('total_chunks')}")
+                elif msg_type == 'chunk':
+                    logger.debug(f"[{DEVICE_ID}] Received chunk {payload_data.get('chunk_num')} "
+                               f"of transfer {payload_data.get('transfer_id')}")
+                elif msg_type == 'transfer_complete':
+                    logger.info(f"[{DEVICE_ID}] Transfer complete for ID: {payload_data.get('transfer_id')}")
+        except json.JSONDecodeError:
+            logger.warning(f"[{DEVICE_ID}] Message is not JSON format: {msg.payload[:100]}...")
+        except Exception as e:
+            logger.warning(f"[{DEVICE_ID}] Error decoding message: {e}")
+        
+        if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
+            logger.info(f"[{DEVICE_ID}] Processing chunked message on topic {msg.topic}")
+            # Process chunk message
             try:
-                model_bytes = result['data']
-                metadata = result['metadata']
-                model_type = metadata.get('model_type')
-                    
-                logger.info(f"[{DEVICE_ID}] Processing complete model of type: {model_type}")
-                    
-                if model_type:
-                    if model_type == 'MobileNet':
-                        # Handle single file model
-                        model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
-                        with open(model_path, 'wb') as f:
-                            f.write(model_bytes)
-                        logger.info(f"[{DEVICE_ID}] Saved MobileNet model to {model_path}")
-                    else:  # TinyBERT or other directory-based models
-                        # Handle directory-based model
-                        model_dir = os.path.join(os.getcwd(), 'tinybert_model')
-                        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                            tmp.write(model_bytes)
-                            tmp.flush()
-                                
-                            # Clear existing model directory if it exists
-                            if os.path.exists(model_dir):
-                                shutil.rmtree(model_dir)
-                                
-                            # Extract the new model
-                            with tarfile.open(tmp.name, 'r:gz') as tar:
-                                tar.extractall(path=os.path.dirname(model_dir))
-                                
-                            os.unlink(tmp.name)  # Clean up temp file
-                            logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
+                result = chunked_transfer.handle_chunk_message(msg)
+                if result is None:
+                    logger.debug(f"[{DEVICE_ID}] Chunk processed but transfer not complete yet")
+                else:
+                    logger.info(f"[{DEVICE_ID}] Completed chunked transfer, got result")
+            except Exception as chunk_error:
+                logger.error(f"[{DEVICE_ID}] Error handling chunk message: {chunk_error}")
+                logger.exception("Chunk handling error details:")
+                return
+                
+            # If we have a complete model
+            if result is not None:
+                try:
+                    model_bytes = result['data']
+                    metadata = result['metadata']
+                    model_type = metadata.get('model_type')
                         
-                    logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
-                    model_update_event.set()
+                    logger.info(f"[{DEVICE_ID}] Processing complete model of type: {model_type}")
                         
-            except Exception as e:
-                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
-                logger.exception("Detailed error:")
+                    if model_type:
+                        if model_type == 'MobileNet':
+                            # Handle single file model
+                            model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
+                            with open(model_path, 'wb') as f:
+                                f.write(model_bytes)
+                            logger.info(f"[{DEVICE_ID}] Saved MobileNet model to {model_path}")
+                        else:  # TinyBERT or other directory-based models
+                            # Handle directory-based model
+                            model_dir = os.path.join(os.getcwd(), 'tinybert_model')
+                            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                                tmp.write(model_bytes)
+                                tmp.flush()
+                                    
+                                # Clear existing model directory if it exists
+                                if os.path.exists(model_dir):
+                                    shutil.rmtree(model_dir)
+                                    
+                                # Extract the new model
+                                with tarfile.open(tmp.name, 'r:gz') as tar:
+                                    tar.extractall(path=os.path.dirname(model_dir))
+                                    
+                                os.unlink(tmp.name)  # Clean up temp file
+                                logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
+                            
+                        logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+                        model_update_event.set()
+                            
+                except Exception as e:
+                    logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
+                    logger.exception("Detailed error:")
+    except Exception as e:
+        logger.error(f"[{DEVICE_ID}] Error in on_message handler: {e}")
+        logger.exception("Error details:")
 
 # Connect to MQTT Broker
 def connect_mqtt():

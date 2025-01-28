@@ -54,6 +54,7 @@ class ChunkedMQTTTransfer:
             
             # Send chunks with progress tracking
             for chunk_num in range(total_chunks):
+                logger.info(f"Sending chunk {chunk_num} of {total_chunks} for transfer {transfer_id}")
                 start_idx = chunk_num * CHUNK_SIZE
                 end_idx = min(start_idx + CHUNK_SIZE, len(file_data))
                 chunk_data = file_data[start_idx:end_idx]
