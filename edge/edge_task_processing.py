@@ -86,6 +86,27 @@ model = None
 # Initialize chunked transfer handler
 chunked_transfer = ChunkedMQTTTransfer(client, DEVICE_ID)
 
+# Debug MQTT callbacks
+def on_connect(client, userdata, flags, rc, properties=None):
+    """Callback when client connects to the broker."""
+    if rc == 0:
+        logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker with result code {rc}")
+        # Resubscribe to topics on reconnect
+        client.subscribe([(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)])
+    else:
+        logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker with result code {rc}")
+
+def on_subscribe(client, userdata, mid, granted_qos, properties=None):
+    """Callback when client subscribes to a topic."""
+    logger.info(f"[{DEVICE_ID}] Successfully subscribed with message ID: {mid}, QoS: {granted_qos}")
+
+def on_disconnect(client, userdata, rc, properties=None):
+    """Callback when client disconnects from the broker."""
+    if rc != 0:
+        logger.warning(f"[{DEVICE_ID}] Unexpected disconnection from MQTT broker with result code {rc}")
+    else:
+        logger.info(f"[{DEVICE_ID}] Successfully disconnected from MQTT broker")
+
 def process_task(task):
     """
     Process a single task based on its type and data.
@@ -327,8 +348,10 @@ def send_trained_model(model_path, model_type, data_type):
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
+    """Callback when a message is received."""
     logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
     logger.debug(f"[{DEVICE_ID}] Message payload size: {len(msg.payload)} bytes")
+    logger.debug(f"[{DEVICE_ID}] Message QoS: {msg.qos}")
         
     if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
         # Process chunk message
@@ -369,8 +392,6 @@ def on_message(client, userdata, msg):
                             logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
                         
                     logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
-                        
-                    logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
                     model_update_event.set()
                         
             except Exception as e:
@@ -380,17 +401,26 @@ def on_message(client, userdata, msg):
 # Connect to MQTT Broker
 def connect_mqtt():
     # Set up MQTT callbacks
+    client.on_connect = on_connect
     client.on_message = on_message
+    client.on_subscribe = on_subscribe
+    client.on_disconnect = on_disconnect
+    
     try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        logger.info(f"[{DEVICE_ID}] Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
-        # Subscribe to both control and chunks topics for aggregated model updates
-        client.subscribe([(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)])
         client.loop_start()
-        logger.info(f"[{DEVICE_ID}] Connected to MQTT broker and subscribed to {MQTT_TOPIC_AGGREGATED} topics")
+        
+        # Wait for connection to be established
+        time.sleep(1)
+        
+        if not client.is_connected():
+            logger.error(f"[{DEVICE_ID}] Failed to establish connection to MQTT broker")
+            return False
+            
         return True
     except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
+        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker: {e}")
         return False
 
 # Start MQTT loop in a separate thread
@@ -398,7 +428,7 @@ def mqtt_loop():
     while True:
         try:
             if not client.is_connected():
-                logger.warning("MQTT client disconnected. Attempting to reconnect...")
+                logger.warning(f"[{DEVICE_ID}] MQTT client disconnected. Attempting to reconnect...")
                 connect_mqtt()
             time.sleep(5)  # Check connection every 5 seconds
         except Exception as e:
