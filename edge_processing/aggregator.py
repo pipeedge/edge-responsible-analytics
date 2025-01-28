@@ -39,10 +39,23 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # MLflow Configuration
-# mlflow.set_tracking_uri("http://10.200.3.159:5002")
 MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://10.200.3.159:5002')
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-mlflow.set_experiment("Model_Evaluation")
+
+# Get or create experiment
+experiment_name = "Model_Evaluation"
+try:
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+    if experiment is None:
+        # Only create if it doesn't exist
+        experiment_id = mlflow.create_experiment(experiment_name)
+    else:
+        experiment_id = experiment.experiment_id
+    mlflow.set_experiment(experiment_name)
+except Exception as e:
+    logger.error(f"Error setting up MLflow experiment: {e}")
+    raise
+
 # Initialize MLflow client
 mlflow_client = MlflowClient()
 
