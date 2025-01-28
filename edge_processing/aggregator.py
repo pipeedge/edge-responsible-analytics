@@ -40,24 +40,76 @@ logger = logging.getLogger(__name__)
 
 # MLflow Configuration
 MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://10.200.3.159:5002')
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+USE_MLFLOW = os.getenv('USE_MLFLOW', 'true').lower() == 'true'
+mlflow_available = False
 
-# Get or create experiment
-experiment_name = "Model_Evaluation"
-try:
-    experiment = mlflow.get_experiment_by_name(experiment_name)
-    if experiment is None:
-        # Only create if it doesn't exist
-        experiment_id = mlflow.create_experiment(experiment_name)
-    else:
-        experiment_id = experiment.experiment_id
-    mlflow.set_experiment(experiment_name)
-except Exception as e:
-    logger.error(f"Error setting up MLflow experiment: {e}")
-    raise
+if USE_MLFLOW:
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        # Get or create experiment
+        experiment_name = "Model_Evaluation"
+        try:
+            experiment = mlflow.get_experiment_by_name(experiment_name)
+            if experiment is None:
+                # Only create if it doesn't exist
+                experiment_id = mlflow.create_experiment(experiment_name)
+            else:
+                experiment_id = experiment.experiment_id
+            mlflow.set_experiment(experiment_name)
+            mlflow_available = True
+            # Initialize MLflow client
+            mlflow_client = MlflowClient()
+            logger.info("MLflow tracking initialized successfully")
+        except Exception as e:
+            logger.warning(f"Failed to setup MLflow experiment: {e}. MLflow tracking will be disabled.")
+    except Exception as e:
+        logger.warning(f"Failed to connect to MLflow: {e}. MLflow tracking will be disabled.")
+else:
+    logger.info("MLflow tracking is disabled by configuration")
 
-# Initialize MLflow client
-mlflow_client = MlflowClient()
+def log_to_mlflow(metrics=None, params=None, artifacts=None):
+    """Helper function to safely log to MLflow"""
+    if not mlflow_available:
+        return
+        
+    try:
+        if metrics:
+            mlflow.log_metrics(metrics)
+        if params:
+            mlflow.log_params(params)
+        if artifacts:
+            for name, artifact in artifacts.items():
+                mlflow.log_artifact(artifact, name)
+    except Exception as e:
+        logger.warning(f"Failed to log to MLflow: {e}")
+
+def safe_mlflow_start_run(run_name):
+    """Helper function to safely start MLflow run"""
+    if not mlflow_available:
+        from contextlib import contextmanager
+        @contextmanager
+        def dummy_context():
+            yield None
+        return dummy_context()
+        
+    try:
+        return mlflow.start_run(run_name=run_name)
+    except Exception as e:
+        logger.warning(f"Failed to start MLflow run: {e}")
+        @contextmanager
+        def dummy_context():
+            yield None
+        return dummy_context()
+
+def safe_mlflow_end_run(status="FINISHED"):
+    """Helper function to safely end MLflow run"""
+    if not mlflow_available:
+        return
+        
+    try:
+        mlflow.end_run(status=status)
+    except Exception as e:
+        logger.warning(f"Failed to end MLflow run: {e}")
 
 # MQTT Configuration
 # MQTT_BROKER = os.getenv('MQTT_BROKER', 'mosquitto-service')
@@ -163,7 +215,7 @@ def evaluate_and_aggregate():
         for model_type in model_types:
             # Ensure any existing run is ended before starting a new one
             try:
-                mlflow.end_run()
+                safe_mlflow_end_run()
             except Exception as e:
                 logger.warning(f"No active MLflow run to end: {e}")
 
@@ -305,7 +357,7 @@ def evaluate_and_aggregate():
                         return
 
                     # Start MLflow run
-                    with mlflow.start_run(run_name=f"AggregatedModel_Evaluation_{model_type}"):
+                    with safe_mlflow_start_run(f"AggregatedModel_Evaluation_{model_type}"):
                         try:
                             # Evaluate privacy
                             missing_columns = [col for col in QUASI_IDENTIFIERS if col not in df_val.columns]
@@ -324,7 +376,7 @@ def evaluate_and_aggregate():
 
                         except Exception as e:
                             logger.exception(f"Error during model evaluation: {e}")
-                            mlflow.end_run(status="FAILED")
+                            safe_mlflow_end_run(status="FAILED")
                             return
 
                 except Exception as e:
@@ -444,50 +496,23 @@ def evaluate_and_aggregate():
                         thresholds=reliability_thresholds
                     )
     
-                mlflow.log_param("threshold_demographic_parity_difference", fairness_thresholds.get("demographic_parity_difference", None))
-                if model_type == 'MobileNet':
-                    mlflow.log_metric("is_fair", int(is_fair))
-                    mlflow.log_metric("is_explainable", int(is_explainable))
-                    mlflow.log_metric("is_reliable", int(is_reliable))
+                log_to_mlflow(metrics={
+                    "threshold_demographic_parity_difference": fairness_thresholds.get("demographic_parity_difference", None),
+                    "is_fair": int(is_fair),
+                    "is_explainable": int(is_explainable),
+                    "is_reliable": int(is_reliable)
+                })
                 
     
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
                     publish_aggregated_model(model_type, current_path)
                     
-                    # Log the aggregated Model 
+                    # Register model with MLflow
                     if model_type == 'MobileNet':
-                        mlflow.keras.log_model(
-                            aggregated_model, 
-                            "model", 
-                            signature=infer_signature(X_val, aggregated_model.predict(X_val))
-                        )
+                        register_model_with_mlflow(aggregated_model, model_type, X_val)
                     elif model_type in ['t5_small', 'tinybert']:
-                        # Create a pipeline for the model
-                        from transformers import Pipeline, pipeline
-                        nlp_pipeline = pipeline(
-                            task="text-classification",
-                            model=aggregated_model,
-                            tokenizer=tokenizer
-                        )
-                        mlflow.transformers.log_model(
-                            nlp_pipeline,
-                            "model"
-                        )
-    
-                    # Register the model in MLflow
-                    model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
-                    model_name = "aggregated_" + model_type
-                    model_details = mlflow.register_model(model_uri, model_name)
-    
-                    # Transition to Production stage
-                    mlflow_client.transition_model_version_stage(
-                        name=model_name,
-                        version=model_details.version,
-                        stage="Production"
-                    )
-    
-                    logger.info(f"Registered model version {model_details.version} as Production.")
+                        register_model_with_mlflow(aggregated_model, model_type, tokenizer=tokenizer)
                     
                     # Backup the current aggregated model
                     if os.path.exists(previous_path):
@@ -514,7 +539,7 @@ def evaluate_and_aggregate():
                     
                     logger.warning(f"Aggregated {model_type} model failed policies: {failed_policies}. Retaining previous model.")
                     notify_policy_failure(failed_policies)
-                    mlflow.log_param("failed_policies", failed_policies)
+                    log_to_mlflow(params={"failed_policies": failed_policies})
                     
                     # Use the previous aggregated model if it exists
                     if os.path.exists(previous_path):
@@ -886,11 +911,51 @@ def schedule_cloud_sync():
     
     while True:
         schedule.run_pending()
-        time.sleep(30)  # Check every minute
+        time.sleep(10)  # Check every minute
+
+def register_model_with_mlflow(model, model_type, X_val=None, tokenizer=None):
+    """Helper function to safely register model with MLflow"""
+    if not mlflow_available:
+        return
+        
+    try:
+        if model_type == 'MobileNet':
+            mlflow.keras.log_model(
+                model, 
+                "model", 
+                signature=infer_signature(X_val, model.predict(X_val)))
+        elif model_type in ['t5_small', 'tinybert']:
+            # Create a pipeline for the model
+            from transformers import Pipeline, pipeline
+            nlp_pipeline = pipeline(
+                task="text-classification",
+                model=model,
+                tokenizer=tokenizer
+            )
+            mlflow.transformers.log_model(
+                nlp_pipeline,
+                "model"
+            )
+
+        # Register the model in MLflow
+        model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+        model_name = "aggregated_" + model_type
+        model_details = mlflow.register_model(model_uri, model_name)
+
+        # Transition to Production stage
+        mlflow_client.transition_model_version_stage(
+            name=model_name,
+            version=model_details.version,
+            stage="Production"
+        )
+
+        logger.info(f"Registered model version {model_details.version} as Production.")
+    except Exception as e:
+        logger.warning(f"Failed to register model with MLflow: {e}")
 
 def main():
     # Start parent MLflow run
-    with mlflow.start_run(run_name="Model_Aggregation_Parent"):
+    with safe_mlflow_start_run("Model_Aggregation_Parent"):
         # Connect to MQTT for edge device communication
         if not connect_mqtt():
             logger.error("Failed to connect to MQTT broker. Exiting.")
@@ -909,7 +974,7 @@ def main():
             logger.info("Shutting down aggregator.")
             client.loop_stop()
             client.disconnect()
-            mlflow.end_run()
+            safe_mlflow_end_run()
 
 if __name__ == "__main__":
     # Define expected number of devices

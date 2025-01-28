@@ -61,6 +61,8 @@ spec:
             value: "http://cloud-layer:8080"
           - name: MLFLOW_TRACKING_URI
             value: "http://mlflow:5002"
+          - name: USE_MLFLOW
+            value: "false"
           - name: PYTHONPATH
             value: "/app"
           - name: PYTHONUNBUFFERED

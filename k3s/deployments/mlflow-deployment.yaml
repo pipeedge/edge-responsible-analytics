@@ -35,6 +35,17 @@ spec:
                 values:
                 - mlflow
             topologyKey: "kubernetes.io/hostname"
+      initContainers:
+      - name: init-mlflow
+        image: ghcr.io/mlflow/mlflow:v2.20.0
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            mlflow db upgrade sqlite:///mlflow/mlflow.db
+            mlflow experiments create-experiment --experiment-name "default" || true
+        volumeMounts:
+        - name: mlflow-storage
+          mountPath: /mlflow
       containers:
       - name: mlflow
         image: ghcr.io/mlflow/mlflow:v2.20.0
@@ -44,7 +55,8 @@ spec:
           "--port", "5002",
           "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
           "--default-artifact-root", "/mlflow/mlruns",
-          "--workers", "3"
+          "--workers", "3",
+          "--serve-artifacts"
         ]
         ports:
         - containerPort: 5002
@@ -54,6 +66,10 @@ spec:
         env:
         - name: MLFLOW_TRACKING_URI
           value: "http://mlflow-service:5002"
+        - name: MLFLOW_TRACKING_INSECURE_TLS
+          value: "true"
+        - name: MLFLOW_DEFAULT_EXPERIMENT_NAME
+          value: "default"
         resources:
           requests:
             memory: "512Mi"
@@ -61,6 +77,18 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 15
+          periodSeconds: 30
   volumeClaimTemplates:
   - metadata:
       name: mlflow-storage
