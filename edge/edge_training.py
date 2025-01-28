@@ -409,10 +409,19 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     
     if is_mimic:
         from dataset.mimic_processor import process_mimic_data
+        # Store the data generators for reuse across epochs
         train_gen, val_gen = process_mimic_data(
             batch_size=8,
             max_samples=max_samples
         )
+        # Convert generator output to lists for multiple epoch access
+        train_data = []
+        print("Processing MIMIC training data...")
+        for texts, sensitive_features in train_gen:
+            train_data.append((texts, sensitive_features))
+            if len(train_data) * 8 >= max_samples:  # Using batch_size=8
+                break
+        print(f"Processed {len(train_data)} batches of MIMIC data")
     else:
         from dataset.mt_processor import process_medical_transcriptions_data
         X_train, _, y_train, _, sf_train, _ = process_medical_transcriptions_data(
@@ -458,14 +467,12 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
             raise
     
     # Configure optimizer and loss function
-    import tensorflow.raw_ops as raw_ops
-    # Use TensorFlow optimizer directly instead of Keras
     optimizer = tf.optimizers.Adam(
         learning_rate=1e-4,
         beta_1=0.9,
         beta_2=0.999,
         epsilon=1e-7,
-        name='adam_opt'  # Add explicit name to avoid conflicts
+        name='adam_opt'
     )
     
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -486,8 +493,8 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
         steps = 0
         
         if is_mimic:
-            # Training on MIMIC data using generator
-            for texts, sensitive_features in train_gen:
+            # Training on MIMIC data using stored batches
+            for texts, sensitive_features in train_data:
                 # Tokenize batch
                 inputs = tokenizer(
                     texts.tolist(),
@@ -524,7 +531,6 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
                 
                 # Force garbage collection
                 gc.collect()
-                
         else:
             # Training on Medical Transcriptions data
             # Process in smaller batches
