@@ -109,8 +109,8 @@ class ChunkedMQTTTransfer:
                 chunk_data = base64.b64decode(payload['data'])
                 self.received_chunks[transfer_id][chunk_num] = chunk_data
                 
-                # if chunk_num % 500 == 0:
-                #     logger.info(f"Received chunk {chunk_num}/{self.total_chunks[transfer_id]} from {transfer_id}")
+                if chunk_num % 500 == 0:
+                    logger.info(f"Received chunk {chunk_num}/{self.total_chunks[transfer_id]} from {transfer_id}")
 
                 # Check if we have all chunks
                 if len(self.received_chunks[transfer_id]) == self.total_chunks[transfer_id]:
