@@ -41,36 +41,12 @@ def train_step(model, optimizer, inputs, targets, loss_fn):
 
 def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
     """
-    Train MobileNet with optimized memory usage and reduced retracing
+    Train MobileNet with optimized memory usage and reduced retracing.
+    Handles both directory-based datasets and HuggingFace datasets.
     """
-    # Create data generator with fixed batch size and shapes
-    batch_size = 8
-    datagen = tf.keras.preprocessing.image.ImageDataGenerator(
-        rescale=1./255,
-        validation_split=0.2
-    )
-    
-    # Use flow_from_directory with fixed image size
-    train_generator = datagen.flow_from_directory(
-        data_path,
-        target_size=(224, 224),
-        batch_size=batch_size,
-        class_mode='binary',
-        subset='training',
-        shuffle=True
-    )
-    
-    val_generator = datagen.flow_from_directory(
-        data_path,
-        target_size=(224, 224),
-        batch_size=batch_size,
-        class_mode='binary',
-        subset='validation',
-        shuffle=False
-    )
-    
     # Create the model
     model = load_mobilenet_model()
+    batch_size = 8
     
     # Configure training
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
@@ -82,65 +58,162 @@ def train_mobilenet_edge(data_path, epochs=2, samples_per_class=50):
     best_loss = float('inf')
     best_accuracy = 0.0
     
-    # Training loop
-    for epoch in range(epochs):
-        print(f"Epoch {epoch + 1}/{epochs}")
-        total_loss = 0
-        steps = 0
+    # Determine if using HuggingFace dataset (CXR8) or directory-based dataset
+    is_huggingface = data_path is None
+    
+    if is_huggingface:
+        # Load CXR8 data using the processor
+        from dataset.cxr8_processor import process_cxr8_data
+        train_gen, val_gen = process_cxr8_data(batch_size=batch_size)
         
-        # Training steps
-        for images, labels in train_generator:
-            # Call train_step with all required arguments
-            loss, predictions = train_step(
-                model=model,
-                optimizer=optimizer,
-                inputs=images,
-                targets=labels,
-                loss_fn=loss_fn
-            )
+        # Training loop for HuggingFace dataset
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}/{epochs}")
+            total_loss = 0
+            steps = 0
             
-            train_acc_metric.update_state(labels, predictions)
+            # Training steps
+            for batch_data in train_gen:
+                if isinstance(batch_data, tuple):
+                    X_batch, y_batch, _ = batch_data
+                    # Call train_step with all required arguments
+                    loss, predictions = train_step(
+                        model=model,
+                        optimizer=optimizer,
+                        inputs=X_batch,
+                        targets=y_batch,
+                        loss_fn=loss_fn
+                    )
+                    
+                    train_acc_metric.update_state(y_batch, predictions)
+                    
+                    total_loss += loss
+                    steps += 1
+                    
+                    if steps % 10 == 0:
+                        print(f"Step {steps}, Loss: {total_loss/steps}")
+                    
+                    if steps * batch_size >= samples_per_class * 2:
+                        break
             
-            total_loss += loss
-            steps += 1
+            # Validation steps
+            val_loss = 0
+            val_steps = 0
+            for val_batch in val_gen:
+                if isinstance(val_batch, tuple):
+                    val_images, val_labels, _ = val_batch
+                    val_predictions = model(val_images, training=False)
+                    val_loss += loss_fn(val_labels, val_predictions)
+                    val_acc_metric.update_state(val_labels, val_predictions)
+                    val_steps += 1
+                    
+                    if val_steps * batch_size >= samples_per_class:
+                        break
             
-            if steps % 10 == 0:
-                print(f"Step {steps}, Loss: {total_loss/steps}")
+            # Calculate epoch metrics
+            epoch_loss = total_loss / steps
+            epoch_accuracy = train_acc_metric.result().numpy()
+            epoch_val_loss = val_loss / val_steps
+            epoch_val_accuracy = val_acc_metric.result().numpy()
             
-            if steps * batch_size >= samples_per_class * 2:
-                break
-        
-        # Validation steps
-        val_loss = 0
-        val_steps = 0
-        for val_images, val_labels in val_generator:
-            val_predictions = model(val_images, training=False)
-            val_loss += loss_fn(val_labels, val_predictions)
-            val_acc_metric.update_state(val_labels, val_predictions)
-            val_steps += 1
+            # Update best metrics
+            if epoch_val_accuracy > best_accuracy:
+                best_accuracy = epoch_val_accuracy
+            if epoch_val_loss < best_loss:
+                best_loss = epoch_val_loss
             
-            if val_steps * batch_size >= samples_per_class:
-                break
+            print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}, "
+                  f"val_loss={epoch_val_loss:.4f}, val_accuracy={epoch_val_accuracy:.4f}")
+            
+            # Reset metrics
+            train_acc_metric.reset_state()
+            val_acc_metric.reset_state()
+            gc.collect()
+    else:
+        # Original directory-based training code
+        datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+            rescale=1./255,
+            validation_split=0.2
+        )
         
-        # Calculate epoch metrics
-        epoch_loss = total_loss / steps
-        epoch_accuracy = train_acc_metric.result().numpy()
-        epoch_val_loss = val_loss / val_steps
-        epoch_val_accuracy = val_acc_metric.result().numpy()
+        # Use flow_from_directory with fixed image size
+        train_generator = datagen.flow_from_directory(
+            data_path,
+            target_size=(224, 224),
+            batch_size=batch_size,
+            class_mode='binary',
+            subset='training',
+            shuffle=True
+        )
         
-        # Update best metrics
-        if epoch_val_accuracy > best_accuracy:
-            best_accuracy = epoch_val_accuracy
-        if epoch_val_loss < best_loss:
-            best_loss = epoch_val_loss
+        val_generator = datagen.flow_from_directory(
+            data_path,
+            target_size=(224, 224),
+            batch_size=batch_size,
+            class_mode='binary',
+            subset='validation',
+            shuffle=False
+        )
         
-        print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}, "
-              f"val_loss={epoch_val_loss:.4f}, val_accuracy={epoch_val_accuracy:.4f}")
-        
-        # Reset metrics
-        train_acc_metric.reset_state()
-        val_acc_metric.reset_state()
-        gc.collect()
+        # Training loop for directory-based dataset
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}/{epochs}")
+            total_loss = 0
+            steps = 0
+            
+            # Training steps
+            for images, labels in train_generator:
+                # Call train_step with all required arguments
+                loss, predictions = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=images,
+                    targets=labels,
+                    loss_fn=loss_fn
+                )
+                
+                train_acc_metric.update_state(labels, predictions)
+                
+                total_loss += loss
+                steps += 1
+                
+                if steps % 10 == 0:
+                    print(f"Step {steps}, Loss: {total_loss/steps}")
+                
+                if steps * batch_size >= samples_per_class * 2:
+                    break
+            
+            # Validation steps
+            val_loss = 0
+            val_steps = 0
+            for val_images, val_labels in val_generator:
+                val_predictions = model(val_images, training=False)
+                val_loss += loss_fn(val_labels, val_predictions)
+                val_acc_metric.update_state(val_labels, val_predictions)
+                val_steps += 1
+                
+                if val_steps * batch_size >= samples_per_class:
+                    break
+            
+            # Calculate epoch metrics
+            epoch_loss = total_loss / steps
+            epoch_accuracy = train_acc_metric.result().numpy()
+            epoch_val_loss = val_loss / val_steps
+            epoch_val_accuracy = val_acc_metric.result().numpy()
+            
+            # Update best metrics
+            if epoch_val_accuracy > best_accuracy:
+                best_accuracy = epoch_val_accuracy
+            if epoch_val_loss < best_loss:
+                best_loss = epoch_val_loss
+            
+            print(f"Epoch {epoch+1}: loss={epoch_loss:.4f}, accuracy={epoch_accuracy:.4f}, "
+                  f"val_loss={epoch_val_loss:.4f}, val_accuracy={epoch_val_accuracy:.4f}")
+            
+            # Reset metrics
+            train_acc_metric.reset_state()
+            val_acc_metric.reset_state()
+            gc.collect()
     
     # Save the model
     model.save('mobilenet_model.keras')
