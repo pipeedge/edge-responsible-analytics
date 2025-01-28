@@ -5,6 +5,7 @@ from load_models import load_mobilenet_model, load_bert_model
 import pandas as pd
 import logging
 from typing import Generator, Tuple, Union, List
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -50,45 +51,80 @@ def perform_inference(data, data_type, batch_size=16):
                 predictions = model.predict(data)
                 return predictions
             
-        elif data_type == "mt":
+        elif data_type == "mt" or data_type == "mimic":
+            # For MIMIC, we'll use TinyBERT by default
             model, tokenizer = load_bert_model()
             
-            # Ensure data is in the correct format (list of strings)
-            if isinstance(data, pd.Series):
-                data = data.tolist()
-            elif isinstance(data, str):
-                data = [data]
-            elif not isinstance(data, list):
-                raise ValueError(f"Unexpected data type for medical transcription: {type(data)}")
+            # Handle generator input (for MIMIC)
+            if isinstance(data, Generator):
+                predictions = []
+                sensitive_features = []
+                
+                logger.info(f"Starting inference on {data_type} data with TinyBERT")
+                
+                for batch_data in data:
+                    if isinstance(batch_data, tuple):
+                        texts, sf_batch = batch_data
+                        # Tokenize the texts
+                        inputs = tokenizer(
+                            texts.tolist(),
+                            padding=True,
+                            truncation=True,
+                            return_tensors="tf",
+                            max_length=64
+                        )
+                        
+                        # Get predictions
+                        outputs = model(inputs)
+                        batch_predictions = tf.nn.softmax(outputs.logits, axis=-1).numpy()
+                        predictions.extend(batch_predictions.tolist())
+                        
+                        if isinstance(sf_batch, pd.DataFrame):
+                            sensitive_features.append(sf_batch)
+                
+                logger.info(f"Inference completed for {data_type} data")
+                return {
+                    'predictions': np.array(predictions),
+                    'sensitive_features': pd.concat(sensitive_features, ignore_index=True) if sensitive_features else None
+                }
             
-            # Process in batches
-            predictions = []
-            for i in range(0, len(data), batch_size):
-                batch = data[i:i + batch_size]
-                try:
-                    # Tokenize with padding and truncation
-                    inputs = tokenizer(
-                        batch, 
-                        return_tensors="tf", 
-                        padding=True, 
-                        truncation=True,
-                        max_length=64
-                    )
-                    
-                    # Get predictions
-                    outputs = model(inputs)
-                    logits = outputs.logits
-                    predictions.extend(tf.nn.softmax(logits, axis=-1).numpy().tolist())
-                    
-                    # Force garbage collection after each batch
-                    import gc
-                    gc.collect()
-                    
-                except Exception as e:
-                    logger.error(f"Error during inference batch {i}: {str(e)}")
-                    raise
-                    
-            return predictions
+            # Handle direct input
+            else:
+                # Ensure data is in the correct format (list of strings)
+                if isinstance(data, pd.Series):
+                    data = data.tolist()
+                elif isinstance(data, str):
+                    data = [data]
+                elif not isinstance(data, list):
+                    raise ValueError(f"Unexpected data type for text data: {type(data)}")
+                
+                # Process in batches
+                predictions = []
+                for i in range(0, len(data), batch_size):
+                    batch = data[i:i + batch_size]
+                    try:
+                        # Tokenize with padding and truncation
+                        inputs = tokenizer(
+                            batch, 
+                            return_tensors="tf", 
+                            padding=True, 
+                            truncation=True,
+                            max_length=64
+                        )
+                        
+                        # Get predictions
+                        outputs = model(inputs)
+                        logits = outputs.logits
+                        predictions.extend(tf.nn.softmax(logits, axis=-1).numpy().tolist())
+                        
+                        # Force garbage collection after each batch
+                        gc.collect()
+                        
+                    except Exception as e:
+                        logger.error(f"Error during inference batch {i}: {str(e)}")
+                        raise
+                        
+                return predictions
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
             

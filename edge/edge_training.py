@@ -160,38 +160,24 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
     # Load model and tokenizer
     model, tokenizer = load_t5_model()
     
-    # Get limited dataset
-    X_train, _, y_train, _, _, _ = process_medical_transcriptions_data(
-        data_path, batch_size=4
-    )
-    
-    # Limit dataset size
-    X_train = X_train[:max_samples]
-    y_train = y_train[:max_samples]
-    
-    # Pre-tokenize all data at once
-    inputs = tokenizer(
-        list(X_train),
-        padding=True,
-        truncation=True,
-        max_length=64,
-        return_tensors="tf"
-    )
-    
-    targets = tokenizer(
-        list(y_train),
-        padding=True,
-        truncation=True,
-        max_length=32,
-        return_tensors="tf"
-    )
-    
-    # Convert to tf.data.Dataset with fixed batch size
-    batch_size = 2
-    dataset = tf.data.Dataset.from_tensor_slices((
-        {k: v for k, v in inputs.items()},
-        targets.input_ids
-    )).batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
+    # Determine dataset type and load appropriate data
+    if "mimic" in str(data_path).lower():
+        from dataset.mimic_processor import process_mimic_data
+        train_gen, _ = process_mimic_data(
+            batch_size=4,
+            max_samples=max_samples
+        )
+        is_mimic = True
+    else:
+        # Get limited dataset for MT
+        X_train, _, y_train, _, _, _ = process_medical_transcriptions_data(
+            data_path, batch_size=4
+        )
+        is_mimic = False
+        
+        # Limit dataset size
+        X_train = X_train[:max_samples]
+        y_train = y_train[:max_samples]
     
     # Configure optimizer with low learning rate
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
@@ -208,23 +194,88 @@ def train_t5_edge(data_path, epochs=5, max_samples=200):
         total_loss = 0
         steps = 0
         
-        for batch_inputs, batch_targets in dataset:
-            loss = train_step(
-                model=model,
-                optimizer=optimizer,
-                inputs=batch_inputs,
-                targets=batch_targets,
-                loss_fn=loss_fn
+        if is_mimic:
+            # Training on MIMIC data using generator
+            for texts, sensitive_features in train_gen:
+                # Pre-tokenize batch
+                inputs = tokenizer(
+                    texts.tolist(),
+                    padding=True,
+                    truncation=True,
+                    max_length=64,
+                    return_tensors="tf"
+                )
+                
+                # For MIMIC, we'll predict gender as a binary classification task
+                targets = tf.convert_to_tensor(
+                    sensitive_features['gender'].map({'male': 0, 'female': 1}).values,
+                    dtype=tf.int32
+                )
+                
+                # Train step
+                loss, logits = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=inputs,
+                    targets=targets,
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                train_acc_metric.update_state(targets, logits)
+                
+                total_loss += loss
+                steps += 1
+                
+                if steps % 10 == 0:
+                    accuracy = train_acc_metric.result().numpy()
+                    print(f"Step {steps}, Loss: {total_loss/steps}, Accuracy: {accuracy}")
+                
+                # Force garbage collection
+                gc.collect()
+        else:
+            # Original MT training code
+            # Pre-tokenize all data at once
+            inputs = tokenizer(
+                list(X_train),
+                padding=True,
+                truncation=True,
+                max_length=64,
+                return_tensors="tf"
             )
             
-            # Update metrics
-            train_acc_metric.update_state(batch_targets, loss)
+            targets = tokenizer(
+                list(y_train),
+                padding=True,
+                truncation=True,
+                max_length=32,
+                return_tensors="tf"
+            )
             
-            total_loss += loss
-            steps += 1
+            # Convert to tf.data.Dataset with fixed batch size
+            batch_size = 2
+            dataset = tf.data.Dataset.from_tensor_slices((
+                {k: v for k, v in inputs.items()},
+                targets.input_ids
+            )).batch(batch_size, drop_remainder=True).prefetch(tf.data.AUTOTUNE)
             
-            if steps % 10 == 0:
-                print(f"Step {steps}, Loss: {total_loss/steps}")
+            for batch_inputs, batch_targets in dataset:
+                loss = train_step(
+                    model=model,
+                    optimizer=optimizer,
+                    inputs=batch_inputs,
+                    targets=batch_targets,
+                    loss_fn=loss_fn
+                )
+                
+                # Update metrics
+                train_acc_metric.update_state(batch_targets, loss)
+                
+                total_loss += loss
+                steps += 1
+                
+                if steps % 10 == 0:
+                    print(f"Step {steps}, Loss: {total_loss/steps}")
         
         # Calculate epoch metrics
         epoch_loss = total_loss / steps

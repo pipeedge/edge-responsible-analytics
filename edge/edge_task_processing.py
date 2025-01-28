@@ -97,7 +97,17 @@ def process_task(task):
         processed_data = process_chest_xray_data(task['data_path'])
     elif data_type == "cxr8":
         from dataset.cxr8_processor import process_cxr8_data
+        logger.info("[edge_task_processing] Processing CXR8 data from HuggingFace dataset")
         train_gen, val_gen = process_cxr8_data(batch_size=task.get('batch_size', 32))
+        # For inference, use the validation generator
+        if task['type'] == 'inference':
+            processed_data = val_gen
+        else:
+            processed_data = train_gen
+    elif data_type == "mimic":
+        from dataset.mimic_processor import process_mimic_data
+        logger.info("[edge_task_processing] Processing MIMIC data from HuggingFace dataset")
+        train_gen, val_gen = process_mimic_data(batch_size=task.get('batch_size', 32))
         # For inference, use the validation generator
         if task['type'] == 'inference':
             processed_data = val_gen
@@ -396,8 +406,13 @@ def task_processing(task_type, model_type, data_type):
             train_data_path = 'dataset/chest_xray/train'
             inference_data_path = 'dataset/chest_xray/val'
         elif data_type == 'cxr8':
-            train_data_path = 'dataset/cxr8'
-            inference_data_path = 'dataset/cxr8'
+            # CXR8 uses HuggingFace dataset, no local path needed
+            train_data_path = None
+            inference_data_path = None
+        elif data_type == 'mimic':
+            # MIMIC uses HuggingFace dataset, no local path needed
+            train_data_path = None
+            inference_data_path = None
     elif model_type in ['tinybert', 't5']:
         data_type = 'mt'
         train_data_path = 'dataset/mt'
@@ -513,7 +528,7 @@ def main():
                         choices=['inference', 'training'],
                         help='Type of task to perform (default: inference)')
     parser.add_argument('--data_type', type=str, default='chest_xray',
-                        choices=['chest_xray', 'cxr8', 'mt'],
+                        choices=['chest_xray', 'cxr8', 'mt', 'mimic'],
                         help='Type of data to perform (default: chest_xray)')
     
     args = parser.parse_args()
