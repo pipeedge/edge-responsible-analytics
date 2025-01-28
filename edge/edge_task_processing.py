@@ -391,11 +391,10 @@ def on_message(client, userdata, msg):
         logger.error(f"[{DEVICE_ID}] Error in on_message callback: {e}")
         logger.exception("Detailed error:")
 
-# Set up MQTT callbacks
-client.on_message = on_message
-
 # Connect to MQTT Broker
 def connect_mqtt():
+    # Set up MQTT callbacks
+    client.on_message = on_message
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
