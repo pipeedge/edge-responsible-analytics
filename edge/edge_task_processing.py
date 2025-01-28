@@ -187,7 +187,7 @@ def process_task(task):
                     'best_loss': history['best_loss']
                 }
                 
-            elif data_type == 'mt':
+            elif data_type in ['mt', 'mimic']:
                 # Determine if using T5 or TinyBERT based on task configuration
                 model_variant = task.get('model_variant', 'tinybert')
                 
