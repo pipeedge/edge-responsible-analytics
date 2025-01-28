@@ -383,10 +383,6 @@ def evaluate_and_aggregate():
                     logger.exception(f"Error preparing validation data: {e}")
                     return
 
-                # # Log data details
-                # logger.info(f"Model Type: {model_type}")
-                # logger.info(f"Number of samples - X_val: {len(X_val)}, y_val: {len(y_val)}, sensitive_features: {len(sensitive_features)}")
-
                 # Evaluate fairness using the policy evaluator
                 if model_type == 'MobileNet':
                     is_fair, failed_fairness_policies = evaluate_fairness_policy(
@@ -503,7 +499,105 @@ def evaluate_and_aggregate():
                     "is_reliable": int(is_reliable)
                 })
                 
-    
+                # Calculate accuracy and loss for the aggregated model
+                if model_type == 'MobileNet':
+                    val_predictions = aggregated_model.predict(X_val)
+                    val_loss = tf.keras.losses.binary_crossentropy(y_val, val_predictions).numpy().mean()
+                    val_accuracy = tf.keras.metrics.binary_accuracy(y_val, val_predictions).numpy().mean()
+                elif model_type == 'tinybert':
+                    # Process in batches to manage memory
+                    total_loss = 0
+                    total_correct = 0
+                    total_samples = 0
+                    batch_size = 32
+                    
+                    for i in range(0, len(X_val), batch_size):
+                        batch_texts = X_val[i:min(i + batch_size, len(X_val))]
+                        batch_labels = y_val[i:min(i + batch_size, len(X_val))]
+                        
+                        inputs = tokenizer(
+                            batch_texts.tolist(),
+                            padding=True,
+                            truncation=True,
+                            return_tensors="tf",
+                            max_length=64
+                        )
+                        
+                        outputs = aggregated_model(inputs, training=False)
+                        logits = outputs.logits
+                        
+                        # Calculate loss
+                        batch_loss = tf.keras.losses.sparse_categorical_crossentropy(
+                            batch_labels,
+                            logits,
+                            from_logits=True
+                        ).numpy().mean()
+                        
+                        # Calculate accuracy
+                        predictions = tf.argmax(logits, axis=1)
+                        batch_correct = tf.reduce_sum(tf.cast(predictions == batch_labels, tf.int32))
+                        
+                        total_loss += batch_loss * len(batch_texts)
+                        total_correct += batch_correct
+                        total_samples += len(batch_texts)
+                    
+                    val_loss = total_loss / total_samples
+                    val_accuracy = float(total_correct / total_samples)
+                
+                # Store aggregated model metrics in JSON
+                aggregated_metrics = {
+                    'status': 'success' if (is_fair and is_explainable and is_reliable) else 'failed',
+                    'metrics': {
+                        'fairness': {
+                            'is_fair': bool(is_fair),
+                            'failed_policies': failed_fairness_policies if not is_fair else []
+                        },
+                        'explainability': {
+                            'is_explainable': bool(is_explainable),
+                            'failed_policies': failed_explainability_policies if not is_explainable else []
+                        },
+                        'reliability': {
+                            'is_reliable': bool(is_reliable),
+                            'failed_policies': failed_reliability_policies if not is_reliable else []
+                        },
+                        'privacy': {
+                            'is_private': bool(is_private),
+                            'failed_policies': failed_privacy_policies if not is_private else []
+                        },
+                        'performance': {
+                            'validation_loss': float(val_loss),
+                            'validation_accuracy': float(val_accuracy)
+                        }
+                    },
+                    'model_type': model_type,
+                    'data_type': data_type,
+                    'timestamp': datetime.now().isoformat(),
+                    'aggregator_id': Agg_ID,
+                    'num_devices_aggregated': len(models_of_type),
+                    'thresholds': {
+                        'fairness': fairness_thresholds,
+                        'explainability': explainability_thresholds,
+                        'reliability': reliability_thresholds,
+                        'privacy': privacy_thresholds
+                    }
+                }
+                
+                # Create results directory if it doesn't exist
+                results_dir = os.path.join(os.getcwd(), "aggregation_results")
+                os.makedirs(results_dir, exist_ok=True)
+                
+                # Save results to JSON file with timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                results_file = os.path.join(
+                    results_dir,
+                    f"aggregation_results_{model_type}_{data_type}_{timestamp}.json"
+                )
+                
+                with open(results_file, 'w') as f:
+                    json.dump(aggregated_metrics, f, indent=2)
+                    
+                logger.info(f"Aggregation results saved to {results_file}")
+                
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
                     publish_success = publish_aggregated_model(model_type, current_path)

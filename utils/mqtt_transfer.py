@@ -40,7 +40,7 @@ class ChunkedMQTTTransfer:
                 'start_time': time.time()
             }
             
-            logger.info(f"Starting transfer {transfer_id} with {total_chunks} chunks")
+            logger.info(f"Starting transfer {transfer_id} with {total_chunks} chunks in topic: {topic}")
 
             # Send transfer start message with metadata
             start_payload = {
