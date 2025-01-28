@@ -51,7 +51,7 @@ class ChunkedMQTTTransfer:
                 'metadata': metadata or {}
             }
             start_result = self.mqtt_client.publish(f"{topic}/control", json.dumps(start_payload), qos=MQTT_QOS)
-            start_result.wait_for_publish()
+            # start_result.wait_for_publish()
             logger.info(f"Transfer start message published for {transfer_id}")
             
             # Add small delay after start message to ensure receiver is ready
