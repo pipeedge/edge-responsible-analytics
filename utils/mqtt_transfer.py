@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 1 * 1024  # 10KB chunks
+CHUNK_SIZE = 100 * 1024  # n KB chunks
 MQTT_QOS = 1  # Use QoS 1 for reliable delivery
 
 class ChunkedMQTTTransfer:
