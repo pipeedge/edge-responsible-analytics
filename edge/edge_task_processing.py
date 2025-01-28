@@ -92,13 +92,16 @@ def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker with result code {rc}")
         # Resubscribe to topics on reconnect
-        client.subscribe([(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)])
+        topics = [(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)]
+        logger.info(f"[{DEVICE_ID}] Subscribing to topics: {topics}")
+        client.subscribe(topics)
     else:
         logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker with result code {rc}")
 
 def on_subscribe(client, userdata, mid, granted_qos, properties=None):
     """Callback when client subscribes to a topic."""
     logger.info(f"[{DEVICE_ID}] Successfully subscribed with message ID: {mid}, QoS: {granted_qos}")
+    logger.info(f"[{DEVICE_ID}] Subscription properties: {properties}")
 
 def on_disconnect(client, userdata, rc, properties=None):
     """Callback when client disconnects from the broker."""
@@ -350,28 +353,19 @@ def send_trained_model(model_path, model_type, data_type):
 def on_message(client, userdata, msg):
     """Callback when a message is received."""
     logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
-    logger.debug(f"[{DEVICE_ID}] Message payload size: {len(msg.payload)} bytes")
-    logger.debug(f"[{DEVICE_ID}] Message QoS: {msg.qos}")
+    logger.info(f"[{DEVICE_ID}] Message QoS: {msg.qos}")
     
     try:
         # Debug raw message
         try:
             payload_str = msg.payload.decode('utf-8')
             payload_data = json.loads(payload_str)
-            logger.debug(f"[{DEVICE_ID}] Message payload: {payload_data}")
+            logger.info(f"[{DEVICE_ID}] Message type: {payload_data.get('type')}")
             
-            # Log specific message type
-            msg_type = payload_data.get('type')
-            if msg_type:
-                logger.info(f"[{DEVICE_ID}] Message type: {msg_type}")
-                if msg_type == 'transfer_start':
-                    logger.info(f"[{DEVICE_ID}] Transfer starting with ID: {payload_data.get('transfer_id')}, "
-                              f"total chunks: {payload_data.get('total_chunks')}")
-                elif msg_type == 'chunk':
-                    logger.debug(f"[{DEVICE_ID}] Received chunk {payload_data.get('chunk_num')} "
-                               f"of transfer {payload_data.get('transfer_id')}")
-                elif msg_type == 'transfer_complete':
-                    logger.info(f"[{DEVICE_ID}] Transfer complete for ID: {payload_data.get('transfer_id')}")
+            if payload_data.get('type') == 'transfer_start':
+                logger.info(f"[{DEVICE_ID}] Transfer starting - ID: {payload_data.get('transfer_id')}, Total chunks: {payload_data.get('total_chunks')}")
+            elif payload_data.get('type') == 'chunk':
+                logger.debug(f"[{DEVICE_ID}] Received chunk {payload_data.get('chunk_num')} of {payload_data.get('total_chunks')} for transfer {payload_data.get('transfer_id')}")
         except json.JSONDecodeError:
             logger.warning(f"[{DEVICE_ID}] Message is not JSON format: {msg.payload[:100]}...")
         except Exception as e:

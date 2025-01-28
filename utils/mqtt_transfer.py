@@ -50,11 +50,15 @@ class ChunkedMQTTTransfer:
                 'device_id': self.device_id,
                 'metadata': metadata or {}
             }
-            self.mqtt_client.publish(f"{topic}/control", json.dumps(start_payload), qos=MQTT_QOS)
+            start_result = self.mqtt_client.publish(f"{topic}/control", json.dumps(start_payload), qos=MQTT_QOS)
+            start_result.wait_for_publish()
+            logger.info(f"Transfer start message published for {transfer_id}")
+            
+            # Add small delay after start message to ensure receiver is ready
+            time.sleep(0.1)
             
             # Send chunks with progress tracking
             for chunk_num in range(total_chunks):
-                logger.info(f"Sending chunk {chunk_num} of {total_chunks} for transfer {transfer_id}")
                 start_idx = chunk_num * CHUNK_SIZE
                 end_idx = min(start_idx + CHUNK_SIZE, len(file_data))
                 chunk_data = file_data[start_idx:end_idx]
@@ -86,8 +90,8 @@ class ChunkedMQTTTransfer:
                               f"Rate: {rate:.1f} chunks/sec")
                     self.last_progress_log[transfer_id] = current_time
                 
-                # Add small delay to prevent overwhelming the broker
-                if chunk_num % 100 == 0:
+                # Add small delay between chunks to prevent overwhelming the broker
+                if chunk_num % 10 == 0:  # Adjust delay frequency
                     time.sleep(0.01)
             
             # Send transfer complete message
@@ -96,7 +100,9 @@ class ChunkedMQTTTransfer:
                 'transfer_id': transfer_id,
                 'device_id': self.device_id
             }
-            self.mqtt_client.publish(f"{topic}/control", json.dumps(complete_payload), qos=MQTT_QOS)
+            complete_result = self.mqtt_client.publish(f"{topic}/control", json.dumps(complete_payload), qos=MQTT_QOS)
+            complete_result.wait_for_publish()
+            logger.info(f"Transfer complete message published for {transfer_id}")
             
             # Cleanup progress tracking
             if transfer_id in self.transfer_progress:
