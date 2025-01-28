@@ -91,10 +91,14 @@ def on_connect(client, userdata, flags, rc, properties=None):
     """Callback when client connects to the broker."""
     if rc == 0:
         logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker with result code {rc}")
-        # Resubscribe to topics on reconnect
-        topics = [(f"{MQTT_TOPIC_AGGREGATED}/control", 1), (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)]
-        logger.info(f"[{DEVICE_ID}] Subscribing to topics: {topics}")
-        client.subscribe(topics)
+        # Subscribe to topics individually for better error tracking
+        topics = [
+            (f"{MQTT_TOPIC_AGGREGATED}/control", 1),
+            (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)
+        ]
+        for topic, qos in topics:
+            result = client.subscribe(topic, qos)
+            logger.info(f"[{DEVICE_ID}] Subscribing to topic: {topic} with QoS {qos}, MID: {result[1]}")
     else:
         logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker with result code {rc}")
 
@@ -440,27 +444,38 @@ def connect_mqtt():
     try:
         logger.info(f"[{DEVICE_ID}] Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
+        
+        # Start the loop before waiting
         client.loop_start()
         
         # Wait for connection to be established
-        time.sleep(1)
+        connection_timeout = 5  # seconds
+        start_time = time.time()
+        while not client.is_connected() and time.time() - start_time < connection_timeout:
+            time.sleep(0.1)
         
         if not client.is_connected():
-            logger.error(f"[{DEVICE_ID}] Failed to establish connection to MQTT broker")
+            logger.error(f"[{DEVICE_ID}] Failed to establish connection to MQTT broker within {connection_timeout} seconds")
             return False
-        
+            
+        logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker")
         return True
+        
     except Exception as e:
         logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker: {e}")
         return False
 
-# Start MQTT loop in a separate thread
 def mqtt_loop():
     while True:
         try:
             if not client.is_connected():
                 logger.warning(f"[{DEVICE_ID}] MQTT client disconnected. Attempting to reconnect...")
-                connect_mqtt()
+                if connect_mqtt():
+                    logger.info(f"[{DEVICE_ID}] Successfully reconnected to MQTT broker")
+                else:
+                    logger.error(f"[{DEVICE_ID}] Failed to reconnect to MQTT broker")
+            else:
+                logger.debug(f"[{DEVICE_ID}] MQTT client is connected and running")
             time.sleep(5)  # Check connection every 5 seconds
         except Exception as e:
             logger.error(f"[{DEVICE_ID}] MQTT loop error: {e}")
