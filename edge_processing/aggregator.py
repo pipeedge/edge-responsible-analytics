@@ -506,30 +506,33 @@ def evaluate_and_aggregate():
     
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
-                    publish_aggregated_model(model_type, current_path)
+                    publish_success = publish_aggregated_model(model_type, current_path)
                     
-                    # Register model with MLflow
-                    if model_type == 'MobileNet':
-                        register_model_with_mlflow(aggregated_model, model_type, X_val)
-                    elif model_type in ['t5_small', 'tinybert']:
-                        register_model_with_mlflow(aggregated_model, model_type, tokenizer=tokenizer)
-                    
-                    # Backup the current aggregated model
-                    if os.path.exists(previous_path):
-                        if os.path.isdir(previous_path):
-                            shutil.rmtree(previous_path)
-                        else:
-                            os.remove(previous_path)
-                    
-                    if os.path.isdir(current_path):
-                        shutil.copytree(current_path, previous_path)
-                    else:
-                        shutil.copy2(current_path, previous_path)
+                    if publish_success:
+                        # Register model with MLflow only if publication succeeded
+                        if model_type == 'MobileNet':
+                            register_model_with_mlflow(aggregated_model, model_type, X_val)
+                        elif model_type in ['t5_small', 'tinybert']:
+                            register_model_with_mlflow(aggregated_model, model_type, tokenizer=tokenizer)
                         
-                    # Remove received models of this type
-                    for device_id in list(received_models.keys()):
-                        if received_models[device_id]['model_type'] == model_type:
-                            del received_models[device_id]
+                        # Backup the current aggregated model
+                        if os.path.exists(previous_path):
+                            if os.path.isdir(previous_path):
+                                shutil.rmtree(previous_path)
+                            else:
+                                os.remove(previous_path)
+                        
+                        if os.path.isdir(current_path):
+                            shutil.copytree(current_path, previous_path)
+                        else:
+                            shutil.copy2(current_path, previous_path)
+                            
+                        # Remove received models of this type
+                        for device_id in list(received_models.keys()):
+                            if received_models[device_id]['model_type'] == model_type:
+                                del received_models[device_id]
+                    else:
+                        logger.error(f"Failed to publish aggregated {model_type} model. Keeping previous model.")
                 else:
                     failed_policies = []
                     if failed_privacy_policies: failed_policies.append(failed_privacy_policies[0])
@@ -543,7 +546,7 @@ def evaluate_and_aggregate():
                     
                     # Use the previous aggregated model if it exists
                     if os.path.exists(previous_path):
-                        publish_aggregated_model(model_type, previous_path)
+                        publish_success = publish_aggregated_model(model_type, previous_path)
                         logger.info(f"Published previous aggregated {model_type} model")
                     else:
                         logger.warning("No previous aggregated model available to deploy.")
@@ -716,39 +719,73 @@ def publish_aggregated_model(model_type, model_path):
     Publish the aggregated model to the MQTT broker using chunked transfer.
     """
     try:
+        # Prepare model bytes with progress tracking
+        logger.info(f"Preparing {model_type} model for publication from {model_path}")
+        
         if model_type == 'MobileNet':
             # Handle single file model
             with open(model_path, 'rb') as f:
                 model_bytes = f.read()
         else:  # Directory-based models (T5, TinyBERT)
-            # Create a temporary tar file
+            # Create a temporary tar file with progress logging
+            logger.info(f"Creating archive for {model_type} model...")
             with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                 # Create tar archive of the model directory
-                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                archive_path = tmp.name[:-7]  # Remove .tar.gz
+                shutil.make_archive(archive_path, 'gztar', model_path)
+                
+                # Read the archive
                 with open(tmp.name, 'rb') as f:
                     model_bytes = f.read()
+                    logger.info(f"Created archive of size: {len(model_bytes) / (1024*1024):.2f} MB")
                 os.unlink(tmp.name)  # Clean up temp file
 
         # Prepare metadata
         metadata = {
             'model_type': model_type,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'size_bytes': len(model_bytes)
         }
         
-        # Send the aggregated model using chunked transfer
-        success = chunked_transfer.send_file_in_chunks(
-            model_bytes,
-            MQTT_TOPIC_AGGREGATED,
-            metadata=metadata
-        )
+        logger.info(f"Starting publication of {model_type} model (size: {len(model_bytes) / (1024*1024):.2f} MB)")
+        
+        # Set a timeout for the transfer
+        transfer_timeout = 3600  # 1 hour timeout for very large models
+        start_time = time.time()
+        
+        # Send the model with timeout handling
+        success = False
+        try:
+            success = chunked_transfer.send_file_in_chunks(
+                model_bytes,
+                MQTT_TOPIC_AGGREGATED,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"Error during model transfer: {e}")
+            logger.exception("Detailed error:")
+            success = False
+            
+        elapsed_time = time.time() - start_time
         
         if success:
-            logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+            logger.info(f"Successfully published aggregated {model_type} model in {elapsed_time:.1f} seconds")
         else:
-            logger.error(f"Failed to publish aggregated {model_type} model")
+            logger.error(f"Failed to publish aggregated {model_type} model after {elapsed_time:.1f} seconds")
+            
+        # Clean up any temporary files
+        if 'archive_path' in locals():
+            try:
+                os.remove(f"{archive_path}.tar.gz")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary archive: {e}")
+                
+        return success
             
     except Exception as e:
         logger.error(f"Failed to publish aggregated model: {e}")
+        logger.exception("Detailed error:")
+        return False
 
 def notify_policy_failure(failed_policies):
     """
