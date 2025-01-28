@@ -563,9 +563,9 @@ def main():
     # Connect to MQTT
     connect_mqtt()
     # Start MQTT loop in background
-    thread = threading.Thread(target=mqtt_loop)
-    thread.daemon = True
-    thread.start()
+    # thread = threading.Thread(target=mqtt_loop)
+    # thread.daemon = True
+    # thread.start()
 
     # Start memory monitoring thread
     monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
