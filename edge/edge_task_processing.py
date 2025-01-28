@@ -327,69 +327,55 @@ def send_trained_model(model_path, model_type, data_type):
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
-    try:
-        logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
-        logger.debug(f"[{DEVICE_ID}] Message payload size: {len(msg.payload)} bytes")
+    logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
+    logger.debug(f"[{DEVICE_ID}] Message payload size: {len(msg.payload)} bytes")
         
-        if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
-            # Process chunk message
-            result = chunked_transfer.handle_chunk_message(msg)
+    if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
+        # Process chunk message
+        result = chunked_transfer.handle_chunk_message(msg)
             
-            # If we have a complete model
-            if result is not None:
-                try:
-                    model_bytes = result['data']
-                    metadata = result['metadata']
-                    model_type = metadata.get('model_type')
+        # If we have a complete model
+        if result is not None:
+            try:
+                model_bytes = result['data']
+                metadata = result['metadata']
+                model_type = metadata.get('model_type')
                     
-                    logger.info(f"[{DEVICE_ID}] Processing complete model of type: {model_type}")
+                logger.info(f"[{DEVICE_ID}] Processing complete model of type: {model_type}")
                     
-                    if model_type:
-                        if model_type == 'MobileNet':
-                            # Handle single file model
-                            model_path = 'mobilenet_model.keras'
-                            with open(model_path, 'wb') as f:
-                                f.write(model_bytes)
-                            logger.info(f"[{DEVICE_ID}] Saved MobileNet model to {model_path}")
-                        else:  # TinyBERT or other directory-based models
-                            # Handle directory-based model
-                            model_dir = 'tinybert_model'
-                            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                                tmp.write(model_bytes)
-                                tmp.flush()
+                if model_type:
+                    if model_type == 'MobileNet':
+                        # Handle single file model
+                        model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
+                        with open(model_path, 'wb') as f:
+                            f.write(model_bytes)
+                        logger.info(f"[{DEVICE_ID}] Saved MobileNet model to {model_path}")
+                    else:  # TinyBERT or other directory-based models
+                        # Handle directory-based model
+                        model_dir = os.path.join(os.getcwd(), 'tinybert_model')
+                        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                            tmp.write(model_bytes)
+                            tmp.flush()
                                 
-                                # Clear existing model directory if it exists
-                                if os.path.exists(model_dir):
-                                    shutil.rmtree(model_dir)
+                            # Clear existing model directory if it exists
+                            if os.path.exists(model_dir):
+                                shutil.rmtree(model_dir)
                                 
-                                # Extract the new model
-                                with tarfile.open(tmp.name, 'r:gz') as tar:
-                                    tar.extractall(path=os.path.dirname(model_dir))
+                            # Extract the new model
+                            with tarfile.open(tmp.name, 'r:gz') as tar:
+                                tar.extractall(path=os.path.dirname(model_dir))
                                 
-                                os.unlink(tmp.name)  # Clean up temp file
-                                logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
+                            os.unlink(tmp.name)  # Clean up temp file
+                            logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
                         
-                        logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+                    logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
                         
-                        # Load the new model
-                        with model_lock:
-                            global model
-                            if model_type == 'MobileNet':
-                                model = tf.keras.models.load_model(model_path, compile=False)
-                                model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-                            else:  # TinyBERT
-                                from load_models import load_bert_model
-                                model, _ = load_bert_model()  # Reload with saved weights
+                    logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
+                    model_update_event.set()
                         
-                        logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
-                        model_update_event.set()
-                        
-                except Exception as e:
-                    logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
-                    logger.exception("Detailed error:")
-    except Exception as e:
-        logger.error(f"[{DEVICE_ID}] Error in on_message callback: {e}")
-        logger.exception("Detailed error:")
+            except Exception as e:
+                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
+                logger.exception("Detailed error:")
 
 # Connect to MQTT Broker
 def connect_mqtt():
@@ -402,6 +388,7 @@ def connect_mqtt():
         client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/chunks")
         client.loop_start()
         print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+        return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
         return False
