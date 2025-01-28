@@ -37,20 +37,23 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       containers:
       - name: mlflow
-        image: ghcr.io/mlflow/mlflow:v2.19.0
+        image: ghcr.io/mlflow/mlflow:v2.20.0
         command: ["mlflow", "server"]
         args: [
           "--host", "0.0.0.0",
           "--port", "5002",
           "--backend-store-uri", "sqlite:///mlflow/mlflow.db",
-          "--default-artifact-root", "/mlflow/artifacts",
-          "--workers", "4"
+          "--default-artifact-root", "/mlflow/mlruns",
+          "--workers", "3"
         ]
         ports:
         - containerPort: 5002
         volumeMounts:
         - name: mlflow-storage
           mountPath: /mlflow
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service:5002"
         resources:
           requests:
             memory: "512Mi"
@@ -58,8 +61,12 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "500m"
-      volumes:
-      - name: mlflow-storage
-        hostPath:
-          path: /mnt/mlflow-data
-          type: DirectoryOrCreate
+  volumeClaimTemplates:
+  - metadata:
+      name: mlflow-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 10Gi
