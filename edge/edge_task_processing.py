@@ -328,6 +328,7 @@ def send_trained_model(model_path, model_type, data_type):
 # Callback when a message is received
 def on_message(client, userdata, msg):
     if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
+        logger.info(f"[{DEVICE_ID}] Received message on topic {msg.topic}")
         # Process chunk message
         result = chunked_transfer.handle_chunk_message(msg)
         
