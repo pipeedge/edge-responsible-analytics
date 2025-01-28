@@ -405,20 +405,20 @@ def train_bert_edge(data_path, epochs=5, max_samples=300):
     }
     
     # Determine dataset type and load appropriate data
-    if "mimic" in data_path.lower():
+    is_mimic = data_path is None or "mimic" in str(data_path).lower()
+    
+    if is_mimic:
         from dataset.mimic_processor import process_mimic_data
         train_gen, val_gen = process_mimic_data(
             batch_size=8,
             max_samples=max_samples
         )
-        is_mimic = True
     else:
         from dataset.mt_processor import process_medical_transcriptions_data
         X_train, _, y_train, _, sf_train, _ = process_medical_transcriptions_data(
             data_path,
             batch_size=8
         )
-        is_mimic = False
         
         # Limit dataset size for edge device
         X_train = X_train[:max_samples]
