@@ -92,21 +92,10 @@ def on_connect(client, userdata, flags, rc, properties=None):
     """Callback when client connects to the broker."""
     if rc == 0:
         logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker with result code {rc}")
-        # Subscribe to topics individually for better error tracking
-        topics = [
-            (f"{MQTT_TOPIC_AGGREGATED}/control", 1),
-            (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)
-        ]
-        for topic, qos in topics:
-            result = client.subscribe(topic, qos)
-            logger.info(f"[{DEVICE_ID}] Subscribing to topic: {topic} with QoS {qos}, MID: {result[1]}")
+        result = client.subscribe(MQTT_TOPIC_AGGREGATED)
+        logger.info(f"[{DEVICE_ID}] Subscribing to topic: {MQTT_TOPIC_AGGREGATED}")
     else:
         logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker with result code {rc}")
-
-def on_subscribe(client, userdata, mid, granted_qos, properties=None):
-    """Callback when client subscribes to a topic."""
-    logger.info(f"[{DEVICE_ID}] Successfully subscribed with message ID: {mid}, QoS: {granted_qos}")
-    logger.info(f"[{DEVICE_ID}] Subscription properties: {properties}")
 
 def on_disconnect(client, userdata, rc, properties=None):
     """Callback when client disconnects from the broker."""
@@ -481,7 +470,6 @@ def connect_mqtt():
     # Set up MQTT callbacks
     client.on_connect = on_connect
     client.on_message = on_message
-    client.on_subscribe = on_subscribe
     client.on_disconnect = on_disconnect
     
     try:
