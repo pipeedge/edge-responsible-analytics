@@ -75,9 +75,10 @@ client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv5)
 # Event to signal when a new aggregated model is received
 model_update_event = threading.Event()
 
-# Global model variable
-model_lock = threading.Lock()
 model = None
+
+model_chunks = {}
+model_chunks_lock = threading.Lock()
 
 # Set up MLflow tracking
 #mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -353,7 +354,48 @@ def send_trained_model(model_path, model_type, data_type):
         logger.error(f"[{DEVICE_ID}] Failed to send trained model: {e}")
         logger.exception("Detailed error:")
 
-# Callback when a message is received
+def on_message(client, userdata, msg):
+    """MQTTv5 on_message callback"""
+    if msg.topic == MQTT_TOPIC_AGGREGATED:
+        try:
+            payload = json.loads(msg.payload.decode('utf-8'))
+            chunk_data = payload.get('model_data')
+            model_type = payload.get('model_type')
+            chunk_index = payload.get('chunk_index')
+            total_chunks = payload.get('total_chunks')
+
+            if not all([chunk_data, model_type, chunk_index is not None, total_chunks]):
+                logger.error(f"[{DEVICE_ID}] Received message with missing fields")
+                return
+
+            with model_chunks_lock:
+                # Initialize chunk storage for this model type if needed
+                if model_type not in model_chunks:
+                    model_chunks[model_type] = {
+                        'chunks': [''] * total_chunks,
+                        'total_chunks': total_chunks
+                    }
+
+                # Store this chunk
+                model_chunks[model_type]['chunks'][chunk_index] = chunk_data
+                received_count = sum(1 for chunk in model_chunks[model_type]['chunks'] if chunk)
+                logger.info(f"[{DEVICE_ID}] Received chunk {chunk_index + 1}/{total_chunks} for {model_type} model")
+
+                # Check if we have all chunks
+                if received_count == total_chunks:
+                    logger.info(f"[{DEVICE_ID}] Received all chunks for {model_type} model, assembling")
+                    complete_model = ''.join(model_chunks[model_type]['chunks'])
+                    # Clean up chunks
+                    del model_chunks[model_type]
+                    # Process the complete model
+                    process_complete_model(model_type, complete_model)
+
+        except json.JSONDecodeError:
+            logger.exception(f"[{DEVICE_ID}] Failed to decode JSON payload")
+        except Exception as e:
+            logger.exception(f"[{DEVICE_ID}] Unexpected error in on_message: {e}")
+
+'''
 def on_message(client, userdata, msg):
     """Callback when a message is received."""
     logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
@@ -432,6 +474,7 @@ def on_message(client, userdata, msg):
     except Exception as e:
         logger.error(f"[{DEVICE_ID}] Error in on_message handler: {e}")
         logger.exception("Error details:")
+'''
 
 # Connect to MQTT Broker
 def connect_mqtt():
@@ -652,3 +695,36 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def process_complete_model(model_type, model_data):
+    """Process a complete model after receiving all chunks"""
+    try:
+        model_bytes = base64.b64decode(model_data)
+        
+        if model_type == 'MobileNet':
+            # Handle single file model
+            model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
+            with open(model_path, 'wb') as f:
+                f.write(model_bytes)
+        else:  # TinyBERT
+            # Handle directory-based model
+            model_dir = 'tinybert_model'
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                tmp.write(model_bytes)
+                tmp.flush()
+                
+                # Clear existing model directory if it exists
+                if os.path.exists(model_dir):
+                    shutil.rmtree(model_dir)
+                
+                # Extract the new model
+                with tarfile.open(tmp.name, 'r:gz') as tar:
+                    tar.extractall(path=os.path.dirname(model_dir))
+                
+                os.unlink(tmp.name)  # Clean up temp file
+        
+        logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+        model_update_event.set()
+        
+    except Exception as e:
+        logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")

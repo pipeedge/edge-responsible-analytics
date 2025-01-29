@@ -827,6 +827,74 @@ def aggregate_models(models_of_type, model_type, save_path):
 
 def publish_aggregated_model(model_type, model_path):
     """
+    Publish the aggregated model to the MQTT broker.
+    """
+    try:
+        if model_type == 'MobileNet':
+            # Handle single file model
+            with open(model_path, 'rb') as f:
+                aggregated_model_bytes = f.read()
+        else:  # Directory-based models (T5, TinyBERT)
+            # Create a temporary tar file
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                # Create tar archive of the model directory
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                with open(tmp.name, 'rb') as f:
+                    aggregated_model_bytes = f.read()
+                os.unlink(tmp.name)  # Clean up temp file
+
+        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+        
+        # Split large models into chunks with smaller size
+        chunk_size = 50000  # 50KB chunks
+        model_chunks = [aggregated_model_b64[i:i+chunk_size] for i in range(0, len(aggregated_model_b64), chunk_size)]
+        total_chunks = len(model_chunks)
+        
+        logger.info(f"[Aggregator] Splitting aggregated model into {total_chunks} chunks for transmission")
+        
+        # Set up message properties for QoS 1 and longer message expiry
+        properties = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
+        properties.MessageExpiryInterval = 3600  # 1 hour expiry
+        
+        for i, chunk in enumerate(model_chunks):
+            payload = json.dumps({
+                'model_data': chunk,
+                'model_type': model_type,
+                'chunk_index': i,
+                'total_chunks': total_chunks
+            })
+            
+            # Publish with QoS 1 and properties
+            result = client.publish(
+                MQTT_TOPIC_AGGREGATED,
+                payload,
+                qos=1,
+                properties=properties
+            )
+            
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                logger.info(f"[Aggregator] Successfully published chunk {i+1}/{total_chunks}")
+                # Wait for message to be delivered
+                result.wait_for_publish()
+            else:
+                logger.error(f"[Aggregator] Failed to publish chunk {i+1}/{total_chunks}: {mqtt.error_string(result.rc)}")
+                # Wait and retry once on failure
+                time.sleep(1)
+                retry_result = client.publish(MQTT_TOPIC_AGGREGATED, payload, qos=1, properties=properties)
+                if retry_result.rc != mqtt.MQTT_ERR_SUCCESS:
+                    raise Exception(f"Failed to publish chunk after retry: {mqtt.error_string(retry_result.rc)}")
+                retry_result.wait_for_publish()
+            
+            # Small delay between chunks to prevent overwhelming the broker
+            time.sleep(0.2)
+            
+        logger.info(f"[Aggregator] Completed sending all {total_chunks} chunks of the aggregated model")
+    except Exception as e:
+        logger.error(f"Failed to publish aggregated model: {e}")
+        
+'''
+def publish_aggregated_model(model_type, model_path):
+    """
     Publish the aggregated model to the MQTT broker using chunked transfer.
     """
     try:
@@ -897,6 +965,7 @@ def publish_aggregated_model(model_type, model_path):
         logger.error(f"Failed to publish aggregated model: {e}")
         logger.exception("Detailed error:")
         return False
+'''
 
 def notify_policy_failure(failed_policies):
     """
