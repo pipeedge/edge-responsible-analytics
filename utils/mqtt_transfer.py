@@ -74,7 +74,7 @@ class ChunkedMQTTTransfer:
                 
                 # Publish with QoS 1 and wait for confirmation
                 result = self.mqtt_client.publish(f"{topic}/chunks", json.dumps(chunk_payload), qos=MQTT_QOS)
-                result.wait_for_publish()
+                # result.wait_for_publish()
                 
                 # Update progress
                 self.transfer_progress[transfer_id]['sent_chunks'] = chunk_num + 1
