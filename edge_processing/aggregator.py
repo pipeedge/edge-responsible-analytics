@@ -619,6 +619,7 @@ def evaluate_and_aggregate():
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
                     # publish_success = publish_aggregated_model(model_type, current_path)
                     publish_aggregated_model(model_type, current_path)
+                    logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
                     # if publish_success:
                     #     # Register model with MLflow only if publication succeeded
                     #     if model_type == 'MobileNet':
@@ -657,7 +658,7 @@ def evaluate_and_aggregate():
                     
                     # Use the previous aggregated model if it exists
                     if os.path.exists(previous_path):
-                        publish_success = publish_aggregated_model(model_type, previous_path)
+                        publish_aggregated_model(model_type, previous_path)
                         logger.info(f"Published previous aggregated {model_type} model")
                     else:
                         logger.warning("No previous aggregated model available to deploy.")
@@ -849,7 +850,6 @@ def publish_aggregated_model(model_type, model_path):
             'model_type': model_type
         })
         client.publish(MQTT_TOPIC_AGGREGATED, payload)
-        logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
     except Exception as e:
         logger.error(f"Failed to publish aggregated model: {e}")
 

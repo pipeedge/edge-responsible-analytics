@@ -326,6 +326,7 @@ def send_trained_model(model_path, model_type, data_type):
         logger.exception("Detailed error:")
 
 def on_message(client, userdata, msg):
+    logger.info(f"[{DEVICE_ID}] Received message on topic {msg.topic}")
     if msg.topic == MQTT_TOPIC_AGGREGATED:
         payload = json.loads(msg.payload.decode('utf-8'))
         aggregated_model_b64 = payload.get('model_data')
