@@ -338,12 +338,12 @@ def on_message(client, userdata, msg):
                 
                 if model_type == 'MobileNet':
                     # Handle single file model
-                    model_path = 'mobilenet_model.keras'
+                    model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
                     with open(model_path, 'wb') as f:
                         f.write(model_bytes)
                 else:  # TinyBERT
                     # Handle directory-based model
-                    model_dir = 'tinybert_model'
+                    model_dir = os.path.join(os.getcwd(), 'aggregated_tinybert')
                     with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
                         tmp.write(model_bytes)
                         tmp.flush()
