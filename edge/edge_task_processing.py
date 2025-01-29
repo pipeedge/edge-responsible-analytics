@@ -385,12 +385,14 @@ def connect_mqtt():
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
         client.subscribe(MQTT_TOPIC_AGGREGATED)
         print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
+        client.loop_start()
+        return True
     except Exception as e:
         logger.exception(f"Failed to connect to MQTT broker: {e}")
-
+        return False
 # Start MQTT loop in a separate thread
-def mqtt_loop():
-    client.loop_forever()
+# def mqtt_loop():
+#     client.loop_forever()
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
@@ -537,16 +539,18 @@ def main():
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}' with data_type='{data_type}'.")
 
     # Connect to MQTT
-    connect_mqtt()
+    if not connect_mqtt():
+            logger.error("Failed to connect to MQTT broker. Exiting.")
+            sys.exit(1)
     # Start MQTT loop in background
-    thread = threading.Thread(target=mqtt_loop)
-    thread.daemon = True
-    thread.start()
+    # thread = threading.Thread(target=mqtt_loop)
+    # thread.daemon = True
+    # thread.start()
 
     # Start MQTT monitoring loop in a separate thread
-    mqtt_monitor_thread = threading.Thread(target=mqtt_loop, daemon=True)
-    mqtt_monitor_thread.start()
-    logger.info("Started MQTT monitoring thread")
+    # mqtt_monitor_thread = threading.Thread(target=mqtt_loop, daemon=True)
+    # mqtt_monitor_thread.start()
+    # logger.info("Started MQTT monitoring thread")
 
     # Start memory monitoring thread
     monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
