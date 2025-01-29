@@ -617,33 +617,33 @@ def evaluate_and_aggregate():
                 
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
-                    publish_success = publish_aggregated_model(model_type, current_path)
-                    
-                    if publish_success:
-                        # Register model with MLflow only if publication succeeded
-                        if model_type == 'MobileNet':
-                            register_model_with_mlflow(aggregated_model, model_type, X_val)
-                        elif model_type in ['t5_small', 'tinybert']:
-                            register_model_with_mlflow(aggregated_model, model_type, tokenizer=tokenizer)
+                    # publish_success = publish_aggregated_model(model_type, current_path)
+                    publish_aggregated_model(model_type, current_path)
+                    # if publish_success:
+                    #     # Register model with MLflow only if publication succeeded
+                    #     if model_type == 'MobileNet':
+                    #         register_model_with_mlflow(aggregated_model, model_type, X_val)
+                    #     elif model_type in ['t5_small', 'tinybert']:
+                    #         register_model_with_mlflow(aggregated_model, model_type, tokenizer=tokenizer)
                         
-                        # Backup the current aggregated model
-                        if os.path.exists(previous_path):
-                            if os.path.isdir(previous_path):
-                                shutil.rmtree(previous_path)
-                            else:
-                                os.remove(previous_path)
+                    #     # Backup the current aggregated model
+                    #     if os.path.exists(previous_path):
+                    #         if os.path.isdir(previous_path):
+                    #             shutil.rmtree(previous_path)
+                    #         else:
+                    #             os.remove(previous_path)
                         
-                        if os.path.isdir(current_path):
-                            shutil.copytree(current_path, previous_path)
-                        else:
-                            shutil.copy2(current_path, previous_path)
+                    #     if os.path.isdir(current_path):
+                    #         shutil.copytree(current_path, previous_path)
+                    #     else:
+                    #         shutil.copy2(current_path, previous_path)
                             
-                        # Remove received models of this type
-                        for device_id in list(received_models.keys()):
-                            if received_models[device_id]['model_type'] == model_type:
-                                del received_models[device_id]
-                    else:
-                        logger.error(f"Failed to publish aggregated {model_type} model. Keeping previous model.")
+                    #     # Remove received models of this type
+                    #     for device_id in list(received_models.keys()):
+                    #         if received_models[device_id]['model_type'] == model_type:
+                    #             del received_models[device_id]
+                    # else:
+                    #     logger.error(f"Failed to publish aggregated {model_type} model. Keeping previous model.")
                 else:
                     failed_policies = []
                     if failed_privacy_policies: failed_policies.append(failed_privacy_policies[0])
@@ -827,6 +827,36 @@ def aggregate_models(models_of_type, model_type, save_path):
 
 def publish_aggregated_model(model_type, model_path):
     """
+    Publish the aggregated model to the MQTT broker.
+    """
+    try:
+        if model_type == 'MobileNet':
+            # Handle single file model
+            with open(model_path, 'rb') as f:
+                aggregated_model_bytes = f.read()
+        else:  # Directory-based models (T5, TinyBERT)
+            # Create a temporary tar file
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                # Create tar archive of the model directory
+                shutil.make_archive(tmp.name[:-7], 'gztar', model_path)
+                with open(tmp.name, 'rb') as f:
+                    aggregated_model_bytes = f.read()
+                os.unlink(tmp.name)  # Clean up temp file
+
+        aggregated_model_b64 = base64.b64encode(aggregated_model_bytes).decode('utf-8')
+        payload = json.dumps({
+            'model_data': aggregated_model_b64,
+            'model_type': model_type
+        })
+        client.publish(MQTT_TOPIC_AGGREGATED, payload)
+        logger.info(f"Published aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
+    except Exception as e:
+        logger.error(f"Failed to publish aggregated model: {e}")
+
+
+'''
+def publish_aggregated_model(model_type, model_path):
+    """
     Publish the aggregated model to the MQTT broker using chunked transfer.
     """
     try:
@@ -897,6 +927,7 @@ def publish_aggregated_model(model_type, model_path):
         logger.error(f"Failed to publish aggregated model: {e}")
         logger.exception("Detailed error:")
         return False
+'''
 
 def notify_policy_failure(failed_policies):
     """
