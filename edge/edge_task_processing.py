@@ -86,34 +86,6 @@ model = None
 # Initialize chunked transfer handler
 chunked_transfer = ChunkedMQTTTransfer(client, DEVICE_ID)
 
-# Debug MQTT callbacks
-def on_connect(client, userdata, flags, rc, properties=None):
-    """Callback when client connects to the broker."""
-    if rc == 0:
-        logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker with result code {rc}")
-        # Subscribe to topics individually for better error tracking
-        topics = [
-            (f"{MQTT_TOPIC_AGGREGATED}/control", 1),
-            (f"{MQTT_TOPIC_AGGREGATED}/chunks", 1)
-        ]
-        for topic, qos in topics:
-            result = client.subscribe(topic, qos)
-            logger.info(f"[{DEVICE_ID}] Subscribing to topic: {topic} with QoS {qos}, MID: {result[1]}")
-    else:
-        logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker with result code {rc}")
-
-def on_subscribe(client, userdata, mid, granted_qos, properties=None):
-    """Callback when client subscribes to a topic."""
-    logger.info(f"[{DEVICE_ID}] Successfully subscribed with message ID: {mid}, QoS: {granted_qos}")
-    logger.info(f"[{DEVICE_ID}] Subscription properties: {properties}")
-
-def on_disconnect(client, userdata, rc, properties=None):
-    """Callback when client disconnects from the broker."""
-    if rc != 0:
-        logger.warning(f"[{DEVICE_ID}] Unexpected disconnection from MQTT broker with result code {rc}")
-    else:
-        logger.info(f"[{DEVICE_ID}] Successfully disconnected from MQTT broker")
-
 def process_task(task):
     """
     Process a single task based on its type and data.
@@ -353,134 +325,72 @@ def send_trained_model(model_path, model_type, data_type):
         logger.error(f"[{DEVICE_ID}] Failed to send trained model: {e}")
         logger.exception("Detailed error:")
 
-# Callback when a message is received
 def on_message(client, userdata, msg):
-    """Callback when a message is received."""
-    logger.info(f"[{DEVICE_ID}] Received message on topic: {msg.topic}")
-    logger.info(f"[{DEVICE_ID}] Message QoS: {msg.qos}")
-    
-    try:
-        # Debug raw message
-        try:
-            payload_str = msg.payload.decode('utf-8')
-            payload_data = json.loads(payload_str)
-            logger.info(f"[{DEVICE_ID}] Message type: {payload_data.get('type')}")
-            
-            if payload_data.get('type') == 'transfer_start':
-                logger.info(f"[{DEVICE_ID}] Transfer starting - ID: {payload_data.get('transfer_id')}, Total chunks: {payload_data.get('total_chunks')}")
-            elif payload_data.get('type') == 'chunk':
-                logger.debug(f"[{DEVICE_ID}] Received chunk {payload_data.get('chunk_num')} of {payload_data.get('total_chunks')} for transfer {payload_data.get('transfer_id')}")
-        except json.JSONDecodeError:
-            logger.warning(f"[{DEVICE_ID}] Message is not JSON format: {msg.payload[:100]}...")
-        except Exception as e:
-            logger.warning(f"[{DEVICE_ID}] Error decoding message: {e}")
+    if msg.topic == MQTT_TOPIC_AGGREGATED:
+        payload = json.loads(msg.payload.decode('utf-8'))
+        aggregated_model_b64 = payload.get('model_data')
+        model_type = payload.get('model_type')
         
-        if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
-            logger.info(f"[{DEVICE_ID}] Processing chunked message on topic {msg.topic}")
-            # Process chunk message
+        if aggregated_model_b64:
             try:
-                result = chunked_transfer.handle_chunk_message(msg)
-                if result is None:
-                    logger.debug(f"[{DEVICE_ID}] Chunk processed but transfer not complete yet")
-                else:
-                    logger.info(f"[{DEVICE_ID}] Completed chunked transfer, got result")
-            except Exception as chunk_error:
-                logger.error(f"[{DEVICE_ID}] Error handling chunk message: {chunk_error}")
-                logger.exception("Chunk handling error details:")
-                return
+                model_bytes = base64.b64decode(aggregated_model_b64)
                 
-            # If we have a complete model
-            if result is not None:
-                try:
-                    model_bytes = result['data']
-                    metadata = result['metadata']
-                    model_type = metadata.get('model_type')
+                if model_type == 'MobileNet':
+                    # Handle single file model
+                    model_path = 'mobilenet_model.keras'
+                    with open(model_path, 'wb') as f:
+                        f.write(model_bytes)
+                else:  # TinyBERT
+                    # Handle directory-based model
+                    model_dir = 'tinybert_model'
+                    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                        tmp.write(model_bytes)
+                        tmp.flush()
                         
-                    logger.info(f"[{DEVICE_ID}] Processing complete model of type: {model_type}")
+                        # Clear existing model directory if it exists
+                        if os.path.exists(model_dir):
+                            shutil.rmtree(model_dir)
                         
-                    if model_type:
-                        if model_type == 'MobileNet':
-                            # Handle single file model
-                            model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
-                            with open(model_path, 'wb') as f:
-                                f.write(model_bytes)
-                            logger.info(f"[{DEVICE_ID}] Saved MobileNet model to {model_path}")
-                        else:  # TinyBERT or other directory-based models
-                            # Handle directory-based model
-                            model_dir = os.path.join(os.getcwd(), 'tinybert_model')
-                            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                                tmp.write(model_bytes)
-                                tmp.flush()
-                                    
-                                # Clear existing model directory if it exists
-                                if os.path.exists(model_dir):
-                                    shutil.rmtree(model_dir)
-                                    
-                                # Extract the new model
-                                with tarfile.open(tmp.name, 'r:gz') as tar:
-                                    tar.extractall(path=os.path.dirname(model_dir))
-                                    
-                                os.unlink(tmp.name)  # Clean up temp file
-                                logger.info(f"[{DEVICE_ID}] Extracted TinyBERT model to {model_dir}")
-                            
-                        logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
-                        model_update_event.set()
-                            
-                except Exception as e:
-                    logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
-                    logger.exception("Detailed error:")
-    except Exception as e:
-        logger.error(f"[{DEVICE_ID}] Error in on_message handler: {e}")
-        logger.exception("Error details:")
+                        # Extract the new model
+                        with tarfile.open(tmp.name, 'r:gz') as tar:
+                            tar.extractall(path=os.path.dirname(model_dir))
+                        
+                        os.unlink(tmp.name)  # Clean up temp file
+                
+                logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+                
+                # Load the new model
+                with model_lock:
+                    global model
+                    if model_type == 'MobileNet':
+                        model = tf.keras.models.load_model(model_path, compile=False)
+                        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+                    else:  # TinyBERT
+                        from load_models import load_bert_model
+                        model, _ = load_bert_model()  # Reload with saved weights
+                
+                logger.info(f"[{DEVICE_ID}] Aggregated model loaded successfully")
+                model_update_event.set()
+                
+            except Exception as e:
+                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
+
+# Set up MQTT callbacks
+client.on_message = on_message
 
 # Connect to MQTT Broker
 def connect_mqtt():
-    # Set up MQTT callbacks
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.on_subscribe = on_subscribe
-    client.on_disconnect = on_disconnect
-    
     try:
-        logger.info(f"[{DEVICE_ID}] Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
-        
-        # Start the loop before waiting
-        client.loop_start()
-        
-        # Wait for connection to be established
-        connection_timeout = 5  # seconds
-        start_time = time.time()
-        while not client.is_connected() and time.time() - start_time < connection_timeout:
-            time.sleep(0.1)
-        
-        if not client.is_connected():
-            logger.error(f"[{DEVICE_ID}] Failed to establish connection to MQTT broker within {connection_timeout} seconds")
-            return False
-            
-        logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker")
-        return True
-        
+        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
     except Exception as e:
-        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker: {e}")
-        return False
+        logger.exception(f"Failed to connect to MQTT broker: {e}")
 
+# Start MQTT loop in a separate thread
 def mqtt_loop():
-    while True:
-        try:
-            if not client.is_connected():
-                logger.warning(f"[{DEVICE_ID}] MQTT client disconnected. Attempting to reconnect...")
-                if connect_mqtt():
-                    logger.info(f"[{DEVICE_ID}] Successfully reconnected to MQTT broker")
-                else:
-                    logger.error(f"[{DEVICE_ID}] Failed to reconnect to MQTT broker")
-            else:
-                logger.debug(f"[{DEVICE_ID}] MQTT client is connected and running")
-            time.sleep(5)  # Check connection every 5 seconds
-        except Exception as e:
-            logger.error(f"[{DEVICE_ID}] MQTT loop error: {e}")
-            logger.exception("Detailed error:")
-            time.sleep(5)  # Wait before retrying
+    client.loop_forever()
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
@@ -627,9 +537,11 @@ def main():
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}' with data_type='{data_type}'.")
 
     # Connect to MQTT
-    if not connect_mqtt():
-        logger.error("Failed to connect to MQTT broker. Exiting.")
-        sys.exit(1)
+    connect_mqtt()
+    # Start MQTT loop in background
+    thread = threading.Thread(target=mqtt_loop)
+    thread.daemon = True
+    thread.start()
 
     # Start MQTT monitoring loop in a separate thread
     mqtt_monitor_thread = threading.Thread(target=mqtt_loop, daemon=True)
