@@ -376,11 +376,10 @@ def on_message(client, userdata, msg):
             except Exception as e:
                 logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
 
-# Set up MQTT callbacks
-client.on_message = on_message
 
 # Connect to MQTT Broker
 def connect_mqtt():
+    client.on_message = on_message  
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)

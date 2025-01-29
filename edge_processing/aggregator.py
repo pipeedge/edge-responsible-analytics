@@ -659,7 +659,7 @@ def evaluate_and_aggregate():
                     # Use the previous aggregated model if it exists
                     if os.path.exists(previous_path):
                         publish_aggregated_model(model_type, previous_path)
-                        logger.info(f"Published previous aggregated {model_type} model")
+                        logger.info(f"Published previous aggregated {model_type} model to {MQTT_TOPIC_AGGREGATED}")
                     else:
                         logger.warning("No previous aggregated model available to deploy.")
                     
