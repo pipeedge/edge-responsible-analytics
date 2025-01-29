@@ -344,45 +344,45 @@ def send_trained_model(model_path, model_type, data_type):
         logger.exception("Detailed error:")
 
 def on_message(client, userdata, msg):
-    """MQTTv5 on_message callback"""
     if msg.topic == MQTT_TOPIC_AGGREGATED:
-        try:
-            payload = json.loads(msg.payload.decode('utf-8'))
-            chunk_data = payload.get('model_data')
-            model_type = payload.get('model_type')
-            chunk_index = payload.get('chunk_index')
-            total_chunks = payload.get('total_chunks')
-
-            if not all([chunk_data, model_type, chunk_index is not None, total_chunks]):
-                logger.error(f"[{DEVICE_ID}] Received message with missing fields")
-                return
-
-            with model_chunks_lock:
-                # Initialize chunk storage for this model type if needed
-                if model_type not in model_chunks:
-                    model_chunks[model_type] = {
-                        'chunks': [''] * total_chunks,
-                        'total_chunks': total_chunks
-                    }
-
-                # Store this chunk
-                model_chunks[model_type]['chunks'][chunk_index] = chunk_data
-                received_count = sum(1 for chunk in model_chunks[model_type]['chunks'] if chunk)
-                logger.info(f"[{DEVICE_ID}] Received chunk {chunk_index + 1}/{total_chunks} for {model_type} model")
-
-                # Check if we have all chunks
-                if received_count == total_chunks:
-                    logger.info(f"[{DEVICE_ID}] Received all chunks for {model_type} model, assembling")
-                    complete_model = ''.join(model_chunks[model_type]['chunks'])
-                    # Clean up chunks
-                    del model_chunks[model_type]
-                    # Process the complete model
-                    process_complete_model(model_type, complete_model)
-
-        except json.JSONDecodeError:
-            logger.exception(f"[{DEVICE_ID}] Failed to decode JSON payload")
-        except Exception as e:
-            logger.exception(f"[{DEVICE_ID}] Unexpected error in on_message: {e}")
+        payload = json.loads(msg.payload.decode('utf-8'))
+        aggregated_model_b64 = payload.get('model_data')
+        model_type = payload.get('model_type')
+        
+        if aggregated_model_b64:
+            try:
+                model_bytes = base64.b64decode(aggregated_model_b64)
+                
+                if model_type == 'MobileNet':
+                    # Handle single file model
+                    # model_path = 'mobilenet_model.keras'
+                    model_path = os.path.join(os.getcwd(), 'aggregated_mobilenet.keras')
+                    with open(model_path, 'wb') as f:
+                        f.write(model_bytes)
+                else:  # TinyBERT
+                    # Handle directory-based model
+                    # model_dir = 'tinybert_model'
+                    model_dir = os.path.join(os.getcwd(), 'tinybert_model')
+                    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                        tmp.write(model_bytes)
+                        tmp.flush()
+                        
+                        # Clear existing model directory if it exists
+                        if os.path.exists(model_dir):
+                            shutil.rmtree(model_dir)
+                        
+                        # Extract the new model
+                        with tarfile.open(tmp.name, 'r:gz') as tar:
+                            tar.extractall(path=os.path.dirname(model_dir))
+                        
+                        os.unlink(tmp.name)  # Clean up temp file
+                
+                logger.info(f"[{DEVICE_ID}] Received and saved aggregated model")
+                
+                model_update_event.set()
+                
+            except Exception as e:
+                logger.error(f"[{DEVICE_ID}] Failed to process aggregated model: {e}")
 
 '''
 def on_message(client, userdata, msg):
@@ -467,51 +467,18 @@ def on_message(client, userdata, msg):
 
 # Connect to MQTT Broker
 def connect_mqtt():
-    # Set up MQTT callbacks
-    client.on_connect = on_connect
     client.on_message = on_message
-    client.on_disconnect = on_disconnect
-    
     try:
-        logger.info(f"[{DEVICE_ID}] Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=300)
-        
-        # Start the loop before waiting
-        client.loop_start()
-        
-        # Wait for connection to be established
-        connection_timeout = 5  # seconds
-        start_time = time.time()
-        while not client.is_connected() and time.time() - start_time < connection_timeout:
-            time.sleep(0.1)
-        
-        if not client.is_connected():
-            logger.error(f"[{DEVICE_ID}] Failed to establish connection to MQTT broker within {connection_timeout} seconds")
-            return False
-            
-        logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker")
-        return True
-        
+        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
+        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
     except Exception as e:
-        logger.exception(f"[{DEVICE_ID}] Failed to connect to MQTT broker: {e}")
-        return False
+        logger.exception(f"Failed to connect to MQTT broker: {e}")
 
+# Start MQTT loop in a separate thread
 def mqtt_loop():
-    while True:
-        try:
-            if not client.is_connected():
-                logger.warning(f"[{DEVICE_ID}] MQTT client disconnected. Attempting to reconnect...")
-                if connect_mqtt():
-                    logger.info(f"[{DEVICE_ID}] Successfully reconnected to MQTT broker")
-                else:
-                    logger.error(f"[{DEVICE_ID}] Failed to reconnect to MQTT broker")
-            else:
-                logger.debug(f"[{DEVICE_ID}] MQTT client is connected and running")
-            time.sleep(5)  # Check connection every 5 seconds
-        except Exception as e:
-            logger.error(f"[{DEVICE_ID}] MQTT loop error: {e}")
-            logger.exception("Detailed error:")
-            time.sleep(5)  # Wait before retrying
+    client.loop_forever()
 
 # Task processing function
 def task_processing(task_type, model_type, data_type):
