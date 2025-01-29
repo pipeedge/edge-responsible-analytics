@@ -467,14 +467,41 @@ def on_message(client, userdata, msg):
 
 # Connect to MQTT Broker
 def connect_mqtt():
+    """Connect to MQTT broker with retries and proper error handling."""
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.on_message = on_message
-    try:
-        print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
-        client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_AGGREGATED)
-        print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
-    except Exception as e:
-        logger.exception(f"Failed to connect to MQTT broker: {e}")
+
+    max_retries = 3
+    retry_delay = 5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"[{DEVICE_ID}] Attempting to connect to MQTT broker {MQTT_BROKER}:{MQTT_PORT} (attempt {attempt + 1}/{max_retries})")
+            client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+            
+            # Start a short loop to handle the connection callback
+            client.loop_start()
+            
+            # Wait for connection to be established
+            for _ in range(10):  # 10 second timeout
+                if client.is_connected():
+                    logger.info(f"[{DEVICE_ID}] Successfully connected to MQTT broker")
+                    client.loop_stop()
+                    return True
+                time.sleep(1)
+            
+            client.loop_stop()
+            logger.warning(f"[{DEVICE_ID}] Connection timeout on attempt {attempt + 1}")
+            
+        except Exception as e:
+            logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker on attempt {attempt + 1}: {str(e)}")
+            if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                logger.info(f"[{DEVICE_ID}] Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+    
+    logger.error(f"[{DEVICE_ID}] Failed to connect to MQTT broker after {max_retries} attempts")
+    return False
 
 # Start MQTT loop in a separate thread
 def mqtt_loop():
