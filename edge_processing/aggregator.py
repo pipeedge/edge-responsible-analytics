@@ -971,6 +971,30 @@ def send_to_opa(input_data, policy_type):
             return False, [f"{policy_type}_policy_not_found"]
 
         response = requests.post(policy_url, json={"input": input_data})
+        
+        # Create directory for OPA responses if it doesn't exist
+        opa_responses_dir = os.path.join(os.getcwd(), "opa_responses")
+        os.makedirs(opa_responses_dir, exist_ok=True)
+        
+        # Save response to JSON file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        response_file = os.path.join(
+            opa_responses_dir,
+            f"opa_response_{policy_type}_{timestamp}.json"
+        )
+        
+        response_data = {
+            "timestamp": datetime.now().isoformat(),
+            "policy_type": policy_type,
+            "input_data": input_data,
+            "response": response.json() if response.status_code == 200 else {"error": response.text},
+            "status_code": response.status_code
+        }
+        
+        with open(response_file, 'w') as f:
+            json.dump(response_data, f, indent=2)
+            logger.info(f"Saved OPA response to {response_file}")
+        
         if response.status_code == 200:
             result = response.json()
             allowed = result.get('result', False)
