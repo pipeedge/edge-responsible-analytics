@@ -826,6 +826,7 @@ def aggregate_models(models_of_type, model_type, save_path):
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
+'''
 def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker.
@@ -852,9 +853,8 @@ def publish_aggregated_model(model_type, model_path):
         client.publish(MQTT_TOPIC_AGGREGATED, payload)
     except Exception as e:
         logger.error(f"Failed to publish aggregated model: {e}")
-
-
 '''
+
 def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker using chunked transfer.
@@ -890,8 +890,6 @@ def publish_aggregated_model(model_type, model_path):
         
         logger.info(f"Starting publication of {model_type} model (size: {len(model_bytes) / (1024*1024):.2f} MB)")
         
-        # Set a timeout for the transfer
-        transfer_timeout = 3600  # 1 hour timeout for very large models
         start_time = time.time()
         
         # Send the model with timeout handling
@@ -927,7 +925,6 @@ def publish_aggregated_model(model_type, model_path):
         logger.error(f"Failed to publish aggregated model: {e}")
         logger.exception("Detailed error:")
         return False
-'''
 
 def notify_policy_failure(failed_policies):
     """
