@@ -65,7 +65,7 @@ spec:
           mountPath: /mlflow
         env:
         - name: MLFLOW_TRACKING_URI
-          value: "http://mlflow-service:5002"
+          value: "http://mlflow:5002"
         - name: MLFLOW_TRACKING_INSECURE_TLS
           value: "true"
         - name: MLFLOW_DEFAULT_EXPERIMENT_NAME
