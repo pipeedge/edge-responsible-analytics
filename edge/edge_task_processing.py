@@ -56,6 +56,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from utils.mqtt_transfer import ChunkedMQTTTransfer
+import csv
+from pathlib import Path
 
 # Load configuration
 #MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow-server:5000')
@@ -518,6 +520,82 @@ def memory_monitor(interval=60):
         clean_up()
         time.sleep(interval)
 
+def setup_monitoring():
+    """Setup monitoring directories and files"""
+    monitoring_dir = Path("monitoring_data")
+    monitoring_dir.mkdir(exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create CSV files with headers
+    resource_file = monitoring_dir / f"resource_usage_{timestamp}.csv"
+    with open(resource_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['timestamp', 'cpu_percent', 'memory_percent', 'memory_used_mb', 
+                        'cpu_temp', 'estimated_power_w'])
+    
+    return resource_file
+
+def get_cpu_temperature():
+    """Get CPU temperature from Raspberry Pi"""
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            temp = float(f.read().strip()) / 1000.0  # Convert millicelsius to celsius
+        return temp
+    except:
+        return 0.0
+
+def estimate_power_consumption(cpu_percent, cpu_temp):
+    """
+    Estimate power consumption based on CPU usage and temperature
+    Returns estimated watts
+    
+    Note: This is a rough estimation based on Raspberry Pi 5 typical power usage:
+    - Idle: ~4W
+    - Load: ~10-15W
+    """
+    # Base power consumption
+    base_power = 4.0
+    
+    # Additional power based on CPU usage (up to 6W more at 100% CPU)
+    cpu_power = (cpu_percent / 100.0) * 6.0
+    
+    # Additional power based on temperature (up to 2W more at 80°C)
+    temp_factor = max(0, min(1, (cpu_temp - 40) / 40))  # Scale between 40°C and 80°C
+    temp_power = temp_factor * 2.0
+    
+    return base_power + cpu_power + temp_power
+
+def monitor_system_resources(resource_file):
+    """Record system resource usage"""
+    cpu_percent = psutil.cpu_percent(interval=1)
+    memory = psutil.virtual_memory()
+    cpu_temp = get_cpu_temperature()
+    estimated_power = estimate_power_consumption(cpu_percent, cpu_temp)
+    
+    with open(resource_file, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            datetime.now().isoformat(),
+            cpu_percent,
+            memory.percent,
+            memory.used / (1024 * 1024),  # Convert to MB
+            cpu_temp,
+            estimated_power
+        ])
+
+def memory_monitor(resource_file, interval=60):
+    """
+    Thread function to monitor system resources at specified intervals.
+    
+    Args:
+        resource_file (Path): Path to the CSV file for logging
+        interval (int): Time in seconds between each check
+    """
+    while True:
+        monitor_system_resources(resource_file)
+        time.sleep(interval)
+
 def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
@@ -537,6 +615,18 @@ def main():
     data_type = args.data_type
 
     logger.info(f"[{DEVICE_ID}] Starting edge task processing with model_type='{model_type}' and task_type='{task_type}' with data_type='{data_type}'.")
+
+    # Setup monitoring
+    resource_file = setup_monitoring()
+    
+    # Start resource monitoring thread with 5-second interval
+    monitor_thread = threading.Thread(
+        target=memory_monitor, 
+        args=(resource_file, 5),  # Record every 5 seconds
+        daemon=True
+    )
+    monitor_thread.start()
+    logger.info(f"Started system monitoring, logging to {resource_file}")
 
     # Connect to MQTT
     if not connect_mqtt():
