@@ -508,16 +508,16 @@ def clean_up():
     gc.collect()
     logger.info("Performed garbage collection.")
 
-def memory_monitor(interval=60):
+def memory_monitor(resource_file, interval=60):
     """
-    Thread function to monitor memory usage at specified intervals.
+    Thread function to monitor system resources at specified intervals.
     
     Args:
-        interval (int): Time in seconds between each memory check.
+        resource_file (Path): Path to the CSV file for logging
+        interval (int): Time in seconds between each check
     """
     while True:
-        log_memory_usage()
-        clean_up()
+        monitor_system_resources(resource_file)
         time.sleep(interval)
 
 def setup_monitoring():
@@ -584,18 +584,6 @@ def monitor_system_resources(resource_file):
             estimated_power
         ])
 
-def memory_monitor(resource_file, interval=60):
-    """
-    Thread function to monitor system resources at specified intervals.
-    
-    Args:
-        resource_file (Path): Path to the CSV file for logging
-        interval (int): Time in seconds between each check
-    """
-    while True:
-        monitor_system_resources(resource_file)
-        time.sleep(interval)
-
 def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
@@ -619,7 +607,7 @@ def main():
     # Setup monitoring
     resource_file = setup_monitoring()
     
-    # Start resource monitoring thread with 5-second interval
+    # Start single resource monitoring thread with 5-second interval
     monitor_thread = threading.Thread(
         target=memory_monitor, 
         args=(resource_file, 5),  # Record every 5 seconds
@@ -630,21 +618,8 @@ def main():
 
     # Connect to MQTT
     if not connect_mqtt():
-            logger.error("Failed to connect to MQTT broker. Exiting.")
-            sys.exit(1)
-    # Start MQTT loop in background
-    # thread = threading.Thread(target=mqtt_loop)
-    # thread.daemon = True
-    # thread.start()
-
-    # Start MQTT monitoring loop in a separate thread
-    # mqtt_monitor_thread = threading.Thread(target=mqtt_loop, daemon=True)
-    # mqtt_monitor_thread.start()
-    # logger.info("Started MQTT monitoring thread")
-
-    # Start memory monitoring thread
-    monitor_thread = threading.Thread(target=memory_monitor, args=(300,), daemon=True)
-    monitor_thread.start()
+        logger.error("Failed to connect to MQTT broker. Exiting.")
+        sys.exit(1)
 
     # Start task processing in the main thread
     task_processing(task_type, model_type, data_type)
