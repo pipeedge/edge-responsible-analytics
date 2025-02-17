@@ -279,7 +279,7 @@ def evaluate_and_aggregate():
                         if data_type == 'chest_xray':
                             from dataset.chest_xray_processor import process_chest_xray_data
                             X_val, y_val, sensitive_features = [], [], []
-                            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("dataset/chest_xray/val", batch_size=32):
+                            for batch_X, batch_y, batch_sensitive in process_chest_xray_data("dataset/chest_xray/val", batch_size=16):
                                 X_val.append(batch_X)
                                 y_val.append(batch_y)
                                 sensitive_features.append(batch_sensitive)
@@ -297,7 +297,7 @@ def evaluate_and_aggregate():
                             
                         elif data_type == 'cxr8':
                             from dataset.cxr8_processor import process_cxr8_data
-                            _, val_gen = process_cxr8_data(batch_size=32, max_samples=1000)  # Use smaller sample size
+                            _, val_gen = process_cxr8_data(batch_size=16, max_samples=1000)  # Use smaller sample size
                             
                             # Process validation data
                             X_val_list = []
@@ -408,7 +408,7 @@ def evaluate_and_aggregate():
                     )
                     
                     # Process in batches to manage memory
-                    batch_size = 32
+                    batch_size = 16
                     all_predictions = []
                     
                     for i in range(0, len(X_val), batch_size):
@@ -511,7 +511,7 @@ def evaluate_and_aggregate():
                     total_loss = 0
                     total_correct = 0
                     total_samples = 0
-                    batch_size = 32
+                    batch_size = 16
                     
                     for i in range(0, len(X_val), batch_size):
                         batch_texts = X_val[i:min(i + batch_size, len(X_val))]

@@ -59,7 +59,7 @@ def extract_demographics(description):
             
     return gender, age
 
-def preprocess_medical_transcriptions(data, batch_size=32):
+def preprocess_medical_transcriptions(data, batch_size=16):
     """
     Preprocess medical transcriptions data in batches to manage memory usage.
     """
@@ -112,7 +112,7 @@ def preprocess_medical_transcriptions(data, batch_size=32):
     
     return X, y, sensitive_features
 
-def process_medical_transcriptions_data(data_path, batch_size=32):
+def process_medical_transcriptions_data(data_path, batch_size=16):
     """
     Process medical transcriptions data with batch processing.
     Memory-efficient implementation.

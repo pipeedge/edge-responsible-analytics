@@ -98,7 +98,7 @@ def process_task(task):
     elif data_type == "cxr8":
         from dataset.cxr8_processor import process_cxr8_data
         logger.info("[edge_task_processing] Processing CXR8 data from HuggingFace dataset")
-        train_gen, val_gen = process_cxr8_data(batch_size=task.get('batch_size', 32))
+        train_gen, val_gen = process_cxr8_data(batch_size=task.get('batch_size', 16))
         # For inference, use the validation generator
         if task['type'] == 'inference':
             processed_data = val_gen
@@ -107,7 +107,7 @@ def process_task(task):
     elif data_type == "mimic":
         from dataset.mimic_processor import process_mimic_data
         logger.info("[edge_task_processing] Processing MIMIC data from HuggingFace dataset")
-        train_gen, val_gen = process_mimic_data(batch_size=task.get('batch_size', 32))
+        train_gen, val_gen = process_mimic_data(batch_size=task.get('batch_size', 16))
         # For inference, use the validation generator
         if task['type'] == 'inference':
             processed_data = val_gen
@@ -145,7 +145,7 @@ def process_task(task):
             'timestamp': datetime.now().isoformat(),
             'device_id': DEVICE_ID,
             'task_config': {
-                'batch_size': task.get('batch_size', 32)
+                'batch_size': task.get('batch_size', 16)
             }
         }
         

@@ -11,7 +11,7 @@ from edge.load_models import load_mobilenet_model, load_t5_model, load_bert_mode
 from dataset.chest_xray_processor import process_chest_xray_data
 from dataset.mt_processor import process_medical_transcriptions_data
 
-def train_model(data_path, data_type, batch_size=32, epochs=1, model_type='MobileNet'):
+def train_model(data_path, data_type, batch_size=16, epochs=1, model_type='MobileNet'):
     """
     Train a model based on data type and configuration.
     

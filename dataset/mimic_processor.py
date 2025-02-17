@@ -94,7 +94,7 @@ def extract_demographics(text):
     
     return gender, age
 
-def process_data_in_batches(df_subset, batch_size=32):
+def process_data_in_batches(df_subset, batch_size=16):
     """
     Process data in batches to manage memory efficiently.
     """
@@ -139,7 +139,7 @@ def process_data_in_batches(df_subset, batch_size=32):
             logger.error(f"Error processing batch {start_idx}-{end_idx}: {e}")
             continue
 
-def prepare_dataset(df, test_size=0.2, batch_size=32):
+def prepare_dataset(df, test_size=0.2, batch_size=16):
     """
     Prepare the dataset for training and testing with batch processing.
     """
@@ -153,7 +153,7 @@ def prepare_dataset(df, test_size=0.2, batch_size=32):
         logger.error(f"Error preparing dataset: {e}")
         raise
 
-def process_mimic_data(batch_size=32, max_samples=1000):
+def process_mimic_data(batch_size=16, max_samples=1000):
     """
     Process MIMIC-III data with batch processing.
     Returns generators for training and validation data.
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     # Test the data loading and processing with limited samples
-    train_gen, val_gen = process_mimic_data(batch_size=32, max_samples=1000)
+    train_gen, val_gen = process_mimic_data(batch_size=16, max_samples=1000)
     
     # Test first batch
     try:

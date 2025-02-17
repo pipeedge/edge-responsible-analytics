@@ -82,7 +82,7 @@ class TrainingHandler:
         try:
             model_type = config.get('model_type')
             data_path = config.get('data_path')
-            batch_size = config.get('batch_size', 32)
+            batch_size = config.get('batch_size', 16)
             epochs = config.get('epochs', 1)
             
             data_type = 'chest_xray' if model_type == 'MobileNet' else 'mt'
