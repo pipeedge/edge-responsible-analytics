@@ -176,3 +176,6 @@ sudo k3s kubectl delete pod [pod_name]
 
 # Show all pods with their node assignments
 sudo k3s kubectl get pods -o wide
+
+sudo k3s kubectl logs edge-processing-0 -f
+sudo k3s kubectl logs edge-device-0 -f 
