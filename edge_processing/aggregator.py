@@ -39,7 +39,8 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 # MLflow Configuration
-MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5002')
+# MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5002')
+MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://10.88.0.27:5002')
 USE_MLFLOW = os.getenv('USE_MLFLOW', 'true').lower() == 'true'
 mlflow_available = False
 
