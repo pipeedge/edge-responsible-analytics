@@ -11,7 +11,7 @@ import tensorflow as tf
 import shap
 import yaml
 import os
-
+import sys
 from art.attacks.evasion import ProjectedGradientDescent
 from art.estimators.classification import TensorFlowV2Classifier
 
@@ -201,12 +201,13 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         # Initialize the SHAP GradientExplainer
         explainer = shap.GradientExplainer(model, background, batch_size=8)
         logger.info(f"after initialize the SHAP GradientExplainer")
-
+        
+        logger.info(f"size of the explainer: {sys.getsizeof(explainer)}")
         # Compute SHAP values
         shap_values = explainer.shap_values(X_sample)
 
         logger.info(f"start to compute the SHAP values")
-        
+
         # Assuming binary classification; select SHAP values for the positive class
         if isinstance(shap_values, list):
             shap_values = shap_values[1]  # Index 1 corresponds to the positive class
