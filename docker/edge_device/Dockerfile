@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM arm64v8/python:3.8-slim AS builder
+FROM arm64v8/python:3.12 AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -25,7 +25,7 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install -r requirements_edge_device.txt
 
 # Stage 2: Final image
-FROM arm64v8/python:3.8-slim
+FROM arm64v8/python:3.12
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
