@@ -197,12 +197,16 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
 
         background = X_sample[:background_size]
 
+        logger.info(f"start to initialize the SHAP GradientExplainer")
         # Initialize the SHAP GradientExplainer
         explainer = shap.GradientExplainer(model, background, batch_size=8)
+        logger.info(f"after initialize the SHAP GradientExplainer")
 
         # Compute SHAP values
         shap_values = explainer.shap_values(X_sample)
 
+        logger.info(f"start to compute the SHAP values")
+        
         # Assuming binary classification; select SHAP values for the positive class
         if isinstance(shap_values, list):
             shap_values = shap_values[1]  # Index 1 corresponds to the positive class
