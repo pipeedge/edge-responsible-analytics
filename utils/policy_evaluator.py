@@ -198,7 +198,7 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         background = X_sample[:background_size]
 
         # Initialize the SHAP GradientExplainer
-        explainer = shap.GradientExplainer(model, background)
+        explainer = shap.GradientExplainer(model, background, batch_size=8)
 
         # Compute SHAP values
         shap_values = explainer.shap_values(X_sample)
