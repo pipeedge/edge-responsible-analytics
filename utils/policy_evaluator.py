@@ -245,6 +245,7 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             nsamples=50  # Number of samples for KernelExplainer
         )
 
+        logger.info(f"SHAP Values length: {len(shap_values)}")
         # Handle different SHAP value formats
         if isinstance(shap_values, list):
             # For binary classification, use positive class values
