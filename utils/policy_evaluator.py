@@ -39,8 +39,15 @@ OPA_SERVER_URL = config['opa_server_url']
 POLICIES = config['policies']
 
 def get_art_classifier(model, loss_object, input_shape):
+    """
+    Creates an ART classifier wrapper for the model with proper input handling.
+    """
+    # Create a wrapper function to handle the input structure
+    def model_wrapper(x):
+        return model(x, training=False)
+
     return TensorFlowV2Classifier(
-        model=model,
+        model=model_wrapper,
         loss_object=loss_object,
         input_shape=input_shape,
         nb_classes=2,
@@ -136,15 +143,27 @@ def evaluate_fairness_policy(model, X, y_true, sensitive_features, thresholds, y
 def evaluate_reliability_policy(model, X_test, y_test, thresholds):
     logger.info("Evaluate reliability policy.")
     try:
+        # Ensure input is in the correct format
+        if isinstance(X_test, tf.Tensor):
+            X_test = X_test.numpy()
+        
         # Wrap the model with ART classifier
         loss_object = tf.keras.losses.BinaryCrossentropy()
         art_classifier = get_art_classifier(model, loss_object, input_shape=(224, 224, 3))
 
         # Initialize the attack (PGD)
-        attack = ProjectedGradientDescent(estimator=art_classifier, eps=0.03, eps_step=0.005, max_iter=40, targeted=False)
+        attack = ProjectedGradientDescent(
+            estimator=art_classifier,
+            eps=0.03,
+            eps_step=0.005,
+            max_iter=40,
+            targeted=False
+        )
 
         # Generate adversarial examples
         X_test_adv = attack.generate(x=X_test)
+        
+        # Convert predictions to the expected format
         predictions = model.predict(X_test_adv)
         y_pred_adv = (predictions >= 0.5).astype(int).flatten()
 
