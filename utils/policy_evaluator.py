@@ -217,18 +217,13 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             X_sample = X_sample.numpy()
         background = X_sample[:background_size]
 
-        # Create a wrapper function that matches the model's expected input structure
-        def model_wrapper(x):
-            return model(tf.convert_to_tensor(x))
-
-        logger.info("Starting to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer with the wrapped model
-        explainer = shap.GradientExplainer(
-            model=model_wrapper,
-            data=background,
-            batch_size=min(8, background_size)
+        logger.info("Starting to initialize the SHAP DeepExplainer")
+        # Initialize the SHAP DeepExplainer with the model
+        explainer = shap.DeepExplainer(
+            model=model,
+            data=background
         )
-        logger.info("SHAP GradientExplainer initialized")
+        logger.info("SHAP DeepExplainer initialized")
         
         logger.info("Computing SHAP values")
         # Ensure input is numpy array for SHAP
