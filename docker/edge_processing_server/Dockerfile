@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM ubuntu:22.04.3 AS builder
+FROM ubuntu:22.04 AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -34,7 +34,7 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
-FROM ubuntu:22.04.3
+FROM ubuntu:22.04
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
