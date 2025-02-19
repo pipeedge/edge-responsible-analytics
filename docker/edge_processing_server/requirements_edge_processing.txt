@@ -1,5 +1,5 @@
 paho-mqtt
-tensorflow==3.5.0
+tensorflow==2.18.0
 numpy
 flask
 transformers
@@ -15,4 +15,4 @@ pyyaml
 adversarial-robustness-toolbox
 schedule
 datasets
-tf_keras
+tf_keras==2.18.0
