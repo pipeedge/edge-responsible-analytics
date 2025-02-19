@@ -10,8 +10,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        software-properties-common && \
-    add-apt-repository -y ppa:deadsnakes/ppa && \
+        gnupg \
+        ca-certificates && \
+    echo "deb http://ppa.launchpad.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F23C5A6CF475977595C89F51BA6932366A755776 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.11 \
@@ -44,8 +46,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        software-properties-common && \
-    add-apt-repository -y ppa:deadsnakes/ppa && \
+        gnupg \
+        ca-certificates && \
+    echo "deb http://ppa.launchpad.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F23C5A6CF475977595C89F51BA6932366A755776 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.11 \
