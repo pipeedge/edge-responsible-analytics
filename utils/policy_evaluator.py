@@ -217,10 +217,14 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             X_sample = X_sample.numpy()
         background = X_sample[:background_size]
 
+        # Create a wrapper function that matches the model's expected input structure
+        def model_wrapper(x):
+            return model(tf.convert_to_tensor(x))
+
         logger.info("Starting to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer with the model
+        # Initialize the SHAP GradientExplainer with the wrapped model
         explainer = shap.GradientExplainer(
-            model=model,
+            model=model_wrapper,
             data=background,
             batch_size=min(8, background_size)
         )
@@ -246,7 +250,6 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             "explainability_score": explainability_score
         }
 
-        # Prepare input data for OPA
         input_data = {
             "explainability": {
                 "metrics": explainability_metrics,
@@ -254,7 +257,6 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             }
         }
 
-        # Send data to OPA for policy evaluation
         allowed, failed_policies = send_to_opa(input_data, "explainability")
 
         if allowed:
