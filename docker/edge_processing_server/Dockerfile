@@ -10,7 +10,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        software-properties-common && \
+        software-properties-common \
+        gpg-agent \
+        curl && \
+    curl -fsSL https://download.opensuse.org/repositories/home:/deadsnakes/xUbuntu_22.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/deadsnakes.gpg && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -44,7 +47,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        software-properties-common && \
+        software-properties-common \
+        gpg-agent \
+        curl && \
+    curl -fsSL https://download.opensuse.org/repositories/home:/deadsnakes/xUbuntu_22.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/deadsnakes.gpg && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
