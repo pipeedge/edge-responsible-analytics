@@ -197,14 +197,21 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
 
         background = X_sample[:background_size]
 
-        logger.info(f"start to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer
-        explainer = shap.GradientExplainer(model, background, batch_size=8)
-        logger.info(f"after initialize the SHAP GradientExplainer")
+        logger.info("Starting to initialize the SHAP GradientExplainer")
+        # Initialize the SHAP GradientExplainer with proper input formatting
+        explainer = shap.GradientExplainer(
+            model=model,
+            data=tf.convert_to_tensor(background),  # Convert to tensor explicitly
+            batch_size=8
+        )
+        logger.info("SHAP GradientExplainer initialized")
         
-        logger.info(f"size of the explainer: {sys.getsizeof(explainer)}")
+        logger.info(f"Size of the explainer: {sys.getsizeof(explainer)}")
+        
+        # Convert X_sample to tensor for SHAP values computation
+        X_tensor = tf.convert_to_tensor(X_sample)
         # Compute SHAP values
-        shap_values = explainer.shap_values(X_sample)
+        shap_values = explainer.shap_values(X_tensor)
 
         logger.info(f"start to compute the SHAP values")
 
