@@ -217,19 +217,26 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
             X_sample = X_sample.numpy()
         background = X_sample[:background_size]
 
-        logger.info("Starting to initialize the SHAP DeepExplainer")
-        # Initialize the SHAP DeepExplainer with the model
-        explainer = shap.DeepExplainer(
-            model=model,
-            data=background
+        # Create a prediction function that returns probabilities
+        def predict_fn(x):
+            return model.predict(x)
+
+        logger.info("Starting to initialize the SHAP KernelExplainer")
+        # Initialize the SHAP KernelExplainer
+        explainer = shap.KernelExplainer(
+            model=predict_fn,
+            data=background,
+            link="identity"
         )
-        logger.info("SHAP DeepExplainer initialized")
+        logger.info("SHAP KernelExplainer initialized")
         
         logger.info("Computing SHAP values")
-        # Ensure input is numpy array for SHAP
-        if isinstance(X_sample, tf.Tensor):
-            X_sample = X_sample.numpy()
-        shap_values = explainer.shap_values(X_sample)
+        # Calculate SHAP values for a subset of samples to improve performance
+        num_samples_to_explain = min(50, len(X_sample))
+        shap_values = explainer.shap_values(
+            X_sample[:num_samples_to_explain], 
+            nsamples=50  # Number of samples for KernelExplainer
+        )
 
         # Handle different SHAP value formats
         if isinstance(shap_values, list):
