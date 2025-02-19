@@ -212,22 +212,25 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         if background_size < 100:
             logger.warning(f"Using {background_size} background samples instead of desired 100 samples.")
 
-        # Convert input to the expected format
-        background = tf.convert_to_tensor(X_sample[:background_size])
+        # Convert input to numpy array if it's a tensor
+        if isinstance(X_sample, tf.Tensor):
+            X_sample = X_sample.numpy()
+        background = X_sample[:background_size]
 
         logger.info("Starting to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer with the model directly
+        # Initialize the SHAP GradientExplainer with the model
         explainer = shap.GradientExplainer(
-            model=model,  # Pass the model directly, not a wrapper
+            model=model,
             data=background,
-            batch_size=min(8, background_size)  # Ensure batch size doesn't exceed data size
+            batch_size=min(8, background_size)
         )
         logger.info("SHAP GradientExplainer initialized")
         
         logger.info("Computing SHAP values")
-        # Compute SHAP values with proper input formatting
-        X_tensor = tf.convert_to_tensor(X_sample)
-        shap_values = explainer.shap_values(X_tensor)
+        # Ensure input is numpy array for SHAP
+        if isinstance(X_sample, tf.Tensor):
+            X_sample = X_sample.numpy()
+        shap_values = explainer.shap_values(X_sample)
 
         # Handle different SHAP value formats
         if isinstance(shap_values, list):
