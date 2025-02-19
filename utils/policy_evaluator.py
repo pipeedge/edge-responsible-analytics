@@ -215,11 +215,18 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         # Convert input to numpy array if it's a tensor
         if isinstance(X_sample, tf.Tensor):
             X_sample = X_sample.numpy()
-        background = X_sample[:background_size]
+            
+        # Reshape the data to 2D format
+        original_shape = X_sample.shape
+        n_samples = X_sample.shape[0]
+        X_reshaped = X_sample.reshape(n_samples, -1)  # Flatten all dimensions except the first
+        background = X_reshaped[:background_size]
 
-        # Create a prediction function that returns probabilities
+        # Create a prediction function that handles reshaping
         def predict_fn(x):
-            return model.predict(x)
+            # Reshape input back to original format for prediction
+            x_orig_shape = x.reshape(-1, *original_shape[1:])
+            return model.predict(x_orig_shape)
 
         logger.info("Starting to initialize the SHAP KernelExplainer")
         # Initialize the SHAP KernelExplainer
@@ -234,7 +241,7 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         # Calculate SHAP values for a subset of samples to improve performance
         num_samples_to_explain = min(50, len(X_sample))
         shap_values = explainer.shap_values(
-            X_sample[:num_samples_to_explain], 
+            X_reshaped[:num_samples_to_explain], 
             nsamples=50  # Number of samples for KernelExplainer
         )
 
@@ -621,4 +628,3 @@ def perturb_text(text, p_swap=0.1):
     for i in range(len(words)-1):
         if np.random.random() < p_swap:
             words[i], words[i+1] = words[i+1], words[i]
-    return ' '.join(words)
