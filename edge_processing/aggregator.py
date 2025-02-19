@@ -474,13 +474,13 @@ def evaluate_and_aggregate():
     
                 # Evaluate explainability
                 if model_type == 'MobileNet':
-                    is_explainable = True
-                    failed_explainability_policies = []
-                    # is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
+                    # is_explainable = True
+                    # failed_explainability_policies = []
+                    is_explainable, failed_explainability_policies = evaluate_explainability_policy(aggregated_model, X_val, explainability_thresholds)
                     # Evaluate reliability
-                    is_reliable = True
-                    failed_reliability_policies = []
-                    # is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
+                    # is_reliable = True
+                    # failed_reliability_policies = []
+                    is_reliable, failed_reliability_policies = evaluate_reliability_policy(aggregated_model, X_val, y_val, reliability_thresholds)
                 
                 # Add TinyBERT-specific explainability and reliability evaluations
                 if model_type == 'tinybert':
@@ -832,7 +832,7 @@ def aggregate_models(models_of_type, model_type, save_path):
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
 
-
+'''
 def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker.
@@ -859,8 +859,8 @@ def publish_aggregated_model(model_type, model_path):
         client.publish(MQTT_TOPIC_AGGREGATED, payload)
     except Exception as e:
         logger.error(f"Failed to publish aggregated model: {e}")
-
 '''
+
 def publish_aggregated_model(model_type, model_path):
     """
     Publish the aggregated model to the MQTT broker using chunked transfer.
@@ -931,7 +931,6 @@ def publish_aggregated_model(model_type, model_path):
         logger.error(f"Failed to publish aggregated model: {e}")
         logger.exception("Detailed error:")
         return False
-'''
 
 def notify_policy_failure(failed_policies):
     """

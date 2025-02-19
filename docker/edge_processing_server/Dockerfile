@@ -1,45 +1,59 @@
 # Stage 1: Dependencies
-FROM python:3.11.11 AS builder
+FROM ubuntu:22.04.3 AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV GIT_PYTHON_REFRESH=quiet
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Set work directory for dependencies
-WORKDIR /deps
-
-# Install build dependencies
+# Install Python 3.11 and build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-venv \
+        python3.11-dev \
         pkg-config \
         libhdf5-dev \
         build-essential && \
     rm -rf /var/lib/apt/lists/*
 
+# Set work directory for dependencies
+WORKDIR /deps
+
 # Copy only requirements file
 COPY docker/edge_processing_server/requirements_edge_processing.txt .
 
 # Create virtual environment and install dependencies
-RUN python -m venv /opt/venv && \
+RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
-FROM python:3.11.11
+FROM ubuntu:22.04.3
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.11 and runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.11 \
+        libhdf5-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set work directory
 WORKDIR /app
-
-# Install runtime dependencies only
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libhdf5-dev && \
-    rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv

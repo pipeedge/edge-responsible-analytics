@@ -328,7 +328,7 @@ def send_trained_model(model_path, model_type, data_type):
 
 def on_message(client, userdata, msg):
     logger.info(f"[{DEVICE_ID}] Received message on topic {msg.topic}")
-    if msg.topic == MQTT_TOPIC_AGGREGATED:
+    if msg.topic.startswith(MQTT_TOPIC_AGGREGATED):
         payload = json.loads(msg.payload.decode('utf-8'))
         aggregated_model_b64 = payload.get('model_data')
         model_type = payload.get('model_type')
@@ -384,7 +384,8 @@ def connect_mqtt():
     try:
         print(f"Connect to {MQTT_BROKER}, {MQTT_PORT}")
         client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        client.subscribe(MQTT_TOPIC_AGGREGATED)
+        client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/control")
+        client.subscribe(f"{MQTT_TOPIC_AGGREGATED}/chunks")
         print(f"[{DEVICE_ID}] Subscribed to {MQTT_TOPIC_AGGREGATED}")
         client.loop_start()
         return True
