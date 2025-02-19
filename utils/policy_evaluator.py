@@ -42,12 +42,10 @@ def get_art_classifier(model, loss_object, input_shape):
     """
     Creates an ART classifier wrapper for the model with proper input handling.
     """
-    # Create a wrapper function to handle the input structure
-    def model_wrapper(x):
-        return model(x, training=False)
+
 
     return TensorFlowV2Classifier(
-        model=model_wrapper,
+        model=model,
         loss_object=loss_object,
         input_shape=input_shape,
         nb_classes=2,
@@ -216,15 +214,11 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
 
         # Convert input to the expected format
         background = tf.convert_to_tensor(X_sample[:background_size])
-        
-        # Create a wrapper function to handle the model input
-        def model_wrapper(x):
-            return model(x, training=False)
 
         logger.info("Starting to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer with the wrapper
+        # Initialize the SHAP GradientExplainer with the model directly
         explainer = shap.GradientExplainer(
-            model=model_wrapper,
+            model=model,  # Pass the model directly, not a wrapper
             data=background,
             batch_size=min(8, background_size)  # Ensure batch size doesn't exceed data size
         )
