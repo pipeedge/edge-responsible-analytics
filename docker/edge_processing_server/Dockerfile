@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM python:3.11 AS builder
+FROM python:3.11.11 AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -26,7 +26,7 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
-FROM python:3.11
+FROM python:3.11.11
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
