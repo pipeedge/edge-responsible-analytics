@@ -212,42 +212,42 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         # Select a background dataset for SHAP
         background_size = min(100, X_sample.shape[0])
         if background_size < 100:
-            logger.warning(f"Insufficient background samples. Using {background_size} samples instead of 100.")
+            logger.warning(f"Using {background_size} background samples instead of desired 100 samples.")
 
-        # Use numpy arrays directly
-        background = X_sample[:background_size]
+        # Convert input to the expected format
+        background = tf.convert_to_tensor(X_sample[:background_size])
+        
+        # Create a wrapper function to handle the model input
+        def model_wrapper(x):
+            return model(x, training=False)
 
         logger.info("Starting to initialize the SHAP GradientExplainer")
-        # Initialize the SHAP GradientExplainer
+        # Initialize the SHAP GradientExplainer with the wrapper
         explainer = shap.GradientExplainer(
-            model=model,
+            model=model_wrapper,
             data=background,
-            batch_size=8
+            batch_size=min(8, background_size)  # Ensure batch size doesn't exceed data size
         )
         logger.info("SHAP GradientExplainer initialized")
         
-        logger.info(f"Size of the explainer: {sys.getsizeof(explainer)}")
-        
-        # Compute SHAP values
-        shap_values = explainer.shap_values(X_sample)
+        logger.info("Computing SHAP values")
+        # Compute SHAP values with proper input formatting
+        X_tensor = tf.convert_to_tensor(X_sample)
+        shap_values = explainer.shap_values(X_tensor)
 
-        logger.info(f"start to compute the SHAP values")
-
-        # Assuming binary classification; select SHAP values for the positive class
+        # Handle different SHAP value formats
         if isinstance(shap_values, list):
-            shap_values = shap_values[1]  # Index 1 corresponds to the positive class
+            # For binary classification, use positive class values
+            shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
 
         # Calculate explainability score as the mean absolute SHAP value
-        explainability_score = np.mean(np.abs(shap_values))
+        explainability_score = float(np.mean(np.abs(shap_values)))
         logger.info(f"Explainability Score: {explainability_score}")
 
         # Prepare metrics for OPA
         explainability_metrics = {
-            "explainability_score": float(explainability_score)
+            "explainability_score": explainability_score
         }
-
-        # Log explainability metrics
-        # logger.info(f"Explainability Metrics: {explainability_metrics}")
 
         # Prepare input data for OPA
         input_data = {
@@ -269,9 +269,6 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
                 failed_policies.append("explainability_score")
             return False, failed_policies
 
-    except requests.exceptions.RequestException as e:
-        logger.exception("Failed to communicate with OPA.")
-        return False, ["OPA Communication Error"]
     except Exception as e:
         logger.exception(f"Error during explainability evaluation: {e}")
         return False, ["Explainability Evaluation Error"]
