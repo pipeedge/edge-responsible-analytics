@@ -10,6 +10,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        curl \
+        gpg \
         gnupg \
         ca-certificates && \
     echo "deb http://ppa.launchpad.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list && \
@@ -48,6 +50,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install Python 3.11 and runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        curl \
+        gpg \
         gnupg \
         ca-certificates && \
     echo "deb http://ppa.launchpad.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes-ppa.list && \
