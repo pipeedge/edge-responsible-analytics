@@ -21,7 +21,8 @@ RUN apt-get update && \
         python3.11-dev \
         pkg-config \
         libhdf5-dev \
-        build-essential && \
+        build-essential \
+        python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 # Set work directory for dependencies
@@ -31,7 +32,7 @@ WORKDIR /deps
 COPY docker/edge_processing_server/requirements_edge_processing.txt .
 
 # Create virtual environment and install dependencies
-RUN python3 -m venv /opt/venv && \
+RUN python3.11 -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip install -r requirements_edge_processing.txt
 
