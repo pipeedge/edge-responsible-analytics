@@ -35,9 +35,15 @@ COPY docker/edge_processing_server/requirements_edge_processing.txt .
 RUN python3.11 -m venv /opt/venv && \
     /opt/venv/bin/python3.11 -m ensurepip && \
     mkdir -p /root/.config/pip && \
-    echo "[global]\ntimeout = 100\nretries = 5" > /root/.config/pip/pip.conf && \
-    /opt/venv/bin/pip install --upgrade pip setuptools && \
-    /opt/venv/bin/pip install -r requirements_edge_processing.txt
+    echo "[global]\n\
+timeout = 180\n\
+retries = 10\n\
+default-timeout = 180\n\
+socket-timeout = 180\n\
+connect-timeout = 180" > /root/.config/pip/pip.conf && \
+    /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip --no-cache-dir install paho-mqtt==1.6.1 && \
+    /opt/venv/bin/pip --no-cache-dir install -r requirements_edge_processing.txt
 
 # Stage 2: Final image
 FROM ubuntu:22.04
