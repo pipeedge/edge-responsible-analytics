@@ -64,4 +64,4 @@ EXPOSE 8001
 
 # Change the CMD to ENTRYPOINT and CMD
 ENTRYPOINT ["python3", "edge/edge_task_processing.py"]
-CMD ["--model_type", "MobileNet", "--data_type", "chest_xray"]
+# CMD ["--model_type", "MobileNet", "--data_type", "chest_xray"]
