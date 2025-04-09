@@ -143,8 +143,10 @@ sudo k3s kubectl apply -f k3s/services/opa_service.yaml
 sudo k3s kubectl delete -f k3s/services/cloud_service.yaml
 
 sudo k3s kubectl apply -f k3s/deployments/cloud-deployment.yaml
-sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment.yaml
-sudo k3s kubectl apply -f k3s/deployments/edge-device-deployment.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment0.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-processing-deployment1.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-device-deployment0.yaml
+sudo k3s kubectl apply -f k3s/deployments/edge-device-deployment1.yaml
 sudo k3s kubectl apply -f k3s/deployments/mlflow-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/mqtt-deployment.yaml
 sudo k3s kubectl apply -f k3s/deployments/opa-deployment.yaml
