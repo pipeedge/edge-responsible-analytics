@@ -15,15 +15,8 @@ spec:
       labels:
         app: cloud-layer
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                - liang-cloud-server
+      nodeSelector:
+        kubernetes.io/hostname: liang-cloud-server
       containers:
       - name: cloud-layer
         image: edgemlops/cloud:latest
@@ -50,10 +43,8 @@ spec:
           periodSeconds: 5
         resources:
           requests:
-            memory: "256Mi"
+            memory: "1Gi"
             cpu: "250m"
           limits:
-            memory: "512Mi"
+            memory: "4Gi"
             cpu: "500m"
-      nodeSelector:
-        kubernetes.io/hostname: liang-cloud-server
