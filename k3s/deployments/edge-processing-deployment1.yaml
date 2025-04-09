@@ -1,19 +1,22 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: edge-processing
+  name: edge-processing-server-1
   labels:
     app: edge-processing
+    server: server-1
 spec:
-  serviceName: "edge-processing"
+  serviceName: "edge-processing-server-1"
   replicas: 1
   selector:
     matchLabels:
       app: edge-processing
+      server: server-1
   template:
     metadata:
       labels:
         app: edge-processing
+        server: server-1
     spec:
       affinity:
         nodeAffinity:
@@ -23,7 +26,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                - liang-local-server-2
+                - liang-local-server-1
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
@@ -43,7 +46,7 @@ spec:
         - containerPort: 1883  # MQTT broker
         env:
           - name: MQTT_BROKER
-            value: "10.42.4.20" #"10.42.1.12"
+            value: "10.42.1.94" #"10.42.1.12"
           - name: MQTT_PORT
             value: "1883"
           - name: MQTT_TOPIC_UPLOAD
@@ -59,7 +62,7 @@ spec:
           - name: CLOUD_API_URL
             value: "http://cloud-layer:8080"
           - name: MLFLOW_TRACKING_URI
-            value: "http://10.42.4.17:5002" #"http://mlflow:5002"
+            value: "http://10.42.1.53:5002" #"http://mlflow:5002"
           - name: USE_MLFLOW
             value: "false"
           - name: PYTHONPATH
