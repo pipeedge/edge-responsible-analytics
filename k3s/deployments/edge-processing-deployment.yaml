@@ -6,7 +6,7 @@ metadata:
     app: edge-processing
 spec:
   serviceName: "edge-processing"
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: edge-processing
@@ -24,7 +24,7 @@ spec:
                 operator: In
                 values:
                 - liang-local-server-1
-                # - liang-local-server-2
+                - liang-local-server-2
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
@@ -44,7 +44,7 @@ spec:
         - containerPort: 1883  # MQTT broker
         env:
           - name: MQTT_BROKER
-            value: "10.42.1.12"
+            value: "mosquitto" #"10.42.1.12"
           - name: MQTT_PORT
             value: "1883"
           - name: MQTT_TOPIC_UPLOAD
@@ -52,7 +52,7 @@ spec:
           - name: MQTT_TOPIC_AGGREGATED
             value: "models/aggregated"
           - name: EXPECTED_DEVICES
-            value: "1"
+            value: "4"
           - name: EDGE_SERVER_ID
             valueFrom:
               fieldRef:

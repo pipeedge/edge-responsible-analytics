@@ -6,7 +6,7 @@ metadata:
     app: edge-device
 spec:
   serviceName: "edge-device"
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app: edge-device
@@ -25,10 +25,10 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                  # - liang-edge-1
+                  - liang-edge-1
                   - liang-edge-2
-                  # - liang-edge-3
-                  # - liang-edge-4
+                  - liang-edge-3
+                  - liang-edge-4
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
