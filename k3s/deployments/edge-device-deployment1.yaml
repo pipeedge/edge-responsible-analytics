@@ -48,7 +48,7 @@ spec:
               cpu: "500m"
           env:              
             - name: MQTT_BROKER
-              value: "10.42.1.101" #"10.42.1.12"
+              value: "10.42.1.104" #"10.42.1.12"
             - name: MQTT_PORT
               value: "1883"
             - name: MQTT_TOPIC_UPLOAD
