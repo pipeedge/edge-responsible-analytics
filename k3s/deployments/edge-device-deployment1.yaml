@@ -6,7 +6,7 @@ metadata:
     app: edge-device
 spec:
   serviceName: "edge-device-domain-1"
-  replicas: 2
+  replicas: 5
   selector:
     matchLabels:
       app: edge-device
@@ -27,6 +27,9 @@ spec:
                 values:
                   - node1
                   - node2
+                  - node3
+                  - r5n02
+                  - r5n03
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -48,7 +51,7 @@ spec:
               cpu: "500m"
           env:              
             - name: MQTT_BROKER
-              value: "10.42.4.6" #"10.42.1.12"
+              value: "mosquitto-server-1-0" #"10.42.4.6" #"10.42.1.12"
             - name: MQTT_PORT
               value: "1883"
             - name: MQTT_TOPIC_UPLOAD

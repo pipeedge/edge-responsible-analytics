@@ -46,7 +46,7 @@ spec:
         - containerPort: 1883  # MQTT broker
         env:
           - name: MQTT_BROKER
-            value: "10.42.5.5" # "10.42.1.12"
+            value: "mosquitto-server-2-0" #"10.42.5.5" # "10.42.1.12"
           - name: MQTT_PORT
             value: "1883"
           - name: MQTT_TOPIC_UPLOAD
@@ -54,7 +54,7 @@ spec:
           - name: MQTT_TOPIC_AGGREGATED
             value: "models/aggregated"
           - name: EXPECTED_DEVICES
-            value: "2"
+            value: "5"
           - name: EDGE_SERVER_ID
             valueFrom:
               fieldRef:
