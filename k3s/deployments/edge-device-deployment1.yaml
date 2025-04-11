@@ -25,8 +25,8 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                  - liang-edge-1
-                  - liang-edge-2
+                  - node1
+                  - node2
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
@@ -48,7 +48,7 @@ spec:
               cpu: "500m"
           env:              
             - name: MQTT_BROKER
-              value: "10.42.1.104" #"10.42.1.12"
+              value: "10.42.4.6" #"10.42.1.12"
             - name: MQTT_PORT
               value: "1883"
             - name: MQTT_TOPIC_UPLOAD
