@@ -26,7 +26,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: In
                 values:
-                - liang-local-server-1
+                - crest-bigdata-89acfcc4-c317-bf53-2acd-93bce3c87706-vm-1
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
