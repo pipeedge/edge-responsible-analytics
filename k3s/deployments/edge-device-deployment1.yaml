@@ -39,7 +39,7 @@ spec:
       containers:
         - name: edge-device
           image: edgemlops/edge-device:latest
-          args: ["--model_type", "$(MODEL_TYPE)", "--data_type", "$(DATA_TYPE)"]
+          args: ["--task_type", "$(TASK_TYPE)", "--model_type", "$(MODEL_TYPE)", "--data_type", "$(DATA_TYPE)"]
           ports:
             - containerPort: 8001
           resources:
@@ -76,3 +76,8 @@ spec:
                 configMapKeyRef:
                   name: edge-device-config
                   key: data_type
+            - name: TASK_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: edge-device-config
+                  key: task_type

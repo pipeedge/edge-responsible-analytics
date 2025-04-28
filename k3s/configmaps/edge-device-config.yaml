@@ -5,3 +5,4 @@ metadata:
 data:
   model_type: "MobileNet"
   data_type: "chest_xray"
+  task_type: "training"
