@@ -55,7 +55,7 @@ async def health_check():
 class ModelUpdate(BaseModel):
     edge_server_id: str
     model_params: str  # base64 encoded model
-    metrics: Dict[str, float]
+    metrics: dict      # Accept any dict, not just Dict[str, float]
     model_type: str
 
 @app.post("/edge/update")

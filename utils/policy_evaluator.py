@@ -207,48 +207,30 @@ def evaluate_explainability_policy(model, X_sample, thresholds):
         if not model.optimizer:
             model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-        # Select a background dataset for SHAP
+        # Convert input to numpy array if it's a tensor
+        if isinstance(X_sample, tf.Tensor):
+            X_sample = X_sample.numpy()
+
+        # Use DeepExplainer for deep learning models
         background_size = min(100, X_sample.shape[0])
         if background_size < 100:
             logger.warning(f"Using {background_size} background samples instead of desired 100 samples.")
 
-        # Convert input to numpy array if it's a tensor
-        if isinstance(X_sample, tf.Tensor):
-            X_sample = X_sample.numpy()
-            
-        # Reshape the data to 2D format
-        original_shape = X_sample.shape
-        n_samples = X_sample.shape[0]
-        X_reshaped = X_sample.reshape(n_samples, -1)  # Flatten all dimensions except the first
-        background = X_reshaped[:background_size]
-
-        # Create a prediction function that handles reshaping
-        def predict_fn(x):
-            # Reshape input back to original format for prediction
-            x_orig_shape = x.reshape(-1, *original_shape[1:])
-            return model.predict(x_orig_shape)
-
-        logger.info("Starting to initialize the SHAP KernelExplainer")
-        # Initialize the SHAP KernelExplainer
-        explainer = shap.KernelExplainer(
-            model=predict_fn,
-            data=background,
-            link="identity"
-        )
-        logger.info("SHAP KernelExplainer initialized")
-        
-        logger.info("Computing SHAP values")
-        # Calculate SHAP values for a subset of samples to improve performance
+        background = X_sample[:background_size]
         num_samples_to_explain = min(50, len(X_sample))
-        shap_values = explainer.shap_values(
-            X_reshaped[:num_samples_to_explain], 
-            nsamples=50  # Number of samples for KernelExplainer
-        )
+        data_to_explain = X_sample[:num_samples_to_explain]
+
+        logger.info("Starting to initialize the SHAP DeepExplainer")
+        # Use DeepExplainer for Keras models
+        explainer = shap.DeepExplainer(model, background)
+        logger.info("SHAP DeepExplainer initialized")
+
+        logger.info("Computing SHAP values")
+        shap_values = explainer.shap_values(data_to_explain)
 
         logger.info(f"SHAP Values length: {len(shap_values)}")
-        # Handle different SHAP value formats
+        # For binary classification, use positive class values
         if isinstance(shap_values, list):
-            # For binary classification, use positive class values
             shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
 
         # Calculate explainability score as the mean absolute SHAP value
