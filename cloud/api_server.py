@@ -100,22 +100,40 @@ async def receive_edge_update(update: ModelUpdate):
         if passed_policies:
             try:
                 # Encode the aggregated model
-                if isinstance(aggregated_model, str):  # If path to saved model
-                    if os.path.isdir(aggregated_model):
-                        # Handle directory-based models
-                        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                            shutil.make_archive(tmp.name[:-7], 'gztar', aggregated_model)
-                            with open(tmp.name, 'rb') as f:
+                if isinstance(aggregated_model, str):  # If path to saved model or base64 string
+                    try:
+                        # Try to treat it as base64 first
+                        model_bytes = base64.b64decode(aggregated_model)
+                    except:
+                        # Not base64, check if it's a path
+                        if os.path.isdir(aggregated_model):
+                            # Handle directory-based models
+                            # Use a short, simple filename for the temp file
+                            with tempfile.NamedTemporaryFile(suffix='.tar.gz', prefix='model_', delete=False) as tmp:
+                                tmp_filename = tmp.name
+                                
+                            # Create archive with a simple name
+                            archive_base = os.path.join(tempfile.gettempdir(), 'model_archive')
+                            shutil.make_archive(archive_base, 'gztar', aggregated_model)
+                            
+                            # Read the archive
+                            with open(archive_base + '.tar.gz', 'rb') as f:
                                 model_bytes = f.read()
-                            os.unlink(tmp.name)
-                    else:
-                        # Handle single file models
-                        with open(aggregated_model, 'rb') as f:
-                            model_bytes = f.read()
+                            
+                            # Clean up
+                            try:
+                                os.remove(archive_base + '.tar.gz')
+                            except:
+                                pass
+                        else:
+                            # Handle single file models
+                            with open(aggregated_model, 'rb') as f:
+                                model_bytes = f.read()
                 else:
                     # Handle model object (needs serialization)
                     model_bytes = aggregator.serialize_model(aggregated_model)
                 
+                # Base64 encode for response
                 model_b64 = base64.b64encode(model_bytes).decode('utf-8')
                 
                 return {
@@ -126,7 +144,7 @@ async def receive_edge_update(update: ModelUpdate):
                 }
                 
             except Exception as e:
-                logger.exception(f"Error processing global model: {e}")
+                logger.exception(f"Error processing global model: {str(e)}")
                 return {
                     "status": "error",
                     "message": f"Failed to process global model: {str(e)}"

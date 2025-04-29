@@ -81,15 +81,29 @@ class FederatedModelAggregator:
         Returns:
             bytes: Serialized model
         """
-        if isinstance(model, str):
-            # It's already a string (likely base64), just return decoded bytes
-            return base64.b64decode(model)
-        else:
-            # Handle actual model object serialization
-            # This is a placeholder - implement proper serialization based on your model type
-            import io
-            import pickle
-            
-            buffer = io.BytesIO()
-            pickle.dump(model, buffer)
-            return buffer.getvalue()
+        try:
+            if isinstance(model, str):
+                # If it's already a base64 string, decode it to bytes
+                try:
+                    return base64.b64decode(model)
+                except Exception as e:
+                    logger.error(f"Error decoding base64 string: {e}")
+                    # If we can't decode as base64, check if it's a file path
+                    if os.path.exists(model):
+                        with open(model, 'rb') as f:
+                            return f.read()
+                    else:
+                        # Last resort, just encode the string as bytes
+                        return model.encode('utf-8')
+            else:
+                # Handle actual model object serialization
+                import io
+                import pickle
+                
+                buffer = io.BytesIO()
+                pickle.dump(model, buffer)
+                buffer.seek(0)
+                return buffer.getvalue()
+        except Exception as e:
+            logger.exception(f"Error serializing model: {e}")
+            raise

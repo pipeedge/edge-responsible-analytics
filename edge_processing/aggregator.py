@@ -1032,11 +1032,21 @@ def sync_with_cloud():
             # Read and encode the model
             if os.path.isdir(current_path):
                 # For directory-based models (T5, TinyBERT)
-                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-                    shutil.make_archive(tmp.name[:-7], 'gztar', current_path)
-                    with open(tmp.name, 'rb') as f:
-                        model_bytes = f.read()
-                    os.unlink(tmp.name)
+                # Use a simple name for the temporary archive
+                archive_path = os.path.join(tempfile.gettempdir(), 'temp_model')
+                
+                # Create archive with the simple name
+                shutil.make_archive(archive_path, 'gztar', current_path)
+                
+                # Read the archive
+                with open(f"{archive_path}.tar.gz", 'rb') as f:
+                    model_bytes = f.read()
+                
+                # Clean up
+                try:
+                    os.remove(f"{archive_path}.tar.gz")
+                except:
+                    pass
             else:
                 # For single file models (MobileNet)
                 with open(current_path, 'rb') as f:
