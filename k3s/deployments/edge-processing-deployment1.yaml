@@ -64,7 +64,7 @@ spec:
           - name: MLFLOW_TRACKING_URI
             value: "http://mlflow:5002" # "http://10.42.1.53:5002"
           - name: USE_MLFLOW
-            value: "true"
+            value: "false"
           - name: PYTHONPATH
             value: "/app"
           - name: PYTHONUNBUFFERED
