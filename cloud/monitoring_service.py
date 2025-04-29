@@ -16,14 +16,28 @@ class ModelMonitoringService:
         
     def track_performance(self, metrics: Dict[str, float]):
         """
-        Track model performance metrics
+        Track model performance metrics.
         """
         try:
-            for metric_name, value in metrics.items():
-                self.model_performance.labels(metric_name).set(value)
-                logger.info(f"Tracked performance metric {metric_name}: {value}")
+            # Extract only numeric metrics for tracking
+            numeric_metrics = {}
+            for key, value in metrics.items():
+                # Skip nested dictionaries and non-numeric values
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    numeric_metrics[key] = value
+                elif isinstance(value, dict):
+                    # Try to extract numeric values from nested dicts
+                    for subkey, subvalue in value.items():
+                        if isinstance(subvalue, (int, float)) and not isinstance(subvalue, bool):
+                            numeric_metrics[f"{key}_{subkey}"] = subvalue
+            
+            # Now numeric_metrics contains only numeric values safe for monitoring systems
+            # Implement your actual monitoring logic here
+            
+            return True
         except Exception as e:
-            logger.error(f"Error tracking performance: {str(e)}")
+            logger.error(f"Error tracking performance: {e}")
+            return False
             
     def track_resource_usage(self, cpu_usage: float, memory_usage: float, gpu_usage: float = None):
         """

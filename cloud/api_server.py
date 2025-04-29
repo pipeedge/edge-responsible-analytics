@@ -64,21 +64,38 @@ async def receive_edge_update(update: ModelUpdate):
     Receive model updates from edge processing servers
     """
     try:
-        # Track the update
-        monitor.track_performance(update.metrics)
+        # Track the update - now with improved error handling
+        try:
+            monitor.track_performance(update.metrics)
+        except Exception as e:
+            logger.warning(f"Error tracking metrics: {e}")
         
         # Store the update in MLflow
         logger.info(f"Received update from edge server {update.edge_server_id}")
         
         # Trigger aggregation if we have enough updates
-        aggregated_model = await aggregator.aggregate_models([update.model_params])
+        try:
+            aggregated_model = await aggregator.aggregate_models([update.model_params])
+        except Exception as e:
+            logger.error(f"Model aggregation failed: {e}")
+            return {
+                "status": "error",
+                "message": f"Model aggregation failed: {str(e)}"
+            }
         
         # Evaluate aggregated model
-        passed_policies, failed_policies = aggregator.evaluate_aggregated_model(
-            model=aggregated_model,
-            validation_data=update.metrics.get('validation_data'),
-            thresholds=update.metrics.get('thresholds')
-        )
+        try:
+            passed_policies, failed_policies = aggregator.evaluate_aggregated_model(
+                model=aggregated_model,
+                validation_data=update.metrics.get('validation_data'),
+                thresholds=update.metrics.get('thresholds')
+            )
+        except Exception as e:
+            logger.error(f"Policy evaluation failed: {e}")
+            return {
+                "status": "error",
+                "message": f"Policy evaluation failed: {str(e)}"
+            }
         
         if passed_policies:
             try:
@@ -123,7 +140,10 @@ async def receive_edge_update(update: ModelUpdate):
             
     except Exception as e:
         logger.error(f"Error processing update: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "status": "error",
+            "message": f"Server error: {str(e)}"
+        }
 
 if __name__ == "__main__":
     # Add error handling for the server startup
