@@ -15,8 +15,8 @@ spec:
       labels:
         app: edge-device
     spec:
-      imagePullSecrets:
-        - name: mlops
+      # imagePullSecrets:
+      #   - name: mlops
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
