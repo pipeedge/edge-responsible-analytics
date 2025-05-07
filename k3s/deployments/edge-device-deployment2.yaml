@@ -4,6 +4,8 @@ metadata:
   name: edge-device-domain-2
   labels:
     app: edge-device
+  annotations:
+    configmap.reloader.stakater.com/reload: "edge-device-config"
 spec:
   serviceName: "edge-device-domain-2"
   replicas: 5
