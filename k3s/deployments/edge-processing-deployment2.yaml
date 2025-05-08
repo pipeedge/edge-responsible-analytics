@@ -71,6 +71,8 @@ spec:
             value: "1"
           - name: RESULTS_DIR
             value: "/app/data"
+          - name: HOST_RESULTS_DIR
+            value: "/app/host-data"
         resources:
           requests:
             memory: "1Gi"
@@ -81,7 +83,13 @@ spec:
         volumeMounts:
           - name: data-volume
             mountPath: /app/data
+          - name: host-data-volume
+            mountPath: /app/host-data
       volumes:
+      - name: host-data-volume
+        hostPath:
+          path: /var/data/edge-processing/server-2
+          type: DirectoryOrCreate
       - name: data-volume
         persistentVolumeClaim:
           claimName: edge-processing-data-server-2

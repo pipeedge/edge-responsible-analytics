@@ -609,6 +609,11 @@ def evaluate_and_aggregate():
                 results_dir = os.environ.get('RESULTS_DIR', os.path.join(os.getcwd(), "aggregation_results"))
                 os.makedirs(results_dir, exist_ok=True)
                 
+                # Also save to host path if available
+                host_results_dir = os.environ.get('HOST_RESULTS_DIR')
+                if host_results_dir:
+                    os.makedirs(host_results_dir, exist_ok=True)
+                
                 # Save results to JSON file with timestamp
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 results_file = os.path.join(
@@ -618,8 +623,16 @@ def evaluate_and_aggregate():
                 
                 with open(results_file, 'w') as f:
                     json.dump(aggregated_metrics, f, indent=2)
-                    
-                logger.info(f"Aggregation results saved to {results_file}")
+                
+                # Also save to host path if configured
+                if host_results_dir:
+                    host_results_file = os.path.join(
+                        host_results_dir,
+                        f"aggregation_results_{model_type}_{data_type}_{timestamp}.json"
+                    )
+                    with open(host_results_file, 'w') as f:
+                        json.dump(aggregated_metrics, f, indent=2)
+                    logger.info(f"Aggregation results saved to host path: {host_results_file}")
                 
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
