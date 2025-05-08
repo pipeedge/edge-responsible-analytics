@@ -64,11 +64,13 @@ spec:
           - name: MLFLOW_TRACKING_URI
             value: "http://mlflow:5002" # "http://10.42.1.53:5002"
           - name: USE_MLFLOW
-            value: "false"
+            value: "true"
           - name: PYTHONPATH
             value: "/app"
           - name: PYTHONUNBUFFERED
             value: "1"
+          - name: RESULTS_DIR
+            value: "/app/data"
         resources:
           requests:
             memory: "1Gi"
@@ -76,3 +78,10 @@ spec:
           limits:
             memory: "4Gi"
             cpu: "1000m"
+        volumeMounts:
+          - name: data-volume
+            mountPath: /app/data
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: edge-processing-data-server-1

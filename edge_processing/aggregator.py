@@ -605,8 +605,8 @@ def evaluate_and_aggregate():
                     }
                 }
                 
-                # Create results directory if it doesn't exist
-                results_dir = os.path.join(os.getcwd(), "aggregation_results")
+                # Use environment variable for results directory or default to a local path
+                results_dir = os.environ.get('RESULTS_DIR', os.path.join(os.getcwd(), "aggregation_results"))
                 os.makedirs(results_dir, exist_ok=True)
                 
                 # Save results to JSON file with timestamp
@@ -979,7 +979,8 @@ def send_to_opa(input_data, policy_type):
         response = requests.post(policy_url, json={"input": input_data})
         
         # Create directory for OPA responses if it doesn't exist
-        opa_responses_dir = os.path.join(os.getcwd(), "opa_responses")
+        results_dir = os.environ.get('RESULTS_DIR', os.getcwd())
+        opa_responses_dir = os.path.join(results_dir, "opa_responses")
         os.makedirs(opa_responses_dir, exist_ok=True)
         
         # Save response to JSON file with timestamp
