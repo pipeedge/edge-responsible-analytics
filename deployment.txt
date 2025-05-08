@@ -166,6 +166,7 @@ sudo k3s kubectl apply -f k3s/storage/cloud-pv.yaml
 sudo k3s kubectl apply -f k3s/storage/cloud-pvc.yaml
 sudo k3s kubectl apply -f k3s/storage/mlflow-pv.yaml
 sudo k3s kubectl apply -f k3s/storage/mlflow-pvc.yaml
+sudo k3s kubectl apply -f k3s/storage/aggregator-results-pvc.yaml
 
 sudo k3s kubectl delete -f k3s/storage/cloud-pv.yaml
 sudo k3s kubectl delete -f k3s/storage/cloud-pvc.yaml
