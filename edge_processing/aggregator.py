@@ -23,11 +23,12 @@ import pandas as pd
 import tarfile
 import shutil
 import tempfile
+import uuid
+from datetime import datetime
+from utils.mqtt_transfer import ChunkedMQTTTransfer
 
 from utils.policy_evaluator import *
 import schedule
-from datetime import datetime
-from utils.mqtt_transfer import ChunkedMQTTTransfer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -166,6 +167,29 @@ SYNC_INTERVAL_MINUTES = int(os.getenv('SYNC_INTERVAL_MINUTES', 30))
 
 # Initialize chunked transfer handler
 chunked_transfer = ChunkedMQTTTransfer(client, Agg_ID)
+
+# Path where the edge-device-config is mounted
+CONFIG_MOUNT_PATH = "/etc/edge-config"
+
+def get_current_experiment_params():
+    """Reads current experiment parameters from mounted ConfigMap files."""
+    params = {
+        "model_type": "unknown_model",
+        "data_type": "unknown_data",
+        "task_type": "unknown_task"
+    }
+    try:
+        with open(os.path.join(CONFIG_MOUNT_PATH, "model_type"), 'r') as f:
+            params["model_type"] = f.read().strip()
+        with open(os.path.join(CONFIG_MOUNT_PATH, "data_type"), 'r') as f:
+            params["data_type"] = f.read().strip()
+        with open(os.path.join(CONFIG_MOUNT_PATH, "task_type"), 'r') as f:
+            params["task_type"] = f.read().strip()
+    except FileNotFoundError:
+        logger.warning(f"ConfigMap files not found at {CONFIG_MOUNT_PATH}. Using defaults for folder naming.")
+    except Exception as e:
+        logger.error(f"Error reading experiment params from {CONFIG_MOUNT_PATH}: {e}")
+    return params
 
 def on_message(client, userdata, msg):
     # logger.info(f"[Aggregator] Received message on topic: {msg.topic}")
@@ -605,34 +629,63 @@ def evaluate_and_aggregate():
                     }
                 }
                 
-                # Use environment variable for results directory or default to a local path
-                results_dir = os.environ.get('RESULTS_DIR', os.path.join(os.getcwd(), "aggregation_results"))
-                os.makedirs(results_dir, exist_ok=True)
+                # Use environment variable for base PVC results directory
+                pvc_results_dir = os.environ.get('RESULTS_DIR', os.path.join(os.getcwd(), "aggregation_results_pvc"))
+                os.makedirs(pvc_results_dir, exist_ok=True)
+
+                # Base directory for hostPath results from environment variable
+                host_base_dir = os.environ.get('HOST_RESULTS_DIR')
+
+                # --- Create unique directory for this aggregation run ---
+                current_params = get_current_experiment_params()
+                timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S%f")
+                random_id = uuid.uuid4().hex[:8]
                 
-                # Also save to host path if available
-                host_results_dir = os.environ.get('HOST_RESULTS_DIR')
-                if host_results_dir:
-                    os.makedirs(host_results_dir, exist_ok=True)
+                # Directory name incorporating current config and unique ID
+                experiment_folder_name = (
+                    f"{current_params['model_type']}_"
+                    f"{current_params['data_type']}_"
+                    f"{current_params['task_type']}_"
+                    f"{timestamp_str}_{random_id}"
+                )
+
+                # Path for results on PVC
+                current_pvc_results_path = os.path.join(pvc_results_dir, experiment_folder_name)
+                os.makedirs(current_pvc_results_path, exist_ok=True)
                 
-                # Save results to JSON file with timestamp
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                results_file = os.path.join(
-                    results_dir,
-                    f"aggregation_results_{model_type}_{data_type}_{timestamp}.json"
+                # Path for results on HostPath (if HOST_RESULTS_DIR is set)
+                current_host_results_path = None
+                if host_base_dir:
+                    current_host_results_path = os.path.join(host_base_dir, experiment_folder_name)
+                    try:
+                        os.makedirs(current_host_results_path, exist_ok=True)
+                    except OSError as e:
+                        logger.error(f"Could not create host directory {current_host_results_path}: {e}")
+                        current_host_results_path = None # Fallback if host path creation fails
+                # --- End of unique directory creation ---
+
+                # Save results to JSON file in the unique PVC experiment folder
+                results_file_pvc = os.path.join(
+                    current_pvc_results_path, # Use the new dynamic path
+                    f"aggregation_results_{model_type}_{data_type}.json" # Original filename for content
                 )
                 
-                with open(results_file, 'w') as f:
+                with open(results_file_pvc, 'w') as f:
                     json.dump(aggregated_metrics, f, indent=2)
-                
-                # Also save to host path if configured
-                if host_results_dir:
-                    host_results_file = os.path.join(
-                        host_results_dir,
-                        f"aggregation_results_{model_type}_{data_type}_{timestamp}.json"
+                logger.info(f"Aggregation results saved to PVC path: {results_file_pvc}")
+
+                # Also save to unique HostPath experiment folder if available
+                if current_host_results_path:
+                    results_file_host = os.path.join(
+                        current_host_results_path,
+                        f"aggregation_results_{model_type}_{data_type}.json"
                     )
-                    with open(host_results_file, 'w') as f:
-                        json.dump(aggregated_metrics, f, indent=2)
-                    logger.info(f"Aggregation results saved to host path: {host_results_file}")
+                    try:
+                        with open(results_file_host, 'w') as f:
+                            json.dump(aggregated_metrics, f, indent=2)
+                        logger.info(f"Aggregation results saved to HostPath: {results_file_host}")
+                    except Exception as e:
+                        logger.error(f"Failed to save results to HostPath {results_file_host}: {e}")
                 
                 if is_fair and is_explainable and is_reliable:
                     logger.info(f"Aggregated {model_type} model passed all policies. Publishing the model.")
@@ -992,14 +1045,27 @@ def send_to_opa(input_data, policy_type):
         response = requests.post(policy_url, json={"input": input_data})
         
         # Create directory for OPA responses if it doesn't exist
-        results_dir = os.environ.get('RESULTS_DIR', os.getcwd())
-        opa_responses_dir = os.path.join(results_dir, "opa_responses")
-        os.makedirs(opa_responses_dir, exist_ok=True)
+        # Using the PVC path for OPA responses
+        pvc_results_dir_base = os.environ.get('RESULTS_DIR', os.getcwd())
         
-        # Save response to JSON file with timestamp
+        # Read current experiment config for folder naming
+        current_params = get_current_experiment_params()
+        timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S%f") # Ensure unique OPA folders too
+        random_id = uuid.uuid4().hex[:8]
+        experiment_folder_name = (
+            f"{current_params['model_type']}_"
+            f"{current_params['data_type']}_"
+            f"{current_params['task_type']}_"
+            f"{timestamp_str}_{random_id}"
+        )
+
+        # OPA responses will go into a subfolder of the current experiment's PVC folder
+        opa_responses_pvc_dir = os.path.join(pvc_results_dir_base, experiment_folder_name, "opa_responses")
+        os.makedirs(opa_responses_pvc_dir, exist_ok=True)
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        response_file = os.path.join(
-            opa_responses_dir,
+        response_file_pvc = os.path.join(
+            opa_responses_pvc_dir,
             f"opa_response_{policy_type}_{timestamp}.json"
         )
         
@@ -1011,9 +1077,25 @@ def send_to_opa(input_data, policy_type):
             "status_code": response.status_code
         }
         
-        with open(response_file, 'w') as f:
+        with open(response_file_pvc, 'w') as f:
             json.dump(response_data, f, indent=2)
-            logger.info(f"Saved OPA response to {response_file}")
+            logger.info(f"Saved OPA response to PVC path: {response_file_pvc}")
+
+        # Optionally, also save to host path if configured
+        host_base_dir = os.environ.get('HOST_RESULTS_DIR')
+        if host_base_dir:
+            opa_responses_host_dir = os.path.join(host_base_dir, experiment_folder_name, "opa_responses")
+            try:
+                os.makedirs(opa_responses_host_dir, exist_ok=True)
+                response_file_host = os.path.join(
+                    opa_responses_host_dir,
+                    f"opa_response_{policy_type}_{timestamp}.json"
+                )
+                with open(response_file_host, 'w') as f:
+                    json.dump(response_data, f, indent=2)
+                logger.info(f"Saved OPA response to HostPath: {response_file_host}")
+            except Exception as e:
+                logger.error(f"Failed to save OPA response to HostPath: {e}")
         
         if response.status_code == 200:
             result = response.json()

@@ -85,11 +85,17 @@ spec:
             mountPath: /app/data
           - name: host-data-volume
             mountPath: /app/host-data
+          - name: edge-config-volume
+            mountPath: /etc/edge-config
+            readOnly: true
       volumes:
       - name: host-data-volume
         hostPath:
-          path: /tmp/edge-processing/server-2
+          path: /tmp/edge-processing
           type: DirectoryOrCreate
       - name: data-volume
         persistentVolumeClaim:
           claimName: edge-processing-data-server-2
+      - name: edge-config-volume
+        configMap:
+          name: edge-device-config
