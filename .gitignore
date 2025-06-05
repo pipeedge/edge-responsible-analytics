@@ -161,3 +161,5 @@ cython_debug/
 *.h5
 k8s/.DS_Store
 .DS_Store
+# SpecStory explanation file
+.specstory/.what-is-this.md

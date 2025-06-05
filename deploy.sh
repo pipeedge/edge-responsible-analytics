@@ -12,8 +12,8 @@
 NAMESPACE="default" # Change if your resources are in a different namespace
 
 # Timeouts and Delays
-EDGE_PROCESSING_READY_TIMEOUT_SECONDS=300 # 5 minutes to wait for edge-processing servers
-EDGE_DEVICE_RELOAD_DELAY_SECONDS=120    # 2 minutes to wait for edge-device pods to be reloaded by Stakater Reloader
+EDGE_PROCESSING_READY_TIMEOUT_SECONDS=120 # 5 minutes to wait for edge-processing servers
+EDGE_DEVICE_RELOAD_DELAY_SECONDS=60    # 2 minutes to wait for edge-device pods to be reloaded by Stakater Reloader
 
 # Deployment Paths (relative to the script's location)
 CONFIGMAPS_DIR="k3s/configmaps"
@@ -163,6 +163,7 @@ if [ $? -ne 0 ]; then log "Warning: edge-processing-server-1 may not be fully re
 
 wait_for_statefulset_ready "edge-processing-server-2" 1 "$NAMESPACE" "$EDGE_PROCESSING_READY_TIMEOUT_SECONDS"
 if [ $? -ne 0 ]; then log "Warning: edge-processing-server-2 may not be fully ready."; fi
+sleep "$EDGE_PROCESSING_READY_TIMEOUT_SECONDS"
 
 # Phase 4: Configure and Deploy Edge Devices for the experiment
 log ""
