@@ -18,10 +18,10 @@ EDGE_DEVICE_RELOAD_DELAY_SECONDS=60    # 2 minutes to wait for edge-device pods 
 RELEASE_DIR="edge-responsible-analytics-release"
 
 # Deployment Paths (relative to the script's location)
-CONFIGMAPS_DIR="$RELEASE_DIR/k3s/configmaps"
-SERVICES_DIR="$RELEASE_DIR/k3s/services"
-STORAGE_DIR="$RELEASE_DIR/k3s/storage"
-DEPLOYMENTS_DIR="$RELEASE_DIR/k3s/deployments"
+CONFIGMAPS_DIR="k3s/configmaps"
+SERVICES_DIR="k3s/services"
+STORAGE_DIR="k3s/storage"
+DEPLOYMENTS_DIR="k3s/deployments"
 
 # Specific deployment files
 OPA_DEPLOYMENT="$DEPLOYMENTS_DIR/opa-deployment.yaml" 
@@ -122,6 +122,9 @@ wait_for_statefulset_ready() {
 }
 
 # --- Script Main Logic ---
+
+# Save all environment variables to a log file with a timestamp
+printenv > "env_log_$(date +%Y%m%d_%H%M%S).txt"
 
 # Check for correct number of arguments for experiment configuration
 if [ "$#" -ne 3 ]; then
