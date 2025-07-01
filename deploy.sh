@@ -15,14 +15,16 @@ NAMESPACE="default" # Change if your resources are in a different namespace
 EDGE_PROCESSING_READY_TIMEOUT_SECONDS=120 # 5 minutes to wait for edge-processing servers
 EDGE_DEVICE_RELOAD_DELAY_SECONDS=60    # 2 minutes to wait for edge-device pods to be reloaded by Stakater Reloader
 
+RELEASE_DIR="edge-responsible-analytics-release"
+
 # Deployment Paths (relative to the script's location)
-CONFIGMAPS_DIR="k3s/configmaps"
-SERVICES_DIR="k3s/services"
-STORAGE_DIR="k3s/storage"
-DEPLOYMENTS_DIR="k3s/deployments"
+CONFIGMAPS_DIR="$RELEASE_DIR/k3s/configmaps"
+SERVICES_DIR="$RELEASE_DIR/k3s/services"
+STORAGE_DIR="$RELEASE_DIR/k3s/storage"
+DEPLOYMENTS_DIR="$RELEASE_DIR/k3s/deployments"
 
 # Specific deployment files
-OPA_DEPLOYMENT="$DEPLOYMENTS_DIR/opa-deployment.yaml"
+OPA_DEPLOYMENT="$DEPLOYMENTS_DIR/opa-deployment.yaml" 
 MQTT_DEPLOYMENT1="$DEPLOYMENTS_DIR/mqtt-deployment1.yaml"
 MQTT_DEPLOYMENT2="$DEPLOYMENTS_DIR/mqtt-deployment2.yaml"
 MLFLOW_DEPLOYMENT="$DEPLOYMENTS_DIR/mlflow-deployment.yaml"
