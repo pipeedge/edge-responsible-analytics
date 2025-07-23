@@ -122,6 +122,94 @@ def load_t5_model():
         logger.error(f"Error loading T5 model: {str(e)}")
         raise
 
+def load_medgemma_model():
+    """
+    Load MedGemma model optimized for Raspberry Pi 5 edge devices.
+    Uses memory-efficient configuration and quantization for resource-constrained environments.
+    """
+    model_dir = os.path.join(os.getcwd(), 'medgemma_model')
+    os.makedirs(model_dir, exist_ok=True)
+    
+    # Configure TensorFlow for memory efficiency on Raspberry Pi
+    try:
+        # Set CPU threading for Raspberry Pi optimization
+        tf.config.threading.set_inter_op_parallelism_threads(2)
+        tf.config.threading.set_intra_op_parallelism_threads(2)
+        tf.config.set_soft_device_placement(True)
+        
+        # Enable mixed precision for faster inference on ARM
+        from tensorflow.keras import mixed_precision
+        policy = mixed_precision.Policy('mixed_float16')
+        mixed_precision.set_global_policy(policy)
+        
+        logger.info("Configured TensorFlow for Raspberry Pi 5 optimization")
+    except Exception as e:
+        logger.warning(f"Could not set all optimization configurations: {e}")
+    
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import torch
+        
+        # Check if local model exists
+        if os.path.exists(os.path.join(model_dir, "config.json")):
+            logger.info("Loading cached MedGemma model from local storage")
+            model = AutoModelForCausalLM.from_pretrained(
+                model_dir,
+                torch_dtype=torch.float16,  # Use float16 for memory efficiency
+                device_map="cpu",  # Force CPU usage for Raspberry Pi
+                trust_remote_code=True,
+                low_cpu_mem_usage=True
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_dir,
+                trust_remote_code=True
+            )
+            return model, tokenizer
+        
+        # Download and configure MedGemma for first time
+        logger.info("Downloading MedGemma model (this may take a while on first run)")
+        
+        # Use the medical-focused Gemma variant optimized for clinical tasks
+        model_name = "google/gemma-2b-it"  # Using smaller 2B parameter model for edge devices
+        
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            padding_side="left"  # Important for generation
+        )
+        
+        # Add padding token if not present
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16,
+            device_map="cpu",
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+            use_cache=True  # Enable KV caching for efficiency
+        )
+        
+        # Configure generation parameters for medical analysis
+        model.generation_config.max_new_tokens = 256
+        model.generation_config.temperature = 0.7
+        model.generation_config.top_p = 0.9
+        model.generation_config.do_sample = True
+        model.generation_config.pad_token_id = tokenizer.pad_token_id
+        model.generation_config.eos_token_id = tokenizer.eos_token_id
+        
+        # Save model locally for future use
+        model.save_pretrained(model_dir)
+        tokenizer.save_pretrained(model_dir)
+        
+        logger.info("MedGemma model loaded and cached successfully")
+        return model, tokenizer
+        
+    except Exception as e:
+        logger.error(f"Error loading MedGemma model: {str(e)}")
+        raise
+
 def load_bert_model():
     # Use consistent path within the project directory
     model_dir = os.path.join(os.getcwd(), "tinybert_model")

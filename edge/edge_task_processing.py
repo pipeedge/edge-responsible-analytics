@@ -122,6 +122,13 @@ def process_task(task):
             processed_data = X_test
         else:
             processed_data = X_train
+    elif data_type.startswith("medgemma"):
+        logger.info(f"Processing data for MedGemma medical analysis: {data_type}")
+        # MedGemma can work with existing medical datasets
+        # Default to MIMIC data for medical text analysis
+        from dataset.mimic_processor import process_mimic_data
+        train_gen, val_gen = process_mimic_data(batch_size=task.get('batch_size', 4))
+        processed_data = val_gen if task['type'] == 'inference' else train_gen
     else:
         raise ValueError(f"Unsupported data type: {data_type}")
     
@@ -134,21 +141,37 @@ def process_task(task):
         os.makedirs(results_dir, exist_ok=True)
         
         if isinstance(predictions, dict):
-            # For CXR8 data that includes sensitive features
-            return predictions['predictions']
+            # For structured results (CXR8, MedGemma, etc.)
+            if data_type.startswith("medgemma"):
+                # MedGemma returns structured medical analysis
+                return predictions
+            else:
+                # For CXR8 data that includes sensitive features
+                return predictions.get('predictions', predictions)
         
-        # Prepare results dictionary
-        results = {
-            'status': 'success',
-            'predictions': np.mean(predictions),
-            'model_type': task.get('model_type'),
-            'data_type': data_type,
-            'timestamp': datetime.now().isoformat(),
-            'device_id': DEVICE_ID,
-            'task_config': {
-                'batch_size': task.get('batch_size', 16)
+        # Prepare results dictionary for traditional models
+        if data_type.startswith("medgemma"):
+            # For MedGemma, predictions are already structured
+            results = predictions
+            results.update({
+                'device_id': DEVICE_ID,
+                'timestamp': datetime.now().isoformat(),
+                'task_config': {
+                    'batch_size': task.get('batch_size', 4)
+                }
+            })
+        else:
+            results = {
+                'status': 'success',
+                'predictions': np.mean(predictions),
+                'model_type': task.get('model_type'),
+                'data_type': data_type,
+                'timestamp': datetime.now().isoformat(),
+                'device_id': DEVICE_ID,
+                'task_config': {
+                    'batch_size': task.get('batch_size', 16)
+                }
             }
-        }
         
         # Save results to JSON file with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -446,6 +469,10 @@ def task_processing(task_type, model_type, data_type):
         elif data_type == 'mimic': 
             train_data_path = None
             inference_data_path = None
+    elif model_type == 'medgemma':
+        # MedGemma works with medical text data
+        train_data_path = None  # Uses MIMIC dataset through generator
+        inference_data_path = None
     else:
         logger.error(f"Unsupported model_type: {model_type}")
         return
@@ -475,6 +502,8 @@ def task_processing(task_type, model_type, data_type):
         model_path = os.path.join(os.getcwd(), 'mobilenet_model.keras')
     elif model_type == 't5':
         model_path = os.path.join(os.getcwd(), 't5_small')
+    elif model_type == 'medgemma':
+        model_path = os.path.join(os.getcwd(), 'medgemma_model')
     else:  # tinybert
         model_path = os.path.join(os.getcwd(), 'tinybert_model')
     
@@ -551,13 +580,13 @@ def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Edge Task Processing Script")
     parser.add_argument('--model_type', type=str, default='MobileNet',
-                        choices=['MobileNet', 'tinybert'],
+                        choices=['MobileNet', 'tinybert', 'medgemma'],
                         help='Type of model to use (default: MobileNet)')
     parser.add_argument('--task_type', type=str, default='inference',
                         choices=['inference', 'training'],
                         help='Type of task to perform (default: inference)')
     parser.add_argument('--data_type', type=str, default='chest_xray',
-                        choices=['chest_xray', 'cxr8', 'mt', 'mimic'],
+                        choices=['chest_xray', 'cxr8', 'mt', 'mimic', 'medgemma_diagnosis', 'medgemma_symptom_analysis', 'medgemma_clinical_summary'],
                         help='Type of data to perform (default: chest_xray)')
     
     args = parser.parse_args()

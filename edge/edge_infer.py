@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import time
-from load_models import load_mobilenet_model, load_bert_model
+from load_models import load_mobilenet_model, load_bert_model, load_medgemma_model
+from medgemma_inference import perform_medgemma_inference
 import pandas as pd
 import logging
 from typing import Generator, Tuple, Union, List
@@ -125,6 +126,27 @@ def perform_inference(data, data_type, batch_size=16):
                         raise
                         
                 return predictions
+        
+        elif data_type == "medgemma" or data_type.startswith("medgemma_"):
+            # Handle MedGemma medical analysis
+            analysis_type = "diagnosis"  # Default analysis type
+            
+            # Extract analysis type from data_type if specified
+            if "_" in data_type:
+                analysis_type = data_type.split("_", 1)[1]
+            
+            logger.info(f"Starting MedGemma inference with analysis_type: {analysis_type}")
+            
+            # Perform MedGemma analysis
+            results = perform_medgemma_inference(
+                data=data,
+                data_type=data_type,
+                analysis_type=analysis_type,
+                batch_size=batch_size
+            )
+            
+            return results
+            
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
             
@@ -138,7 +160,7 @@ def process_inference_results(predictions: Union[np.ndarray, dict], data_type: s
     
     Args:
         predictions: Raw predictions from model
-        data_type: Type of data ('chest_xray', 'cxr8', or 'mt')
+        data_type: Type of data ('chest_xray', 'cxr8', 'mt', 'medgemma', etc.)
     
     Returns:
         Dictionary containing processed results
@@ -150,6 +172,13 @@ def process_inference_results(predictions: Union[np.ndarray, dict], data_type: s
                     'predictions': predictions['predictions'].tolist(),
                     'sensitive_features': predictions['sensitive_features'].to_dict('records')
                 }
+        
+        elif data_type == "medgemma" or data_type.startswith("medgemma_"):
+            # Handle MedGemma results - they're already in proper format
+            if isinstance(predictions, dict):
+                return predictions
+            else:
+                return {'predictions': predictions}
         
         # For other data types, return predictions directly
         return {'predictions': predictions.tolist() if isinstance(predictions, np.ndarray) else predictions}

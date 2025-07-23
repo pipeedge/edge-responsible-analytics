@@ -159,6 +159,10 @@ MODEL_PATHS = {
     'tinybert': {
         'current': 'aggregated_tinybert',
         'previous': 'previous_tinybert'
+    },
+    'medgemma': {
+        'current': 'aggregated_medgemma',
+        'previous': 'previous_medgemma'
     }
 }
 
